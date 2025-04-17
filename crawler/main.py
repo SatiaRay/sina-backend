@@ -10,6 +10,7 @@ from scrapy.crawler import CrawlerRunner
 from twisted.internet import reactor
 from multiprocessing import Process, Queue
 from urllib.parse import urlparse
+from datetime import datetime
 
 # غیرفعال کردن بررسی گواهی SSL
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -126,6 +127,7 @@ def run_spider_in_process(url, queue):
     """
     اجرای خزنده در یک فرآیند جداگانه
     """
+
     try:
         process = CrawlerProcess(settings={
             'LOG_LEVEL': 'ERROR',
@@ -172,13 +174,17 @@ def run_spider_in_process(url, queue):
         
         # تبدیل داده‌های استخراج شده به فرمت مناسب برای پایگاه دانش
         knowledge_items = []
+        current_time = datetime.now().isoformat()
         for item in spider.all_data:
             knowledge_items.append({
                 'text': item['content'],
                 'metadata': {
                     'source': item['url'],
                     'url': item['url'],
-                    'title': item['title']
+                    'title': item['title'],
+                    'curation_status': 'pending',
+                    'date_added': current_time,
+                    'last_modified': current_time
                 }
             })
         

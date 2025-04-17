@@ -4,14 +4,15 @@ from dotenv import load_dotenv
 from crawler.main import run_spider
 from models.text_processor import TextProcessor
 from database.vector_store import VectorStore
+from util.constants import CHROMA_PERSIST_DIRECTORY, DATA_DIR
 import json
 
 load_dotenv()
 
 def setup_system():
     # ایجاد پوشه‌های مورد نیاز
-    Path("data").mkdir(exist_ok=True)
-    Path(os.getenv("CHROMA_PERSIST_DIR")).mkdir(exist_ok=True)
+    Path(DATA_DIR).mkdir(exist_ok=True)
+    Path(CHROMA_PERSIST_DIRECTORY).mkdir(exist_ok=True)
     
     # استخراج داده‌ها
     print("در حال استخراج داده‌ها از وبسایت...")

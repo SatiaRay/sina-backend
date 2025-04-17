@@ -1,6 +1,7 @@
 from pydantic import BaseModel, HttpUrl
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from enum import Enum
 
 class Chunk(BaseModel):
     text: str
@@ -9,8 +10,8 @@ class Chunk(BaseModel):
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat()
-        },
-        schema_extra = {
+        }
+        json_schema_extra = {
             "example": {
                 "text": "ساتیا یک پلتفرم مدیریت منابع سازمانی است که...",
                 "metadata": {
@@ -62,7 +63,7 @@ class UpdateKnowledgeRequest(BaseModel):
     url: str
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "url": "https://www.satia.co/blog"
             }
@@ -78,4 +79,72 @@ class PlainTextRequest(BaseModel):
     """
     text: str
     title: Optional[str] = None
-    source: Optional[str] = None 
+    source: Optional[str] = None
+
+class ChatRequest(BaseModel):
+    """
+    مدل درخواست برای چت با بات
+    
+    - message: پیام کاربر
+    - conversation_id: شناسه مکالمه (اختیاری)
+    """
+    message: str
+    conversation_id: Optional[str] = None
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "ساتیا چیست؟",
+                "conversation_id": "123e4567-e89b-12d3-a456-426614174000"
+            }
+        }
+
+class AddKnowledgeRequest(BaseModel):
+    """
+    مدل درخواست برای افزودن دانش از یک URL
+    
+    - url: آدرس URL که باید خزش شود
+    """
+    url: HttpUrl
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "url": "https://www.satia.co/blog"
+            }
+        }
+
+class CurationStatus(BaseModel):
+    """مدل وضعیت بررسی یک سند"""
+    document_id: str
+    status: str  # 'approved', 'rejected', 'pending'
+    edited_text: Optional[str] = None
+    reason: Optional[str] = None
+    reviewer: Optional[str] = None
+    review_date: Optional[datetime] = None
+
+class CurationListRequest(BaseModel):
+    """مدل درخواست لیست اسناد در انتظار بررسی"""
+    offset: int = 0
+    limit: int = 50
+    status: Optional[str] = None  # Filter by status
+
+class CurationStats(BaseModel):
+    """مدل آمار بررسی اسناد"""
+    total_documents: int
+    approved: int
+    rejected: int
+    pending: int
+    last_review_date: Optional[datetime] = None
+
+class CrawledDocument(BaseModel):
+    """مدل سند خزش شده"""
+    document_id: str
+    url: str
+    title: str
+    text: str
+    metadata: Dict[str, Any]
+    status: str = "pending"
+    review_info: Optional[CurationStatus] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None 

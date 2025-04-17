@@ -1,0 +1,256 @@
+2025-04-16 23:37:42,565 - satya.api - INFO - Request 4de30527-9188-4634-8903-d25fc42460e1 started: OPTIONS http://localhost:8000/ask
+2025-04-16 23:37:42,565 - satya.api - INFO - Request 4de30527-9188-4634-8903-d25fc42460e1 started: OPTIONS http://localhost:8000/ask
+2025-04-16 23:37:42,565 - satya.api - INFO - Request 4de30527-9188-4634-8903-d25fc42460e1 completed: 200 (took 0.000s)
+2025-04-16 23:37:42,565 - satya.api - INFO - Request 4de30527-9188-4634-8903-d25fc42460e1 completed: 200 (took 0.000s)
+2025-04-16 23:37:42,581 - satya.api - INFO - Request d79ec717-6050-4713-a6aa-a91fe551b811 started: POST http://localhost:8000/ask
+2025-04-16 23:37:42,581 - satya.api - INFO - Request d79ec717-6050-4713-a6aa-a91fe551b811 started: POST http://localhost:8000/ask
+2025-04-16 23:37:42,581 - satya.api - INFO - Processing question: سلام
+2025-04-16 23:37:42,581 - satya.api - INFO - Processing question: سلام
+2025-04-16 23:37:47,940 - satya.api - INFO - Successfully generated response
+2025-04-16 23:37:47,940 - satya.api - INFO - Successfully generated response
+2025-04-16 23:37:47,940 - satya.api - INFO - Request d79ec717-6050-4713-a6aa-a91fe551b811 completed: 200 (took 5.360s)
+2025-04-16 23:37:47,940 - satya.api - INFO - Request d79ec717-6050-4713-a6aa-a91fe551b811 completed: 200 (took 5.360s)
+2025-04-16 23:42:36,371 - satya.api - INFO - Request 411f3d5f-3155-49ce-9481-ad02be20e27a started: POST http://localhost:8000/ask
+2025-04-16 23:42:36,371 - satya.api - INFO - Request 411f3d5f-3155-49ce-9481-ad02be20e27a started: POST http://localhost:8000/ask
+2025-04-16 23:42:36,371 - satya.api - INFO - Processing question: ساتیا چیست ؟
+2025-04-16 23:42:36,371 - satya.api - INFO - Processing question: ساتیا چیست ؟
+2025-04-16 23:42:40,689 - satya.api - INFO - Successfully generated response
+2025-04-16 23:42:40,689 - satya.api - INFO - Successfully generated response
+2025-04-16 23:42:40,689 - satya.api - INFO - Request 411f3d5f-3155-49ce-9481-ad02be20e27a completed: 200 (took 4.317s)
+2025-04-16 23:42:40,689 - satya.api - INFO - Request 411f3d5f-3155-49ce-9481-ad02be20e27a completed: 200 (took 4.317s)
+2025-04-17 00:10:50,359 - satya.api - INFO - Request 44c0503f-2d81-401a-938c-e1c856d25878 started: OPTIONS http://localhost:8000/ask
+2025-04-17 00:10:50,359 - satya.api - INFO - Request 44c0503f-2d81-401a-938c-e1c856d25878 started: OPTIONS http://localhost:8000/ask
+2025-04-17 00:10:50,361 - satya.api - INFO - Request 44c0503f-2d81-401a-938c-e1c856d25878 completed: 200 (took 0.002s)
+2025-04-17 00:10:50,361 - satya.api - INFO - Request 44c0503f-2d81-401a-938c-e1c856d25878 completed: 200 (took 0.002s)
+2025-04-17 00:10:50,364 - satya.api - INFO - Request d32641b7-ff30-4c12-8382-abfd58d6bae2 started: POST http://localhost:8000/ask
+2025-04-17 00:10:50,364 - satya.api - INFO - Request d32641b7-ff30-4c12-8382-abfd58d6bae2 started: POST http://localhost:8000/ask
+2025-04-17 00:10:50,369 - satya.api - INFO - Processing question: درمورد ساتیا بیشتر توضیح بده.
+2025-04-17 00:10:50,369 - satya.api - INFO - Processing question: درمورد ساتیا بیشتر توضیح بده.
+2025-04-17 00:11:01,470 - satya.api - INFO - Successfully generated response
+2025-04-17 00:11:01,470 - satya.api - INFO - Successfully generated response
+2025-04-17 00:11:01,471 - satya.api - INFO - Request d32641b7-ff30-4c12-8382-abfd58d6bae2 completed: 200 (took 11.107s)
+2025-04-17 00:11:01,471 - satya.api - INFO - Request d32641b7-ff30-4c12-8382-abfd58d6bae2 completed: 200 (took 11.107s)
+2025-04-17 00:12:20,577 - satya.api - INFO - Request 1acab4e7-73c6-47d5-9806-e23ee656fe77 started: GET http://127.0.0.1:8000/api/add_plaintext
+2025-04-17 00:12:20,577 - satya.api - INFO - Request 1acab4e7-73c6-47d5-9806-e23ee656fe77 started: GET http://127.0.0.1:8000/api/add_plaintext
+2025-04-17 00:12:20,581 - satya.api - INFO - Request 1acab4e7-73c6-47d5-9806-e23ee656fe77 completed: 405 (took 0.004s)
+2025-04-17 00:12:20,581 - satya.api - INFO - Request 1acab4e7-73c6-47d5-9806-e23ee656fe77 completed: 405 (took 0.004s)
+2025-04-17 00:12:31,829 - satya.api - INFO - Request 1a56674c-70a9-4afe-92af-7cdc732e4f4e started: POST http://127.0.0.1:8000/api/add_plaintext
+2025-04-17 00:12:31,829 - satya.api - INFO - Request 1a56674c-70a9-4afe-92af-7cdc732e4f4e started: POST http://127.0.0.1:8000/api/add_plaintext
+2025-04-17 00:12:31,834 - satya.api - INFO - Request 1a56674c-70a9-4afe-92af-7cdc732e4f4e completed: 422 (took 0.005s)
+2025-04-17 00:12:31,834 - satya.api - INFO - Request 1a56674c-70a9-4afe-92af-7cdc732e4f4e completed: 422 (took 0.005s)
+2025-04-17 00:13:31,875 - satya.api - INFO - Request 057f7e99-cd7d-47d8-b919-9a3facbd3dfa started: POST http://127.0.0.1:8000/api/add_plaintext
+2025-04-17 00:13:31,875 - satya.api - INFO - Request 057f7e99-cd7d-47d8-b919-9a3facbd3dfa started: POST http://127.0.0.1:8000/api/add_plaintext
+2025-04-17 00:13:31,885 - satya.api - INFO - Request 057f7e99-cd7d-47d8-b919-9a3facbd3dfa completed: 422 (took 0.010s)
+2025-04-17 00:13:31,885 - satya.api - INFO - Request 057f7e99-cd7d-47d8-b919-9a3facbd3dfa completed: 422 (took 0.010s)
+2025-04-17 00:14:02,711 - satya.api - INFO - Request abc8fa79-e265-4380-be81-edaa657896d2 started: POST http://127.0.0.1:8000/api/add_plaintext
+2025-04-17 00:14:02,711 - satya.api - INFO - Request abc8fa79-e265-4380-be81-edaa657896d2 started: POST http://127.0.0.1:8000/api/add_plaintext
+2025-04-17 00:14:02,834 - satya.api - INFO - Request abc8fa79-e265-4380-be81-edaa657896d2 completed: 200 (took 0.123s)
+2025-04-17 00:14:02,834 - satya.api - INFO - Request abc8fa79-e265-4380-be81-edaa657896d2 completed: 200 (took 0.123s)
+2025-04-17 00:14:23,303 - satya.api - INFO - Request 524d67ff-8104-4050-98a4-6af58aa32486 started: POST http://localhost:8000/ask
+2025-04-17 00:14:23,303 - satya.api - INFO - Request 524d67ff-8104-4050-98a4-6af58aa32486 started: POST http://localhost:8000/ask
+2025-04-17 00:14:23,306 - satya.api - INFO - Processing question: در مورد مهدی محمودی و ساتیا چیزی میدانی ؟
+2025-04-17 00:14:23,306 - satya.api - INFO - Processing question: در مورد مهدی محمودی و ساتیا چیزی میدانی ؟
+2025-04-17 00:14:25,936 - satya.api - INFO - Successfully generated response
+2025-04-17 00:14:25,936 - satya.api - INFO - Successfully generated response
+2025-04-17 00:14:25,937 - satya.api - INFO - Request 524d67ff-8104-4050-98a4-6af58aa32486 completed: 200 (took 2.634s)
+2025-04-17 00:14:25,937 - satya.api - INFO - Request 524d67ff-8104-4050-98a4-6af58aa32486 completed: 200 (took 2.634s)
+2025-04-17 00:15:28,634 - satya.api - INFO - Request bbba32bd-2996-4353-80b8-440e2507192e started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:15:28,634 - satya.api - INFO - Request bbba32bd-2996-4353-80b8-440e2507192e started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:15:28,664 - satya.api - INFO - Request bbba32bd-2996-4353-80b8-440e2507192e completed: 200 (took 0.030s)
+2025-04-17 00:15:28,664 - satya.api - INFO - Request bbba32bd-2996-4353-80b8-440e2507192e completed: 200 (took 0.030s)
+2025-04-17 00:20:16,191 - satya.api - INFO - Request b8c1c7e0-aa31-41ef-af3f-fa0851c9bdce started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:20:16,191 - satya.api - INFO - Request b8c1c7e0-aa31-41ef-af3f-fa0851c9bdce started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:20:16,195 - satya.api - INFO - Request 2031c68a-c83a-4c95-ba5e-a5577d4fb4aa started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:20:16,195 - satya.api - INFO - Request 2031c68a-c83a-4c95-ba5e-a5577d4fb4aa started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:20:16,198 - satya.api - INFO - Request 99ba1c48-e942-4d18-9174-8375783c195b started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:20:16,198 - satya.api - INFO - Request 99ba1c48-e942-4d18-9174-8375783c195b started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:20:16,236 - satya.api - INFO - Request b8c1c7e0-aa31-41ef-af3f-fa0851c9bdce completed: 200 (took 0.045s)
+2025-04-17 00:20:16,236 - satya.api - INFO - Request b8c1c7e0-aa31-41ef-af3f-fa0851c9bdce completed: 200 (took 0.045s)
+2025-04-17 00:20:16,240 - satya.api - INFO - Request 2031c68a-c83a-4c95-ba5e-a5577d4fb4aa completed: 200 (took 0.045s)
+2025-04-17 00:20:16,240 - satya.api - INFO - Request 2031c68a-c83a-4c95-ba5e-a5577d4fb4aa completed: 200 (took 0.045s)
+2025-04-17 00:20:16,242 - satya.api - INFO - Request 99ba1c48-e942-4d18-9174-8375783c195b completed: 200 (took 0.044s)
+2025-04-17 00:20:16,242 - satya.api - INFO - Request 99ba1c48-e942-4d18-9174-8375783c195b completed: 200 (took 0.044s)
+2025-04-17 00:43:47,828 - satya.api - INFO - Request cff599d3-96e7-463e-b101-17ae6e72825e started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:43:47,828 - satya.api - INFO - Request cff599d3-96e7-463e-b101-17ae6e72825e started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:43:47,833 - satya.api - INFO - Request cff599d3-96e7-463e-b101-17ae6e72825e completed: 200 (took 0.005s)
+2025-04-17 00:43:47,833 - satya.api - INFO - Request cff599d3-96e7-463e-b101-17ae6e72825e completed: 200 (took 0.005s)
+2025-04-17 00:59:13,329 - satya.api - INFO - Request f1c8d6b0-715a-4b8b-b2da-b85e260b40e3 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:59:13,329 - satya.api - INFO - Request f1c8d6b0-715a-4b8b-b2da-b85e260b40e3 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 00:59:13,334 - satya.api - INFO - Request f1c8d6b0-715a-4b8b-b2da-b85e260b40e3 completed: 200 (took 0.005s)
+2025-04-17 00:59:13,334 - satya.api - INFO - Request f1c8d6b0-715a-4b8b-b2da-b85e260b40e3 completed: 200 (took 0.005s)
+2025-04-17 01:10:00,714 - satya.api - INFO - Request 3d4a7ff3-6946-4dda-9334-f418078bea09 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:10:00,714 - satya.api - INFO - Request 3d4a7ff3-6946-4dda-9334-f418078bea09 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:10:00,728 - satya.api - INFO - Request 3d4a7ff3-6946-4dda-9334-f418078bea09 completed: 200 (took 0.014s)
+2025-04-17 01:10:00,728 - satya.api - INFO - Request 3d4a7ff3-6946-4dda-9334-f418078bea09 completed: 200 (took 0.014s)
+2025-04-17 01:10:03,808 - satya.api - INFO - Request 7ba996f0-2ce6-4c6d-9139-2f28096e328c started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:10:03,808 - satya.api - INFO - Request 7ba996f0-2ce6-4c6d-9139-2f28096e328c started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:10:03,811 - satya.api - INFO - Request 7ba996f0-2ce6-4c6d-9139-2f28096e328c completed: 200 (took 0.003s)
+2025-04-17 01:10:03,811 - satya.api - INFO - Request 7ba996f0-2ce6-4c6d-9139-2f28096e328c completed: 200 (took 0.003s)
+2025-04-17 01:10:09,174 - satya.api - INFO - Request db70c072-72b8-4ed9-89fc-c47f834d6366 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:10:09,174 - satya.api - INFO - Request db70c072-72b8-4ed9-89fc-c47f834d6366 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:10:09,177 - satya.api - INFO - Request db70c072-72b8-4ed9-89fc-c47f834d6366 completed: 200 (took 0.003s)
+2025-04-17 01:10:09,177 - satya.api - INFO - Request db70c072-72b8-4ed9-89fc-c47f834d6366 completed: 200 (took 0.003s)
+2025-04-17 01:16:23,560 - satya.api - INFO - Request e16ddd52-8c9b-4fdd-89ae-554e07f21c96 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:16:23,560 - satya.api - INFO - Request e16ddd52-8c9b-4fdd-89ae-554e07f21c96 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:16:23,598 - satya.api - INFO - Request e16ddd52-8c9b-4fdd-89ae-554e07f21c96 completed: 200 (took 0.039s)
+2025-04-17 01:16:23,598 - satya.api - INFO - Request e16ddd52-8c9b-4fdd-89ae-554e07f21c96 completed: 200 (took 0.039s)
+2025-04-17 01:20:33,205 - satya.api - INFO - Request ae0d8141-4bda-4c81-9e6a-21bb9dd31068 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:20:33,205 - satya.api - INFO - Request ae0d8141-4bda-4c81-9e6a-21bb9dd31068 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:20:33,207 - satya.api - INFO - Request 24949b9a-3535-4d4d-9d27-3d450d582120 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:20:33,207 - satya.api - INFO - Request 24949b9a-3535-4d4d-9d27-3d450d582120 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:20:33,224 - satya.api - INFO - Request ae0d8141-4bda-4c81-9e6a-21bb9dd31068 completed: 200 (took 0.019s)
+2025-04-17 01:20:33,224 - satya.api - INFO - Request ae0d8141-4bda-4c81-9e6a-21bb9dd31068 completed: 200 (took 0.019s)
+2025-04-17 01:20:33,226 - satya.api - INFO - Request 24949b9a-3535-4d4d-9d27-3d450d582120 completed: 200 (took 0.018s)
+2025-04-17 01:20:33,226 - satya.api - INFO - Request 24949b9a-3535-4d4d-9d27-3d450d582120 completed: 200 (took 0.018s)
+2025-04-17 01:21:09,961 - satya.api - INFO - Request 63ca644a-5566-4b95-a779-9afff706e066 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:21:09,961 - satya.api - INFO - Request 63ca644a-5566-4b95-a779-9afff706e066 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:21:09,965 - satya.api - INFO - Request 63ca644a-5566-4b95-a779-9afff706e066 completed: 200 (took 0.004s)
+2025-04-17 01:21:09,965 - satya.api - INFO - Request 63ca644a-5566-4b95-a779-9afff706e066 completed: 200 (took 0.004s)
+2025-04-17 01:23:11,491 - satya.api - INFO - Request 9992ee75-522d-4b5a-8ed9-185461c74b43 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:23:11,491 - satya.api - INFO - Request 9992ee75-522d-4b5a-8ed9-185461c74b43 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:23:11,506 - satya.api - INFO - Request 9992ee75-522d-4b5a-8ed9-185461c74b43 completed: 200 (took 0.015s)
+2025-04-17 01:23:11,506 - satya.api - INFO - Request 9992ee75-522d-4b5a-8ed9-185461c74b43 completed: 200 (took 0.015s)
+2025-04-17 01:23:14,006 - satya.api - INFO - Request 6775677d-a86b-45be-b8b6-655b8293a38b started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:23:14,006 - satya.api - INFO - Request 6775677d-a86b-45be-b8b6-655b8293a38b started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:23:14,009 - satya.api - INFO - Request 6775677d-a86b-45be-b8b6-655b8293a38b completed: 200 (took 0.003s)
+2025-04-17 01:23:14,009 - satya.api - INFO - Request 6775677d-a86b-45be-b8b6-655b8293a38b completed: 200 (took 0.003s)
+2025-04-17 01:26:45,737 - satya.api - INFO - Request 28031a8e-1f26-414f-8e15-4f5c5673e0b6 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:26:45,737 - satya.api - INFO - Request 28031a8e-1f26-414f-8e15-4f5c5673e0b6 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:26:45,752 - satya.api - INFO - Request 28031a8e-1f26-414f-8e15-4f5c5673e0b6 completed: 200 (took 0.015s)
+2025-04-17 01:26:45,752 - satya.api - INFO - Request 28031a8e-1f26-414f-8e15-4f5c5673e0b6 completed: 200 (took 0.015s)
+2025-04-17 01:26:48,681 - satya.api - INFO - Request d2d3f922-ddd2-40c1-b2b0-0615fbcd1939 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:26:48,681 - satya.api - INFO - Request d2d3f922-ddd2-40c1-b2b0-0615fbcd1939 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:26:48,684 - satya.api - INFO - Request d2d3f922-ddd2-40c1-b2b0-0615fbcd1939 completed: 200 (took 0.003s)
+2025-04-17 01:26:48,684 - satya.api - INFO - Request d2d3f922-ddd2-40c1-b2b0-0615fbcd1939 completed: 200 (took 0.003s)
+2025-04-17 01:27:53,519 - satya.api - INFO - Request 82772fb9-725f-44a2-9389-90014954b3e7 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:27:53,519 - satya.api - INFO - Request 82772fb9-725f-44a2-9389-90014954b3e7 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:27:53,535 - satya.api - INFO - Request 82772fb9-725f-44a2-9389-90014954b3e7 completed: 200 (took 0.016s)
+2025-04-17 01:27:53,535 - satya.api - INFO - Request 82772fb9-725f-44a2-9389-90014954b3e7 completed: 200 (took 0.016s)
+2025-04-17 01:27:57,905 - satya.api - INFO - Request e11c9077-b621-4bf7-a577-bc63827d6c95 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:27:57,905 - satya.api - INFO - Request e11c9077-b621-4bf7-a577-bc63827d6c95 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:27:57,908 - satya.api - INFO - Request e11c9077-b621-4bf7-a577-bc63827d6c95 completed: 200 (took 0.003s)
+2025-04-17 01:27:57,908 - satya.api - INFO - Request e11c9077-b621-4bf7-a577-bc63827d6c95 completed: 200 (took 0.003s)
+2025-04-17 01:32:23,662 - satya.api - INFO - Request a187cdd6-6db5-49bd-81d5-8a6f4b86c6d4 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:32:23,662 - satya.api - INFO - Request a187cdd6-6db5-49bd-81d5-8a6f4b86c6d4 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:32:23,666 - satya.api - INFO - Request 4be33a8f-201c-4e72-89fc-88f7c5cddb60 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:32:23,666 - satya.api - INFO - Request 4be33a8f-201c-4e72-89fc-88f7c5cddb60 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:32:23,691 - satya.api - INFO - Request a187cdd6-6db5-49bd-81d5-8a6f4b86c6d4 completed: 200 (took 0.030s)
+2025-04-17 01:32:23,691 - satya.api - INFO - Request a187cdd6-6db5-49bd-81d5-8a6f4b86c6d4 completed: 200 (took 0.030s)
+2025-04-17 01:32:23,695 - satya.api - INFO - Request 4be33a8f-201c-4e72-89fc-88f7c5cddb60 completed: 200 (took 0.029s)
+2025-04-17 01:32:23,695 - satya.api - INFO - Request 4be33a8f-201c-4e72-89fc-88f7c5cddb60 completed: 200 (took 0.029s)
+2025-04-17 01:34:40,371 - satya.api - INFO - Request e9898fda-95bf-4440-81cc-44a79034a8c2 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:34:40,371 - satya.api - INFO - Request e9898fda-95bf-4440-81cc-44a79034a8c2 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:34:40,401 - satya.api - INFO - Request e9898fda-95bf-4440-81cc-44a79034a8c2 completed: 200 (took 0.030s)
+2025-04-17 01:34:40,401 - satya.api - INFO - Request e9898fda-95bf-4440-81cc-44a79034a8c2 completed: 200 (took 0.030s)
+2025-04-17 01:39:03,151 - satya.api - INFO - Request 1e6659bb-5541-485d-a170-37fce38e3dd1 started: GET http://127.0.0.1:8000/curation/update_status
+2025-04-17 01:39:03,151 - satya.api - INFO - Request 1e6659bb-5541-485d-a170-37fce38e3dd1 started: GET http://127.0.0.1:8000/curation/update_status
+2025-04-17 01:39:03,153 - satya.api - INFO - Request 1e6659bb-5541-485d-a170-37fce38e3dd1 completed: 405 (took 0.002s)
+2025-04-17 01:39:03,153 - satya.api - INFO - Request 1e6659bb-5541-485d-a170-37fce38e3dd1 completed: 405 (took 0.002s)
+2025-04-17 01:39:08,448 - satya.api - INFO - Request a162c744-01ce-485f-9913-4b91bf45f967 started: POST http://127.0.0.1:8000/curation/update_status
+2025-04-17 01:39:08,448 - satya.api - INFO - Request a162c744-01ce-485f-9913-4b91bf45f967 started: POST http://127.0.0.1:8000/curation/update_status
+2025-04-17 01:39:08,452 - satya.api - INFO - Request a162c744-01ce-485f-9913-4b91bf45f967 completed: 422 (took 0.005s)
+2025-04-17 01:39:08,452 - satya.api - INFO - Request a162c744-01ce-485f-9913-4b91bf45f967 completed: 422 (took 0.005s)
+2025-04-17 01:39:22,201 - satya.api - INFO - Request 75284fe5-0b66-4041-a30d-04531c64e9dc started: POST http://127.0.0.1:8000/curation/pending
+2025-04-17 01:39:22,201 - satya.api - INFO - Request 75284fe5-0b66-4041-a30d-04531c64e9dc started: POST http://127.0.0.1:8000/curation/pending
+2025-04-17 01:39:22,203 - satya.api - INFO - Request 75284fe5-0b66-4041-a30d-04531c64e9dc completed: 405 (took 0.002s)
+2025-04-17 01:39:22,203 - satya.api - INFO - Request 75284fe5-0b66-4041-a30d-04531c64e9dc completed: 405 (took 0.002s)
+2025-04-17 01:39:33,262 - satya.api - INFO - Request 16f43d1c-e3d1-4a9b-ac33-9cb69badba5d started: POST http://127.0.0.1:8000/curation/update_status
+2025-04-17 01:39:33,262 - satya.api - INFO - Request 16f43d1c-e3d1-4a9b-ac33-9cb69badba5d started: POST http://127.0.0.1:8000/curation/update_status
+2025-04-17 01:39:33,265 - satya.api - INFO - Request 16f43d1c-e3d1-4a9b-ac33-9cb69badba5d completed: 422 (took 0.003s)
+2025-04-17 01:39:33,265 - satya.api - INFO - Request 16f43d1c-e3d1-4a9b-ac33-9cb69badba5d completed: 422 (took 0.003s)
+2025-04-17 01:39:54,037 - satya.api - INFO - Request fd8f6e2e-47a0-4136-bebc-6e62ed4b9384 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:39:54,037 - satya.api - INFO - Request fd8f6e2e-47a0-4136-bebc-6e62ed4b9384 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:39:54,040 - satya.api - INFO - Request fd8f6e2e-47a0-4136-bebc-6e62ed4b9384 completed: 200 (took 0.003s)
+2025-04-17 01:39:54,040 - satya.api - INFO - Request fd8f6e2e-47a0-4136-bebc-6e62ed4b9384 completed: 200 (took 0.003s)
+2025-04-17 01:40:42,572 - satya.api - INFO - Request b3671f01-ee1f-4f19-a283-548c3b36369d started: POST http://127.0.0.1:8000/curation/update_status
+2025-04-17 01:40:42,572 - satya.api - INFO - Request b3671f01-ee1f-4f19-a283-548c3b36369d started: POST http://127.0.0.1:8000/curation/update_status
+2025-04-17 01:40:42,671 - satya.api - INFO - Request b3671f01-ee1f-4f19-a283-548c3b36369d completed: 200 (took 0.099s)
+2025-04-17 01:40:42,671 - satya.api - INFO - Request b3671f01-ee1f-4f19-a283-548c3b36369d completed: 200 (took 0.099s)
+2025-04-17 01:40:51,638 - satya.api - INFO - Request 35024838-f4bd-45a2-88d5-b32d305cc909 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:40:51,638 - satya.api - INFO - Request 35024838-f4bd-45a2-88d5-b32d305cc909 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:40:51,641 - satya.api - INFO - Request 35024838-f4bd-45a2-88d5-b32d305cc909 completed: 200 (took 0.003s)
+2025-04-17 01:40:51,641 - satya.api - INFO - Request 35024838-f4bd-45a2-88d5-b32d305cc909 completed: 200 (took 0.003s)
+2025-04-17 01:41:28,810 - satya.api - INFO - Request 8ed96589-46b7-4635-8886-43ab58722ded started: OPTIONS http://localhost:8000/ask
+2025-04-17 01:41:28,810 - satya.api - INFO - Request 8ed96589-46b7-4635-8886-43ab58722ded started: OPTIONS http://localhost:8000/ask
+2025-04-17 01:41:28,813 - satya.api - INFO - Request 8ed96589-46b7-4635-8886-43ab58722ded completed: 200 (took 0.003s)
+2025-04-17 01:41:28,813 - satya.api - INFO - Request 8ed96589-46b7-4635-8886-43ab58722ded completed: 200 (took 0.003s)
+2025-04-17 01:41:28,815 - satya.api - INFO - Request bdcfd830-e282-4207-8c96-3ec3f06f68c0 started: POST http://localhost:8000/ask
+2025-04-17 01:41:28,815 - satya.api - INFO - Request bdcfd830-e282-4207-8c96-3ec3f06f68c0 started: POST http://localhost:8000/ask
+2025-04-17 01:41:28,818 - satya.api - INFO - Processing question: خدمات ساتیا شامل چه مواردی است ؟
+2025-04-17 01:41:28,818 - satya.api - INFO - Processing question: خدمات ساتیا شامل چه مواردی است ؟
+2025-04-17 01:41:36,311 - satya.api - INFO - Successfully generated response
+2025-04-17 01:41:36,311 - satya.api - INFO - Successfully generated response
+2025-04-17 01:41:36,313 - satya.api - INFO - Request bdcfd830-e282-4207-8c96-3ec3f06f68c0 completed: 200 (took 7.498s)
+2025-04-17 01:41:36,313 - satya.api - INFO - Request bdcfd830-e282-4207-8c96-3ec3f06f68c0 completed: 200 (took 7.498s)
+2025-04-17 01:42:29,689 - satya.api - INFO - Request ca6fc413-b77a-4a57-861e-4fe6254a2766 started: GET http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:42:29,689 - satya.api - INFO - Request ca6fc413-b77a-4a57-861e-4fe6254a2766 started: GET http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:42:29,691 - satya.api - INFO - Request ca6fc413-b77a-4a57-861e-4fe6254a2766 completed: 405 (took 0.002s)
+2025-04-17 01:42:29,691 - satya.api - INFO - Request ca6fc413-b77a-4a57-861e-4fe6254a2766 completed: 405 (took 0.002s)
+2025-04-17 01:42:33,450 - satya.api - INFO - Request 8e9da4a5-87d4-4c87-864f-5e9745aa65f9 started: POST http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:42:33,450 - satya.api - INFO - Request 8e9da4a5-87d4-4c87-864f-5e9745aa65f9 started: POST http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:42:33,453 - satya.api - INFO - Request 8e9da4a5-87d4-4c87-864f-5e9745aa65f9 completed: 422 (took 0.002s)
+2025-04-17 01:42:33,453 - satya.api - INFO - Request 8e9da4a5-87d4-4c87-864f-5e9745aa65f9 completed: 422 (took 0.002s)
+2025-04-17 01:43:02,317 - satya.api - INFO - Request c958f22e-d025-4e5d-8500-9bc44ede91c3 started: POST http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:43:02,317 - satya.api - INFO - Request c958f22e-d025-4e5d-8500-9bc44ede91c3 started: POST http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:43:02,320 - satya.api - INFO - Request c958f22e-d025-4e5d-8500-9bc44ede91c3 completed: 200 (took 0.003s)
+2025-04-17 01:43:02,320 - satya.api - INFO - Request c958f22e-d025-4e5d-8500-9bc44ede91c3 completed: 200 (took 0.003s)
+2025-04-17 01:43:11,054 - satya.api - INFO - Request 1e03d1c6-1931-4202-9a03-d1ebcf9d7df7 started: POST http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:43:11,054 - satya.api - INFO - Request 1e03d1c6-1931-4202-9a03-d1ebcf9d7df7 started: POST http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:43:11,059 - satya.api - INFO - Request 1e03d1c6-1931-4202-9a03-d1ebcf9d7df7 completed: 200 (took 0.005s)
+2025-04-17 01:43:11,059 - satya.api - INFO - Request 1e03d1c6-1931-4202-9a03-d1ebcf9d7df7 completed: 200 (took 0.005s)
+2025-04-17 01:43:20,420 - satya.api - INFO - Request ae8e3f80-21d1-460d-8db6-9b40ee5f92f6 started: POST http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:43:20,420 - satya.api - INFO - Request ae8e3f80-21d1-460d-8db6-9b40ee5f92f6 started: POST http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:43:20,436 - satya.api - INFO - Request ae8e3f80-21d1-460d-8db6-9b40ee5f92f6 completed: 200 (took 0.016s)
+2025-04-17 01:43:20,436 - satya.api - INFO - Request ae8e3f80-21d1-460d-8db6-9b40ee5f92f6 completed: 200 (took 0.016s)
+2025-04-17 01:43:56,947 - satya.api - INFO - Request 12c7f450-c85e-4f96-9f00-716b3d92d2b4 started: POST http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:43:56,947 - satya.api - INFO - Request 12c7f450-c85e-4f96-9f00-716b3d92d2b4 started: POST http://127.0.0.1:8000/api/all_knowledge
+2025-04-17 01:43:56,950 - satya.api - INFO - Request 12c7f450-c85e-4f96-9f00-716b3d92d2b4 completed: 200 (took 0.003s)
+2025-04-17 01:43:56,950 - satya.api - INFO - Request 12c7f450-c85e-4f96-9f00-716b3d92d2b4 completed: 200 (took 0.003s)
+2025-04-17 01:50:32,608 - satya.api - INFO - Request 8ebab907-8898-4582-b8f5-52d2cdf56192 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:50:32,608 - satya.api - INFO - Request 8ebab907-8898-4582-b8f5-52d2cdf56192 started: GET http://127.0.0.1:8000/curation/pending
+2025-04-17 01:50:32,643 - satya.api - INFO - Request 8ebab907-8898-4582-b8f5-52d2cdf56192 completed: 200 (took 0.035s)
+2025-04-17 01:50:32,643 - satya.api - INFO - Request 8ebab907-8898-4582-b8f5-52d2cdf56192 completed: 200 (took 0.035s)
+2025-04-17 01:52:09,655 - satya.api - INFO - Request 5e2f2db2-f600-4d2a-abdb-5ef97e4c109f started: OPTIONS http://localhost:8000/ask
+2025-04-17 01:52:09,655 - satya.api - INFO - Request 5e2f2db2-f600-4d2a-abdb-5ef97e4c109f started: OPTIONS http://localhost:8000/ask
+2025-04-17 01:52:09,660 - satya.api - INFO - Request 5e2f2db2-f600-4d2a-abdb-5ef97e4c109f completed: 200 (took 0.004s)
+2025-04-17 01:52:09,660 - satya.api - INFO - Request 5e2f2db2-f600-4d2a-abdb-5ef97e4c109f completed: 200 (took 0.004s)
+2025-04-17 01:52:09,665 - satya.api - INFO - Request 8658ac25-1438-4439-922f-6623d294118f started: POST http://localhost:8000/ask
+2025-04-17 01:52:09,665 - satya.api - INFO - Request 8658ac25-1438-4439-922f-6623d294118f started: POST http://localhost:8000/ask
+2025-04-17 01:52:09,670 - satya.api - INFO - Processing question: خدمات ساتیا چیستپ
+2025-04-17 01:52:09,670 - satya.api - INFO - Processing question: خدمات ساتیا چیستپ
+2025-04-17 01:52:16,095 - satya.api - INFO - Successfully generated response
+2025-04-17 01:52:16,095 - satya.api - INFO - Successfully generated response
+2025-04-17 01:52:16,096 - satya.api - INFO - Request 8658ac25-1438-4439-922f-6623d294118f completed: 200 (took 6.432s)
+2025-04-17 01:52:16,096 - satya.api - INFO - Request 8658ac25-1438-4439-922f-6623d294118f completed: 200 (took 6.432s)
+2025-04-17 01:54:13,754 - satya.api - INFO - Request 4b866604-3db4-408e-bb28-5c948e056ea2 started: POST http://localhost:8000/ask
+2025-04-17 01:54:13,754 - satya.api - INFO - Request 4b866604-3db4-408e-bb28-5c948e056ea2 started: POST http://localhost:8000/ask
+2025-04-17 01:54:13,761 - satya.api - INFO - Processing question: میشه بیشتر توضیح بدی ؟
+2025-04-17 01:54:13,761 - satya.api - INFO - Processing question: میشه بیشتر توضیح بدی ؟
+2025-04-17 01:54:20,413 - satya.api - INFO - Successfully generated response
+2025-04-17 01:54:20,413 - satya.api - INFO - Successfully generated response
+2025-04-17 01:54:20,414 - satya.api - INFO - Request 4b866604-3db4-408e-bb28-5c948e056ea2 completed: 200 (took 6.660s)
+2025-04-17 01:54:20,414 - satya.api - INFO - Request 4b866604-3db4-408e-bb28-5c948e056ea2 completed: 200 (took 6.660s)
+2025-04-17 02:04:10,001 - satya.api - INFO - Request 83fb6a97-8bb4-4844-abdb-7f36a9833ba4 started: OPTIONS http://localhost:8000/ask
+2025-04-17 02:04:10,001 - satya.api - INFO - Request 83fb6a97-8bb4-4844-abdb-7f36a9833ba4 started: OPTIONS http://localhost:8000/ask
+2025-04-17 02:04:10,005 - satya.api - INFO - Request 83fb6a97-8bb4-4844-abdb-7f36a9833ba4 completed: 200 (took 0.003s)
+2025-04-17 02:04:10,005 - satya.api - INFO - Request 83fb6a97-8bb4-4844-abdb-7f36a9833ba4 completed: 200 (took 0.003s)
+2025-04-17 02:04:10,011 - satya.api - INFO - Request 5c9e9d62-50b7-4595-a551-1299457fbc4f started: POST http://localhost:8000/ask
+2025-04-17 02:04:10,011 - satya.api - INFO - Request 5c9e9d62-50b7-4595-a551-1299457fbc4f started: POST http://localhost:8000/ask
+2025-04-17 02:04:10,016 - satya.api - INFO - Processing question: یعنی من میتونم سرویس اینترنت بخرم از ساتیا ؟
+2025-04-17 02:04:10,016 - satya.api - INFO - Processing question: یعنی من میتونم سرویس اینترنت بخرم از ساتیا ؟
+2025-04-17 02:04:17,685 - satya.api - INFO - Successfully generated response
+2025-04-17 02:04:17,685 - satya.api - INFO - Successfully generated response
+2025-04-17 02:04:17,687 - satya.api - INFO - Request 5c9e9d62-50b7-4595-a551-1299457fbc4f completed: 200 (took 7.678s)
+2025-04-17 02:04:17,687 - satya.api - INFO - Request 5c9e9d62-50b7-4595-a551-1299457fbc4f completed: 200 (took 7.678s)
+2025-04-17 02:05:52,385 - satya.api - INFO - Request d6828caa-65e4-42c2-b63c-7a029aca8374 started: POST http://127.0.0.1:8000/curation/update_status
+2025-04-17 02:05:52,385 - satya.api - INFO - Request d6828caa-65e4-42c2-b63c-7a029aca8374 started: POST http://127.0.0.1:8000/curation/update_status
+2025-04-17 02:05:52,472 - satya.api - INFO - Request d6828caa-65e4-42c2-b63c-7a029aca8374 completed: 200 (took 0.087s)
+2025-04-17 02:05:52,472 - satya.api - INFO - Request d6828caa-65e4-42c2-b63c-7a029aca8374 completed: 200 (took 0.087s)
+2025-04-17 02:06:36,556 - satya.api - INFO - Request 4c9b61a2-6d41-4ca6-842a-07b9d3216872 started: POST http://localhost:8000/ask
+2025-04-17 02:06:36,556 - satya.api - INFO - Request 4c9b61a2-6d41-4ca6-842a-07b9d3216872 started: POST http://localhost:8000/ask
+2025-04-17 02:06:36,559 - satya.api - INFO - Processing question: میشه درمورد تعرفه های اینترنت بیشتر برای من توضیح بدی ؟
+2025-04-17 02:06:36,559 - satya.api - INFO - Processing question: میشه درمورد تعرفه های اینترنت بیشتر برای من توضیح بدی ؟
+2025-04-17 02:06:41,108 - satya.api - INFO - Successfully generated response
+2025-04-17 02:06:41,108 - satya.api - INFO - Successfully generated response
+2025-04-17 02:06:41,109 - satya.api - INFO - Request 4c9b61a2-6d41-4ca6-842a-07b9d3216872 completed: 200 (took 4.553s)
+2025-04-17 02:06:41,109 - satya.api - INFO - Request 4c9b61a2-6d41-4ca6-842a-07b9d3216872 completed: 200 (took 4.553s)

@@ -10,7 +10,7 @@ import logging
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from fastapi import FastAPI, HTTPException, Depends, Body
+from fastapi import FastAPI, HTTPException, Depends, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
@@ -20,16 +20,18 @@ from models.rag import RAGSystem
 from models.text_processor import TextProcessor
 from crawler.main import run_spider
 import uuid
-from .models import DataSource, DataSourceListResponse, Chunk, EditChunkRequest, PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest
+from .models import (DataSource, DataSourceListResponse, Chunk, EditChunkRequest, 
+                    PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest,
+                    CurationStatus, CurationStats)
 from database.vector_store import VectorStore
 from util.database import get_db_connection
 from api.models import (ChatRequest, 
                       AddKnowledgeRequest)
-from util.logging_config import configure_logging
+from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
 
-# Configure logger
-logger = logging.getLogger(__name__)
+# Configure loggers
+main_logger, error_logger, api_logger = configure_logging()
 
 load_dotenv()
 
@@ -51,7 +53,7 @@ app = FastAPI(
     * `/update_knowledge`: برای به‌روزرسانی دانش موجود از یک URL
     * `/api/add_plaintext`: برای افزودن متن ساده به پایگاه دانش
     """,
-    version="1.0.0",
+    version=APP_VERSION,
     contact={
         "name": "تیم پشتیبانی ساتیا",
         "url": "https://www.satia.co/support",
@@ -92,6 +94,50 @@ tags_metadata = [
 
 app.openapi_tags = tags_metadata
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all requests and their processing time"""
+    start_time = datetime.now()
+    
+    # Generate request ID for tracking
+    request_id = str(uuid.uuid4())
+    
+    # Log request details
+    api_logger.info(f"Request {request_id} started: {request.method} {request.url}")
+    
+    try:
+        # Process request
+        response = await call_next(request)
+        
+        # Calculate processing time
+        process_time = (datetime.now() - start_time).total_seconds()
+        
+        # Log response details
+        api_logger.info(
+            f"Request {request_id} completed: {response.status_code} "
+            f"(took {process_time:.3f}s)"
+        )
+        
+        return response
+        
+    except Exception as e:
+        # Log error details
+        process_time = (datetime.now() - start_time).total_seconds()
+        log_error(
+            error_logger, 
+            e, 
+            f"Request {request_id} failed after {process_time:.3f}s: {request.method} {request.url}"
+        )
+        
+        # Return error response
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "Internal server error occurred. Please check the logs for details.",
+                "request_id": request_id
+            }
+        )
+
 # مدل‌های درخواست و پاسخ
 class QuestionRequest(BaseModel):
     question: str
@@ -111,61 +157,36 @@ rag_system = RAGSystem()
 text_processor = TextProcessor()
 vector_store = VectorStore()
 
-# Initialize logging
-configure_logging()
-
-# Initialize RAG system
-rag_system = RAGSystem()
-
-# Initialize text processor
-text_processor = TextProcessor()
-
 @app.get("/")
 async def root():
     return {"message": "Welcome to Satya Support Chatbot API"}
 
-@app.post("/ask", response_model=QuestionResponse, tags=["Chat"],
+@app.post("/ask", response_model=Dict[str, Any], tags=["Chat"],
           summary="پرسش از چت‌بات",
           description="این اندپوینت یک سوال را دریافت کرده و پاسخ مرتبط را از پایگاه دانش برمی‌گرداند")
-async def ask_question(
-    request: QuestionRequest = Body(
-        ...,
-        example={"question": "ساتیا چیست؟"}
-    )
-):
+async def ask_question(request: Request, question_request: QuestionRequest = Body(...)):
     """
-    پرسش از چت‌بات و دریافت پاسخ
-    
-    - **question**: سوال کاربر
-    
-    **نمونه ورودی:**
-    ```json
-    {
-      "question": "ساتیا چیست؟"
-    }
-    ```
-    
-    **نمونه خروجی:**
-    ```json
-    {
-      "answer": "ساتیا یک پلتفرم مدیریت منابع سازمانی است که...",
-      "sources": [
-        {
-          "text": "ساتیا یک پلتفرم مدیریت منابع سازمانی است که...",
-          "metadata": {
-            "source": "https://www.satia.co/about",
-            "title": "درباره ساتیا"
-          }
-        }
-      ]
-    }
-    ```
+    Process a question and return the answer with relevant sources
     """
     try:
-        response = rag_system.generate_response(request.question)
+        api_logger.info(f"Processing question: {question_request.question}")
+        
+        response = rag_system.generate_response(question_request.question)
+        
+        api_logger.info("Successfully generated response")
         return JSONResponse(content=response, media_type="application/json; charset=utf-8")
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        error_context = f"Question: {question_request.question}"
+        log_error(error_logger, e, error_context)
+        
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Failed to generate response",
+                "error": str(e)
+            }
+        )
 
 @app.post("/askme", response_model=QuestionResponse, tags=["Chat"],
           summary="پرسش از چت‌بات (مترادف ask)",
@@ -947,6 +968,110 @@ async def health_check():
     ```
     """
     return {"status": "ok", "version": "1.0.0"}
+
+@app.get("/curation/pending", tags=["Curation"],
+          summary="دریافت اسناد در انتظار بررسی",
+          description="این اندپوینت لیست اسنادی که نیاز به بررسی دارند را برمی‌گرداند")
+async def get_pending_documents(
+    offset: int = 0,
+    limit: int = 50
+):
+    """
+    دریافت لیست اسناد در انتظار بررسی
+    
+    - **offset**: شماره شروع (پیش‌فرض: 0)
+    - **limit**: تعداد نتایج (پیش‌فرض: 50)
+    """
+    try:
+        documents = vector_store.get_pending_documents(offset, limit)
+        return JSONResponse(
+            content={"documents": documents},
+            media_type="application/json; charset=utf-8"
+        )
+    except Exception as e:
+        log_error(error_logger, e, "Error getting pending documents")
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Failed to get pending documents", "error": str(e)}
+        )
+
+@app.post("/curation/update_status", tags=["Curation"],
+          summary="به‌روزرسانی وضعیت بررسی",
+          description="این اندپوینت وضعیت بررسی یک سند را به‌روزرسانی می‌کند")
+async def update_document_status(status_update: CurationStatus):
+    """
+    به‌روزرسانی وضعیت بررسی یک سند
+    
+    - **document_id**: شناسه سند
+    - **status**: وضعیت جدید ('approved', 'rejected', 'pending')
+    - **edited_text**: متن ویرایش شده (اختیاری)
+    - **reason**: دلیل رد یا تایید (اختیاری)
+    """
+    try:
+        vector_store.update_document_status(
+            status_update.document_id,
+            status_update.status,
+            status_update.edited_text
+        )
+        return JSONResponse(
+            content={"message": "Document status updated successfully"},
+            media_type="application/json; charset=utf-8"
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log_error(error_logger, e, f"Error updating document status: {status_update.document_id}")
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Failed to update document status", "error": str(e)}
+        )
+
+@app.get("/curation/stats", tags=["Curation"],
+          summary="آمار بررسی اسناد",
+          description="این اندپوینت آمار وضعیت بررسی اسناد را برمی‌گرداند")
+async def get_curation_stats():
+    """
+    دریافت آمار وضعیت بررسی اسناد
+    """
+    try:
+        stats = vector_store.get_curation_stats()
+        return JSONResponse(
+            content=stats,
+            media_type="application/json; charset=utf-8"
+        )
+    except Exception as e:
+        log_error(error_logger, e, "Error getting curation stats")
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Failed to get curation stats", "error": str(e)}
+        )
+
+@app.get("/curation/document/{doc_id}", tags=["Curation"],
+          summary="دریافت جزئیات یک سند",
+          description="این اندپوینت جزئیات یک سند خاص را برمی‌گرداند")
+async def get_document_details(doc_id: str):
+    """
+    دریافت جزئیات یک سند با شناسه
+    
+    - **doc_id**: شناسه سند
+    """
+    try:
+        document = vector_store.get_document_by_id(doc_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+            
+        return JSONResponse(
+            content=document,
+            media_type="application/json; charset=utf-8"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error(error_logger, e, f"Error getting document details: {doc_id}")
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "Failed to get document details", "error": str(e)}
+        )
 
 if __name__ == "__main__":
     import uvicorn

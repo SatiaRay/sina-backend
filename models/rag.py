@@ -9,8 +9,12 @@ from crawler.main import run_spider
 from datetime import datetime
 import json
 from pathlib import Path
+from util.logging_config import configure_logging, log_error
+import logging
 
 load_dotenv()
+# Initialize loggers
+main_logger, error_logger, api_logger = configure_logging()
 
 class RAGSystem:
     def __init__(self):
@@ -19,13 +23,19 @@ class RAGSystem:
         self.ollama_host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
         self.ollama_model = os.getenv('OLLAMA_MODEL', 'mistral')
         
-        # ایجاد نمونه Ollama
-        self.llm = Ollama(
-            base_url=self.ollama_host,
-            model=self.ollama_model,
-            temperature=float(os.getenv('TEMPERATURE', 0.7)),
-            num_ctx=int(os.getenv('MAX_TOKENS', 4096))
-        )
+        try:
+            # ایجاد نمونه Ollama
+            self.llm = Ollama(
+                base_url=self.ollama_host,
+                model=self.ollama_model,
+                temperature=float(os.getenv('TEMPERATURE', 0.7)),
+                num_ctx=int(os.getenv('MAX_TOKENS', 4096))
+            )
+            main_logger.info(f"Initialized Ollama with model {self.ollama_model} at {self.ollama_host}")
+        except Exception as e:
+            error_msg = f"Failed to initialize Ollama: {str(e)}"
+            log_error(error_logger, e, "RAGSystem initialization")
+            raise RuntimeError(error_msg)
         
         # تعریف تمپلیت برای تولید پاسخ
         self.prompt_template = PromptTemplate(
@@ -50,30 +60,46 @@ class RAGSystem:
         )
 
     def generate_response(self, question: str) -> Dict[str, Any]:
-        # جستجوی اسناد مرتبط
-        relevant_docs = self.vector_store.search(question)
-        
-        # ترکیب اسناد مرتبط
-        context = "\n\n".join([doc['text'] for doc in relevant_docs])
-        
-        # تولید پاسخ با استفاده از Ollama
-        prompt = self.prompt_template.format(
-            context=context,
-            question=question
-        )
-        
-        response = self.llm(prompt)
-        
-        return {
-            'answer': response,
-            'sources': [
-                {
-                    'text': doc['text'],
-                    'metadata': doc['metadata']
-                }
-                for doc in relevant_docs
-            ]
-        }
+        try:
+            main_logger.info(f"Generating response for question: {question}")
+            
+            # جستجوی اسناد مرتبط
+            relevant_docs = self.vector_store.search(question)
+            main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
+            
+            # ترکیب اسناد مرتبط
+            context = "\n\n".join([doc['text'] for doc in relevant_docs])
+            main_logger.debug(f"Generated context: {context}")
+            with open("data/context_logs.txt", "a", encoding="utf-8") as f:
+                f.write(f"\n\n=== Context Generated at {datetime.now().isoformat()} ===\n")
+                f.write(context)
+
+            
+            
+            # تولید پاسخ با استفاده از Ollama
+            prompt = self.prompt_template.format(
+                context=context,
+                question=question
+            )
+            
+            main_logger.debug("Sending prompt to Ollama")
+            response = self.llm.invoke(prompt)
+            main_logger.info("Successfully generated response")
+            
+            return {
+                'answer': response,
+                'sources': [
+                    {
+                        'text': doc['text'],
+                        'metadata': doc['metadata']
+                    }
+                    for doc in relevant_docs
+                ]
+            }
+        except Exception as e:
+            error_context = f"Question: {question}"
+            log_error(error_logger, e, error_context)
+            raise
 
     def update_knowledge_base(self, url_or_documents):
         """
