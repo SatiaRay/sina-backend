@@ -351,36 +351,19 @@ async def delete_all_knowledge():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/add_knowledge", tags=["Knowledge Management"],
-         summary="افزودن دانش از یک URL به پایگاه دانش",
-         description="این اندپوینت یک URL را دریافت کرده، آن را خزش کرده و محتوای استخراج شده را به پایگاه دانش اضافه می‌کند")
-async def add_knowledge(
+@app.post("/crawl_url", tags=["Knowledge Management"],
+         summary="استخراج متن از یک URL",
+         description="این اندپوینت یک URL را دریافت کرده و متن استخراج شده را برمی‌گرداند")
+async def crawl_url(
     request: UrlRequest = Body(
         ...,
         example={"url": "https://www.satia.co/blog"}
     )
 ):
     """
-    اضافه کردن دانش از یک URL به پایگاه دانش
+    استخراج متن از یک URL
     
-    - **url**: آدرس URL که باید خزش شود (مثال: https://www.satia.co/blog)
-    
-    **نمونه ورودی:**
-    ```json
-    {
-      "url": "https://www.satia.co/blog"
-    }
-    ```
-    
-    **نمونه خروجی:**
-    ```json
-    {
-      "status": "success",
-      "message": "تعداد 8 سند به پایگاه دانش اضافه شد",
-      "document_count": 8,
-      "file_path": "data/crawled_data/www_satia_co_blog.json"
-    }
-    ```
+    - **url**: آدرس URL که باید خزش شود
     """
     try:
         url = str(request.url)
@@ -394,79 +377,154 @@ async def add_knowledge(
         if not knowledge_items:
             return JSONResponse(
                 content={
-                    "status": "error",
+                    "status": "error", 
                     "message": "هیچ اطلاعاتی از URL استخراج نشد",
-                    "document_count": 0
+                    "text": ""
                 },
                 media_type="application/json; charset=utf-8"
             )
-        
-        # اضافه کردن متادیتا به اسناد
+
+        # ترکیب تمام متن‌های استخراج شده و حذف خط جدید
+        full_text = ""
         for item in knowledge_items:
-            if 'metadata' not in item:
-                item['metadata'] = {}
-            item['metadata']['source'] = url  # حفظ دقیق URL
-            item['metadata']['date_added'] = datetime.now().isoformat()
-        
-        # پردازش و ذخیره‌سازی اسناد
-        processed_docs = text_processor.process_batch(knowledge_items)
-        
-        if not processed_docs:
-            return JSONResponse(
-                content={
-                    "status": "error",
-                    "message": "خطا در پردازش اسناد",
-                    "document_count": 0
-                },
-                media_type="application/json; charset=utf-8"
-            )
-        
-        # اضافه کردن به vector store
-        vector_store.add_documents(processed_docs)
-        
-        # ایجاد یک نام فایل مناسب برای ذخیره داده استخراج شده
-        from urllib.parse import urlparse
-        url_parsed = urlparse(url)
-        file_name = url_parsed.netloc + url_parsed.path.replace('/', '_').replace('.', '_')
-        file_name = ''.join(c for c in file_name if c.isalnum() or c == '_')
-        file_name = file_name[:100]
-        
-        # ذخیره اطلاعات در فایل جیسون
-        data_dir = Path("data/crawled_data")
-        data_dir.mkdir(parents=True, exist_ok=True)
-        file_path = data_dir / f"{file_name}.json"
-        
-        try:
-            # ذخیره اطلاعات اصلی در فایل JSON
-            output_data = {
-                "url": url,
-                "title": knowledge_items[0].get('metadata', {}).get('title', 'بدون عنوان'),
-                "date_added": datetime.now().isoformat(),
-                "document_count": len(processed_docs),
-                "content": knowledge_items[0].get('text', '')[:500] + "..."  # نمونه محتوا
-            }
-            
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(output_data, f, ensure_ascii=False, indent=2)
-                
-            print(f"اطلاعات در فایل {file_path} ذخیره شد")
-        except Exception as e:
-            print(f"خطا در ذخیره فایل JSON: {str(e)}")
+            text = item.get('text', '').strip()
+            if text:
+                # حذف تمام کاراکترهای خط جدید و جایگزینی با فاصله
+                text = ' '.join(text.replace('\r', ' ').replace('\n', ' ').split())
+                full_text += text + " "
         
         return JSONResponse(
             content={
                 "status": "success",
-                "message": f"تعداد {len(processed_docs)} سند از URL {url} استخراج و به پایگاه دانش اضافه شد",
+                "text": full_text.strip()
+            },
+            media_type="application/json; charset=utf-8"
+        )
+    except Exception as e:
+        print(f"خطا در استخراج متن: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/store_knowledge", tags=["Knowledge Management"],
+         summary="ذخیره متن در پایگاه دانش",
+         description="این اندپوینت متن را به چانک تقسیم کرده و در پایگاه دانش ذخیره می‌کند")
+async def store_knowledge(
+    source_url: str = Body(..., embed=True),
+    text: str = Body(
+        ...,
+        example="متن کامل برای ذخیره سازی..."
+    )
+):
+    """
+    ذخیره متن در پایگاه دانش
+    
+    - **source_url**: آدرس منبع داده‌ها
+    - **text**: متن کامل برای ذخیره‌سازی
+    """
+    # ایجاد مسیر لاگ
+    log_dir = Path("logs/errors")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "store_knowledge.log"
+    
+    try:
+        if not text:
+            error_msg = "هیچ متنی برای ذخیره‌سازی ارسال نشده است"
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"{datetime.now()}: {error_msg}\n")
+            return JSONResponse(
+                content={
+                    "status": "error",
+                    "message": error_msg
+                },
+                media_type="application/json; charset=utf-8"
+            )
+
+        # تقسیم متن به چانک‌ها با جداکننده خط جدید
+        chunks = [chunk.strip() for chunk in text.split('\n') if chunk.strip()]
+        
+        # تبدیل به فرمت مناسب برای پردازش
+        knowledge_items = []
+        for chunk in chunks:
+            metadata = {
+                'source': source_url,
+                'date_added': datetime.now().isoformat()
+            }
+            knowledge_items.append({
+                'text': chunk,
+                'metadata': metadata
+            })
+        
+        try:
+            # پردازش و ذخیره‌سازی اسناد
+            processed_docs = text_processor.process_batch(knowledge_items)
+        except Exception as e:
+            error_msg = f"خطا در پردازش اسناد: {str(e)}"
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"{datetime.now()}: {error_msg}\n{traceback.format_exc()}\n")
+            return JSONResponse(
+                content={
+                    "status": "error",
+                    "message": error_msg
+                },
+                media_type="application/json; charset=utf-8"
+            )
+        
+        try:
+            # اضافه کردن به vector store
+            vector_store.add_documents(processed_docs)
+        except Exception as e:
+            error_msg = f"خطا در ذخیره‌سازی در vector store: {str(e)}"
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"{datetime.now()}: {error_msg}\n{traceback.format_exc()}\n")
+            return JSONResponse(
+                content={
+                    "status": "error",
+                    "message": error_msg
+                },
+                media_type="application/json; charset=utf-8"
+            )
+        
+        # ذخیره در فایل JSON
+        try:
+            url_parsed = urlparse(source_url)
+            file_name = url_parsed.netloc + url_parsed.path.replace('/', '_').replace('.', '_')
+            file_name = ''.join(c for c in file_name if c.isalnum() or c == '_')
+            file_name = file_name[:100]
+            
+            data_dir = Path("data/crawled_data")
+            data_dir.mkdir(parents=True, exist_ok=True)
+            file_path = data_dir / f"{file_name}.json"
+            
+            output_data = {
+                "url": source_url,
+                "date_added": datetime.now().isoformat(),
+                "document_count": len(processed_docs),
+                "text": text
+            }
+            
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(output_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            error_msg = f"خطا در ذخیره‌سازی فایل JSON: {str(e)}"
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"{datetime.now()}: {error_msg}\n{traceback.format_exc()}\n")
+            # ادامه می‌دهیم چون داده‌ها در vector store ذخیره شده‌اند
+        
+        return JSONResponse(
+            content={
+                "status": "success",
+                "message": f"تعداد {len(processed_docs)} چانک در پایگاه دانش ذخیره شد",
                 "document_count": len(processed_docs),
                 "file_path": str(file_path)
             },
             media_type="application/json; charset=utf-8"
         )
     except Exception as e:
-        print(f"خطا در افزودن دانش: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = f"خطای کلی در ذخیره‌سازی متن: {str(e)}"
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f"{datetime.now()}: {error_msg}\n{traceback.format_exc()}\n")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @app.post("/add_text_knowledge")
 async def add_text_knowledge(request: PlainTextRequest):
@@ -968,110 +1026,6 @@ async def health_check():
     ```
     """
     return {"status": "ok", "version": "1.0.0"}
-
-@app.get("/curation/pending", tags=["Curation"],
-          summary="دریافت اسناد در انتظار بررسی",
-          description="این اندپوینت لیست اسنادی که نیاز به بررسی دارند را برمی‌گرداند")
-async def get_pending_documents(
-    offset: int = 0,
-    limit: int = 50
-):
-    """
-    دریافت لیست اسناد در انتظار بررسی
-    
-    - **offset**: شماره شروع (پیش‌فرض: 0)
-    - **limit**: تعداد نتایج (پیش‌فرض: 50)
-    """
-    try:
-        documents = vector_store.get_pending_documents(offset, limit)
-        return JSONResponse(
-            content={"documents": documents},
-            media_type="application/json; charset=utf-8"
-        )
-    except Exception as e:
-        log_error(error_logger, e, "Error getting pending documents")
-        raise HTTPException(
-            status_code=500,
-            detail={"message": "Failed to get pending documents", "error": str(e)}
-        )
-
-@app.post("/curation/update_status", tags=["Curation"],
-          summary="به‌روزرسانی وضعیت بررسی",
-          description="این اندپوینت وضعیت بررسی یک سند را به‌روزرسانی می‌کند")
-async def update_document_status(status_update: CurationStatus):
-    """
-    به‌روزرسانی وضعیت بررسی یک سند
-    
-    - **document_id**: شناسه سند
-    - **status**: وضعیت جدید ('approved', 'rejected', 'pending')
-    - **edited_text**: متن ویرایش شده (اختیاری)
-    - **reason**: دلیل رد یا تایید (اختیاری)
-    """
-    try:
-        vector_store.update_document_status(
-            status_update.document_id,
-            status_update.status,
-            status_update.edited_text
-        )
-        return JSONResponse(
-            content={"message": "Document status updated successfully"},
-            media_type="application/json; charset=utf-8"
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        log_error(error_logger, e, f"Error updating document status: {status_update.document_id}")
-        raise HTTPException(
-            status_code=500,
-            detail={"message": "Failed to update document status", "error": str(e)}
-        )
-
-@app.get("/curation/stats", tags=["Curation"],
-          summary="آمار بررسی اسناد",
-          description="این اندپوینت آمار وضعیت بررسی اسناد را برمی‌گرداند")
-async def get_curation_stats():
-    """
-    دریافت آمار وضعیت بررسی اسناد
-    """
-    try:
-        stats = vector_store.get_curation_stats()
-        return JSONResponse(
-            content=stats,
-            media_type="application/json; charset=utf-8"
-        )
-    except Exception as e:
-        log_error(error_logger, e, "Error getting curation stats")
-        raise HTTPException(
-            status_code=500,
-            detail={"message": "Failed to get curation stats", "error": str(e)}
-        )
-
-@app.get("/curation/document/{doc_id}", tags=["Curation"],
-          summary="دریافت جزئیات یک سند",
-          description="این اندپوینت جزئیات یک سند خاص را برمی‌گرداند")
-async def get_document_details(doc_id: str):
-    """
-    دریافت جزئیات یک سند با شناسه
-    
-    - **doc_id**: شناسه سند
-    """
-    try:
-        document = vector_store.get_document_by_id(doc_id)
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
-            
-        return JSONResponse(
-            content=document,
-            media_type="application/json; charset=utf-8"
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_error(error_logger, e, f"Error getting document details: {doc_id}")
-        raise HTTPException(
-            status_code=500,
-            detail={"message": "Failed to get document details", "error": str(e)}
-        )
 
 if __name__ == "__main__":
     import uvicorn

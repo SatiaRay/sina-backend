@@ -75,7 +75,6 @@ class VectorStore:
         # جستجو در کالکشن
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            where={"status": "approved"},
             n_results=n_results
         )
         
