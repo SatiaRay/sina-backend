@@ -22,7 +22,7 @@ from crawler.main import run_spider
 import uuid
 from .models import (DataSource, DataSourceListResponse, Chunk, EditChunkRequest, 
                     PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest,
-                    CurationStatus, CurationStats)
+                    CurationStatus, CurationStats, VectorSearchRequest)
 from database.vector_store import VectorStore
 from util.database import get_db_connection
 from api.models import (ChatRequest, 
@@ -1026,6 +1026,55 @@ async def health_check():
     ```
     """
     return {"status": "ok", "version": "1.0.0"}
+
+@app.post("/search-vector-doc", tags=["Utilities"],
+          summary="جستجو در پایگاه دانش برداری",
+          description="این اندپوینت نتایج جستجوی برداری را برای یک سوال نمایش می‌دهد")
+async def search_vector_docs(
+    request: VectorSearchRequest = Body(
+        ...,
+        example={
+            "question": "ساتیا چیست؟",
+            "limit": 5
+        }
+    )
+):
+    """
+    جستجو در پایگاه دانش برداری و نمایش نتایج خام
+    
+    - **question**: سوال یا عبارت جستجو
+    - **limit**: تعداد نتایج (پیش‌فرض: 5)
+    """
+    try:
+        # جستجو در vector store
+        relevant_docs = vector_store.search(request.question, request.limit)
+        
+        # تبدیل نتایج به فرمت مناسب
+        results = []
+        for doc in relevant_docs:
+            result = {
+                'text': doc['text'],
+                'metadata': doc['metadata'],
+                'score': doc.get('score', None)  # اگر امتیاز شباهت موجود باشد
+            }
+            results.append(result)
+        
+        return {
+            'query': request.question,
+            'results': results,
+            'count': len(results)
+        }
+        
+    except Exception as e:
+        error_context = f"Question: {request.question}"
+        log_error(error_logger, e, error_context)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Failed to search vector store",
+                "error": str(e)
+            }
+        )
 
 if __name__ == "__main__":
     import uvicorn
