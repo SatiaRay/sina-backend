@@ -147,4 +147,9 @@ class CrawledDocument(BaseModel):
     status: str = "pending"
     review_info: Optional[CurationStatus] = None
     created_at: datetime
-    updated_at: Optional[datetime] = None 
+    updated_at: Optional[datetime] = None
+
+class VectorSearchRequest(BaseModel):
+    question: str
+    limit: Optional[int] = 5 
+    max_score: Optional[float] = 1.0
