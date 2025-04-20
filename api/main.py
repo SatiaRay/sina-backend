@@ -29,6 +29,7 @@ from api.models import (ChatRequest,
                       AddKnowledgeRequest)
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
+from models.agent_rag import AgentRAGSystem
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -156,24 +157,25 @@ class UrlRequest(BaseModel):
 rag_system = RAGSystem()
 text_processor = TextProcessor()
 vector_store = VectorStore()
+agent_rag = AgentRAGSystem()
 
 @app.get("/")
 async def root():
     return {"message": "Welcome to Satya Support Chatbot API"}
 
 @app.post("/ask", response_model=Dict[str, Any], tags=["Chat"],
-          summary="پرسش از چت‌بات",
-          description="این اندپوینت یک سوال را دریافت کرده و پاسخ مرتبط را از پایگاه دانش برمی‌گرداند")
-async def ask_question(request: Request, question_request: QuestionRequest = Body(...)):
+      summary="پرسش از چت‌بات (نسخه مبتنی بر GPT-4)",
+      description="این اندپوینت از GPT-4 برای پاسخگویی استفاده می‌کند")
+async def ask_question_agent(request: Request, question_request: QuestionRequest = Body(...)):
     """
-    Process a question and return the answer with relevant sources
+    Process a question using the GPT-4 based agent system
     """
     try:
-        api_logger.info(f"Processing question: {question_request.question}")
+        api_logger.info(f"Processing question with agent: {question_request.question}")
         
-        response = rag_system.generate_response(question_request.question)
+        response = await agent_rag.generate_response(question_request.question)
         
-        api_logger.info("Successfully generated response")
+        api_logger.info("Successfully generated response with agent")
         return JSONResponse(content=response, media_type="application/json; charset=utf-8")
         
     except Exception as e:
@@ -1075,6 +1077,7 @@ async def search_vector_docs(
                 "error": str(e)
             }
         )
+
 
 if __name__ == "__main__":
     import uvicorn
