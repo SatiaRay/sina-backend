@@ -9,7 +9,7 @@ import ssl
 from scrapy.crawler import CrawlerRunner
 from twisted.internet import reactor
 from multiprocessing import Process, Queue
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin, urlunparse
 from datetime import datetime
 
 # غیرفعال کردن بررسی گواهی SSL
@@ -45,6 +45,9 @@ class SatyaSpider(scrapy.Spider):
 
 
     def parse(self, response):
+
+        print(f"Processing URL: {response.url}")
+
         # استخراج محتوای اصلی
         content = {
             'url': response.url,
@@ -52,6 +55,7 @@ class SatyaSpider(scrapy.Spider):
             'content': self.clean_content(response.text),
             'images': self.extract_images(response),
             'pdfs': self.extract_pdfs(response),
+            'urls': self.content_urls(response),
             'metadata': {
                 'timestamp': response.headers.get('Date', b'').decode(),
                 'content_type': response.headers.get('Content-Type', b'').decode()
@@ -60,9 +64,48 @@ class SatyaSpider(scrapy.Spider):
         
         # اضافه کردن به لیست داده‌ها
         self.all_data.append(content)
-        
+
         # ذخیره تمام داده‌ها در یک فایل
         self.save_all_data()
+
+    def content_urls(self, response):
+        """
+        استخراج تمام لینک‌های معتبر از صفحه
+        
+        Args:
+            response: پاسخ دریافتی از صفحه
+            
+        Returns:
+            list: لیست URL های معتبر
+        """
+        # استخراج تمام لینک‌ها
+        urls = set()
+        for href in response.css('a::attr(href)').getall():
+            try:
+                # تبدیل URL نسبی به مطلق
+                absolute_url = response.urljoin(href)
+                
+                # بررسی اینکه URL در دامنه‌های مجاز باشد
+                parsed_url = urlparse(absolute_url)
+                if parsed_url.netloc in self.allowed_domains:
+                    # حذف پارامترهای URL و fragment
+                    clean_url = urlunparse((
+                        parsed_url.scheme,
+                        parsed_url.netloc,
+                        parsed_url.path,
+                        '',
+                        '',
+                        ''
+                    ))
+                    urls.add(clean_url)
+                    
+            except Exception as e:
+                print(f"Error processing URL {href}: {str(e)}")
+                continue
+                
+        return list(urls)
+
+    
 
     def clean_content(self, html):
         soup = BeautifulSoup(html, 'html.parser')
@@ -130,7 +173,8 @@ def run_spider_in_process(url, queue):
 
     try:
         process = CrawlerProcess(settings={
-            'LOG_LEVEL': 'ERROR',
+            'LOG_LEVEL': 'INFO',
+            'LOG_FILE': 'scrapy_output.log',
             'ROBOTSTXT_OBEY': False,
             'DOWNLOAD_DELAY': 2,
             'CONCURRENT_REQUESTS': 5,
@@ -181,6 +225,7 @@ def run_spider_in_process(url, queue):
                 'metadata': {
                     'source': item['url'],
                     'url': item['url'],
+                    'sub_urls': item['urls'],
                     'title': item['title'],
                     'curation_status': 'pending',
                     'date_added': current_time,
@@ -203,23 +248,47 @@ def run_spider(url=None):
     Returns:
         list: لیست داده‌های استخراج شده
     """
+
+    urls = set()
+    if url:
+        urls.add(url)
+        
+    crawled_urls = set()
+    all_knowledge = []
+
     try:
-        queue = Queue()
-        p = Process(target=run_spider_in_process, args=(url, queue))
-        p.start()
-        p.join()
-        
-        # دریافت نتایج از صف
-        knowledge_items = queue.get()
-        
-        if not knowledge_items:
+        while urls:
+            current_url = urls.pop()
+            
+            if current_url in crawled_urls:
+                continue
+                
+            print(f"Crawling URL: {current_url}")
+            
+            queue = Queue()
+            p = Process(target=run_spider_in_process, args=(current_url, queue))
+            p.start()
+            p.join()
+            
+            # دریافت نتایج از صف
+            knowledge_items = queue.get()
+            
+            if knowledge_items:
+                crawled_urls.add(current_url)
+                all_knowledge.extend(knowledge_items)
+                
+                # Add new URLs from metadata
+                for item in knowledge_items:
+                    if 'metadata' in item and 'sub_urls' in item['metadata']:
+                        new_urls = set(item['metadata']['sub_urls']) - crawled_urls
+                        urls.update(new_urls)
+            
+        if not all_knowledge:
             print("هیچ داده‌ای از خزنده دریافت نشد")
             return []
             
-        return knowledge_items
+        return all_knowledge
+        
     except Exception as e:
         print(f"خطا در اجرای خزنده: {str(e)}")
         return []
-
-if __name__ == '__main__':
-    run_spider() 
