@@ -53,8 +53,8 @@ class SatyaSpider(scrapy.Spider):
             'url': response.url,
             'title': response.css('title::text').get() or 'بدون عنوان',
             'content': self.clean_content(response.text),
-            'images': self.extract_images(response),
-            'pdfs': self.extract_pdfs(response),
+            # 'images': self.extract_images(response),
+            # 'pdfs': self.extract_pdfs(response),
             'urls': self.content_urls(response),
             'metadata': {
                 'timestamp': response.headers.get('Date', b'').decode(),
@@ -83,10 +83,11 @@ class SatyaSpider(scrapy.Spider):
         for href in response.css('a::attr(href)').getall():
             try:
                 # تبدیل URL نسبی به مطلق
-                absolute_url = response.urljoin(href)
-                
+                absolute_url = response.urljoin(href).replace('www.', '')
+
                 # بررسی اینکه URL در دامنه‌های مجاز باشد
                 parsed_url = urlparse(absolute_url)
+
                 if parsed_url.netloc in self.allowed_domains:
                     # حذف پارامترهای URL و fragment
                     clean_url = urlunparse((
@@ -108,6 +109,8 @@ class SatyaSpider(scrapy.Spider):
     
 
     def clean_content(self, html):
+
+        print(f"Cleaning content ...")
         soup = BeautifulSoup(html, 'html.parser')
         
         # حذف اسکریپت‌ها و استایل‌ها
@@ -238,7 +241,7 @@ def run_spider_in_process(url, queue):
         print(f"خطا در اجرای خزنده: {str(e)}")
         queue.put([])
     
-def run_spider(url=None):
+def run_spider(url=None, recursive=False):
     """
     اجرای خزنده برای یک URL خاص
     
@@ -256,19 +259,33 @@ def run_spider(url=None):
     crawled_urls = set()
     all_knowledge = []
 
+    except_urls = set([
+                'https://satia.co/parental-controls-in-apple-devices/',  # Added missing comma
+                'https://satia.co/bandwith/',
+                'https://satia.co/bandwidth-service-contract/',
+                'https://www.satia.co/noise/',
+                'https://www.satia.co/mac-filtering-in-modem/'
+            ])
+
     try:
-        while urls:
+        while len(urls) > 0:
             current_url = urls.pop()
-            
-            if current_url in crawled_urls:
+
+            current_url = current_url.replace('www.', '')
+
+            if current_url in crawled_urls or current_url in except_urls:
                 continue
-                
-            print(f"Crawling URL: {current_url}")
-            
+
             queue = Queue()
             p = Process(target=run_spider_in_process, args=(current_url, queue))
             p.start()
-            p.join()
+            p.join(timeout=30) # 60 second timeout
+            
+            if p.is_alive():
+                p.terminate()
+                p.join()
+                print(f"Crawler timed out for URL: {current_url}")
+                continue
             
             # دریافت نتایج از صف
             knowledge_items = queue.get()
@@ -276,6 +293,9 @@ def run_spider(url=None):
             if knowledge_items:
                 crawled_urls.add(current_url)
                 all_knowledge.extend(knowledge_items)
+
+                if not recursive:
+                    break
                 
                 # Add new URLs from metadata
                 for item in knowledge_items:
