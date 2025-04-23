@@ -1082,3 +1082,55 @@ async def search_vector_docs(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001) 
+
+
+@app.get("/crawled_data", tags=["Knowledge Management"],
+         summary="دریافت لیست داده‌های خزش شده",
+         description="این اندپوینت لیست تمام فایل‌های داده خزش شده را برمی‌گرداند")
+async def get_crawled_data():
+    """
+    دریافت لیست داده‌های خزش شده از دایرکتوری data/crawled_data
+    """
+    try:
+        # مسیر دایرکتوری داده‌های خزش شده
+        crawled_data_dir = Path("data/crawled_data")
+        
+        if not crawled_data_dir.exists():
+            return {
+                "status": "error",
+                "message": "دایرکتوری داده‌های خزش شده یافت نشد",
+                "files": []
+            }
+            
+        # لیست تمام فایل‌های json
+        json_files = list(crawled_data_dir.glob("*.json"))
+        
+        files_data = []
+        for file_path in json_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    files_data.append({
+                        "filename": file_path.name,
+                        "url": data.get("url", ""),
+                        "title": data.get("title", ""),
+                        "timestamp": data.get("metadata", {}).get("timestamp", "")
+                    })
+            except Exception as e:
+                print(f"Error reading file {file_path}: {str(e)}")
+                continue
+                
+        return {
+            "status": "success",
+            "count": len(files_data),
+            "files": files_data
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "خطا در دریافت لیست داده‌های خزش شده",
+                "error": str(e)
+            }
+        )
