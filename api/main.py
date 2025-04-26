@@ -1134,3 +1134,104 @@ async def get_crawled_data():
                 "error": str(e)
             }
         )
+
+@app.get("/crawl-directories",
+         tags=["Utilities"],
+         summary="دریافت لیست دایرکتوری‌های خزش شده",
+         description="این اندپوینت لیست تمام دایرکتوری‌های موجود در مسیر data/crawl را برمی‌گرداند")
+async def get_crawl_directories():
+    """
+    دریافت لیست دایرکتوری‌های موجود در مسیر data/crawl
+    """
+    try:
+        # مسیر دایرکتوری داده‌های خزش شده
+        crawl_dir = Path("data/crawl")
+        
+        if not crawl_dir.exists():
+            return {
+                "status": "error",
+                "message": "دایرکتوری خزش یافت نشد",
+                "directories": []
+            }
+            
+        # لیست تمام دایرکتوری‌ها
+        directories = [d.name for d in crawl_dir.iterdir() if d.is_dir()]
+        
+        return {
+            "status": "success",
+            "count": len(directories),
+            "directories": directories
+        }
+        
+    except Exception as e:
+        log_error(f"Error getting crawl directories: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "خطا در دریافت لیست دایرکتوری‌های خزش شده",
+                "error": str(e)
+            }
+        )
+
+@app.get("/crawl-directory-files/{directory_name}",
+         tags=["Utilities"],
+         summary="دریافت لیست فایل‌های یک دایرکتوری خزش شده",
+         description="این اندپوینت لیست تمام فایل‌های json موجود در یک دایرکتوری خزش شده را برمی‌گرداند")
+async def get_crawl_directory_files(directory_name: str):
+    """
+    دریافت لیست فایل‌های json موجود در یک دایرکتوری خزش شده
+    
+    Args:
+        directory_name: نام دایرکتوری خزش شده
+    """
+    try:
+        # مسیر دایرکتوری مورد نظر
+        directory_path = Path(f"data/crawl/{directory_name}")
+        
+        if not directory_path.exists() or not directory_path.is_dir():
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "message": "دایرکتوری مورد نظر یافت نشد",
+                    "directory": directory_name
+                }
+            )
+            
+        # لیست تمام فایل‌های json
+        json_files = list(directory_path.glob("*.json"))
+        
+        files_data = []
+        for file_path in json_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    files_data.append({
+                        "filename": file_path.name,
+                        "title": data.get("metadata", {}).get("title", ""),
+                        "source": data.get("metadata", {}).get("source", ""),
+                        "date_added": data.get("metadata", {}).get("date_added", ""),
+                        "last_modified": data.get("metadata", {}).get("last_modified", "")
+                    })
+            except Exception as e:
+                log_error(f"Error reading file {file_path}: {str(e)}")
+                continue
+                
+        return {
+            "status": "success",
+            "directory": directory_name,
+            "count": len(files_data),
+            "files": files_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error(f"Error getting files from directory {directory_name}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "خطا در دریافت لیست فایل‌های دایرکتوری",
+                "error": str(e)
+            }
+        )
+
