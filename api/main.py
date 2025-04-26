@@ -22,7 +22,10 @@ from crawler.main import run_spider
 import uuid
 from .models import (DataSource, DataSourceListResponse, Chunk, EditChunkRequest, 
                     PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest,
-                    CurationStatus, CurationStats, VectorSearchRequest)
+                    CurationStatus, CurationStats, VectorSearchRequest,
+                    ChatRequest, 
+                    AddKnowledgeRequest,
+                    StoreVectorRequest)
 from database.vector_store import VectorStore
 from util.database import get_db_connection
 from api.models import (ChatRequest, 
@@ -1078,6 +1081,49 @@ async def search_vector_docs(
             }
         )
 
+@app.post("/store_vector", tags=["Vector Store"],
+         summary="ذخیره متن و متادیتا در پایگاه داده برداری",
+         description="این اندپوینت متن و متادیتای مربوطه را در پایگاه داده برداری ذخیره می‌کند")
+async def store_vector(
+    request: StoreVectorRequest = Body(
+        ...,
+        example={
+            "text": "ساتیا یک پلتفرم مدیریت منابع سازمانی است که...",
+            "metadata": {
+                "source": "دستی",
+                "title": "درباره ساتیا",
+                "author": "تیم ساتیا",
+                "date": "2024-04-26"
+            }
+        }
+    )
+):
+    try:
+        # Initialize vector store
+        vector_store = VectorStore()
+        
+        # Create document structure
+        document = {
+            "text": request.text,
+            "metadata": request.metadata
+        }
+        
+        # Add document to vector store
+        vector_store.add_documents([document])
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "متن با موفقیت در پایگاه داده برداری ذخیره شد",
+                "status": "success"
+            }
+        )
+    except Exception as e:
+        log_error(error_logger, str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"خطا در ذخیره متن در پایگاه داده برداری: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn
@@ -1231,6 +1277,65 @@ async def get_crawl_directory_files(directory_name: str):
             status_code=500,
             detail={
                 "message": "خطا در دریافت لیست فایل‌های دایرکتوری",
+                "error": str(e)
+            }
+        )
+
+@app.get("/get_file_content/{directory_name}/{filename}", tags=["Data Sources"])
+async def get_file_content(directory_name: str, filename: str):
+    """
+    دریافت محتوای یک فایل JSON از دایرکتوری مشخص شده
+    
+    Args:
+        directory_name (str): نام دایرکتوری حاوی فایل‌های خزش شده
+        filename (str): نام فایل JSON مورد نظر
+    
+    Returns:
+        dict: محتوای فایل JSON به همراه اطلاعات متا
+    """
+    try:
+        # مسیر فایل مورد نظر
+        file_path = Path(f"data/crawl/{directory_name}/{filename}")
+        
+        if not file_path.exists() or not file_path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "message": "فایل مورد نظر یافت نشد",
+                    "directory": directory_name,
+                    "filename": filename
+                }
+            )
+            
+        # خواندن محتوای فایل
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            return {
+                "status": "success",
+                "directory": directory_name,
+                "filename": filename,
+                "content": data
+            }
+        except Exception as e:
+            log_error(f"Error reading file {file_path}: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": "خطا در خواندن محتوای فایل",
+                    "error": str(e)
+                }
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error(f"Error getting file content for {filename} in {directory_name}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "خطا در دریافت محتوای فایل",
                 "error": str(e)
             }
         )
