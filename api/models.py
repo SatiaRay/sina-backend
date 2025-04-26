@@ -158,7 +158,7 @@ class StoreVectorRequest(BaseModel):
     """
     مدل درخواست برای ذخیره متن و متادیتا در پایگاه داده برداری
     
-    - text: متن اصلی برای ذخیره
+    - text: متن اصلی برای ذخیره (می‌تواند شامل تگ‌های HTML باشد)
     - metadata: متادیتای مربوط به متن
     """
     text: str
@@ -167,7 +167,7 @@ class StoreVectorRequest(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "text": "ساتیا یک پلتفرم مدیریت منابع سازمانی است که...",
+                "text": "<p class='content'>ساتیا یک پلتفرم مدیریت منابع سازمانی است که...</p>",
                 "metadata": {
                     "source": "دستی",
                     "title": "درباره ساتیا",

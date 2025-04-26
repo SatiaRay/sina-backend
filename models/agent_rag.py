@@ -37,14 +37,14 @@ class AgentRAGSystem:
         self.persian_agent = Agent(
             name="Satia Persian Support",
             instructions=SATIA_INSTRUCTIONS,
-            model="gpt-4.1",  # Using GPT-4 for better Persian language support
+            model=os.getenv("GPT_MODEL"),  # Using model from environment variable
         )
         
         # Create an English support agent
         self.english_agent = Agent(
             name="Satia English Support",
             instructions=SATIA_INSTRUCTIONS.replace("به زبان فارسی", "in English"),
-            model="gpt-4.1",
+            model=os.getenv("GPT_MODEL"),
         )
         
         # Create a triage agent to handle language selection
@@ -57,7 +57,7 @@ class AgentRAGSystem:
             Always prioritize Persian if the question contains both languages.
             """,
             handoffs=[self.persian_agent, self.english_agent],
-            model="gpt-4.1",
+            model=os.getenv("GPT_MODEL"),
         )
         
         main_logger.info("Initialized Agent RAG System with GPT-4")

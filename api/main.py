@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 import json
 from datetime import datetime
 import logging
+from bs4 import BeautifulSoup
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
@@ -1088,7 +1089,7 @@ async def store_vector(
     request: StoreVectorRequest = Body(
         ...,
         example={
-            "text": "ساتیا یک پلتفرم مدیریت منابع سازمانی است که...",
+            "text": "<p class='content'>ساتیا یک پلتفرم مدیریت منابع سازمانی است که...</p>",
             "metadata": {
                 "source": "دستی",
                 "title": "درباره ساتیا",
@@ -1099,12 +1100,22 @@ async def store_vector(
     )
 ):
     try:
+        # Clean HTML content
+        soup = BeautifulSoup(request.text, 'html.parser')
+        
+        # Remove all attributes from HTML tags
+        for tag in soup.find_all(True):
+            tag.attrs = {}
+        
+        # Get cleaned text
+        cleaned_text = str(soup)
+        
         # Initialize vector store
         vector_store = VectorStore()
         
-        # Create document structure
+        # Create document structure with cleaned text
         document = {
-            "text": request.text,
+            "text": cleaned_text,
             "metadata": request.metadata
         }
         
