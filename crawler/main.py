@@ -68,6 +68,7 @@ class SatyaSpider(scrapy.Spider):
         # ذخیره تمام داده‌ها در یک فایل
         self.save_all_data()
 
+
     def content_urls(self, response):
         """
         استخراج تمام لینک‌های معتبر از صفحه
@@ -106,10 +107,7 @@ class SatyaSpider(scrapy.Spider):
                 
         return list(urls)
 
-    
-
     def clean_content(self, html):
-
         print(f"Cleaning content ...")
         soup = BeautifulSoup(html, 'html.parser')
         
@@ -137,7 +135,7 @@ class SatyaSpider(scrapy.Spider):
         for login_search in soup.select('.login, #login, .search, #search, .search-box, #search-box'):
             login_search.decompose()
         
-        return soup.get_text(separator=' ', strip=True)
+        return str(soup)
 
     def extract_images(self, response):
         return [img.attrib['src'] for img in response.css('img') if 'src' in img.attrib]
@@ -279,16 +277,31 @@ def run_spider(url=None, recursive=False):
             queue = Queue()
             p = Process(target=run_spider_in_process, args=(current_url, queue))
             p.start()
-            p.join(timeout=30) # 60 second timeout
             
+            # Set timeout duration
+            timeout = 10  # 10 second timeout
+            start_time = datetime.now()
+            
+            # Check in a loop if process is still alive
+            while p.is_alive():
+                # Break if timeout exceeded
+                if (datetime.now() - start_time).total_seconds() > timeout:
+                    p.terminate()
+                    p.join()
+                    print(f"Crawler timed out for URL: {current_url}")
+                    break
+                
+                # If process completed, break the loop immediately
+                if not p.is_alive():
+                    break
+            
+            # If process timed out, skip to next URL
             if p.is_alive():
-                p.terminate()
-                p.join()
-                print(f"Crawler timed out for URL: {current_url}")
                 continue
-            
             # دریافت نتایج از صف
             knowledge_items = queue.get()
+
+            print(f"Knowledge items: {knowledge_items}")
             
             if knowledge_items:
                 crawled_urls.add(current_url)

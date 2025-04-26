@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 import json
 from datetime import datetime
 import logging
+from bs4 import BeautifulSoup
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
@@ -22,7 +23,10 @@ from crawler.main import run_spider
 import uuid
 from .models import (DataSource, DataSourceListResponse, Chunk, EditChunkRequest, 
                     PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest,
-                    CurationStatus, CurationStats, VectorSearchRequest)
+                    CurationStatus, CurationStats, VectorSearchRequest,
+                    ChatRequest, 
+                    AddKnowledgeRequest,
+                    StoreVectorRequest)
 from database.vector_store import VectorStore
 from util.database import get_db_connection
 from api.models import (ChatRequest, 
@@ -1078,6 +1082,59 @@ async def search_vector_docs(
             }
         )
 
+@app.post("/store_vector", tags=["Vector Store"],
+         summary="ذخیره متن و متادیتا در پایگاه داده برداری",
+         description="این اندپوینت متن و متادیتای مربوطه را در پایگاه داده برداری ذخیره می‌کند")
+async def store_vector(
+    request: StoreVectorRequest = Body(
+        ...,
+        example={
+            "text": "<p class='content'>ساتیا یک پلتفرم مدیریت منابع سازمانی است که...</p>",
+            "metadata": {
+                "source": "دستی",
+                "title": "درباره ساتیا",
+                "author": "تیم ساتیا",
+                "date": "2024-04-26"
+            }
+        }
+    )
+):
+    try:
+        # Clean HTML content
+        soup = BeautifulSoup(request.text, 'html.parser')
+        
+        # Remove all attributes from HTML tags
+        for tag in soup.find_all(True):
+            tag.attrs = {}
+        
+        # Get cleaned text
+        cleaned_text = str(soup)
+        
+        # Initialize vector store
+        vector_store = VectorStore()
+        
+        # Create document structure with cleaned text
+        document = {
+            "text": cleaned_text,
+            "metadata": request.metadata
+        }
+        
+        # Add document to vector store
+        vector_store.add_documents([document])
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "متن با موفقیت در پایگاه داده برداری ذخیره شد",
+                "status": "success"
+            }
+        )
+    except Exception as e:
+        log_error(error_logger, str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"خطا در ذخیره متن در پایگاه داده برداری: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn
@@ -1134,3 +1191,163 @@ async def get_crawled_data():
                 "error": str(e)
             }
         )
+
+@app.get("/crawl-directories",
+         tags=["Utilities"],
+         summary="دریافت لیست دایرکتوری‌های خزش شده",
+         description="این اندپوینت لیست تمام دایرکتوری‌های موجود در مسیر data/crawl را برمی‌گرداند")
+async def get_crawl_directories():
+    """
+    دریافت لیست دایرکتوری‌های موجود در مسیر data/crawl
+    """
+    try:
+        # مسیر دایرکتوری داده‌های خزش شده
+        crawl_dir = Path("data/crawl")
+        
+        if not crawl_dir.exists():
+            return {
+                "status": "error",
+                "message": "دایرکتوری خزش یافت نشد",
+                "directories": []
+            }
+            
+        # لیست تمام دایرکتوری‌ها
+        directories = [d.name for d in crawl_dir.iterdir() if d.is_dir()]
+        
+        return {
+            "status": "success",
+            "count": len(directories),
+            "directories": directories
+        }
+        
+    except Exception as e:
+        log_error(f"Error getting crawl directories: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "خطا در دریافت لیست دایرکتوری‌های خزش شده",
+                "error": str(e)
+            }
+        )
+
+@app.get("/crawl-directory-files/{directory_name}",
+         tags=["Utilities"],
+         summary="دریافت لیست فایل‌های یک دایرکتوری خزش شده",
+         description="این اندپوینت لیست تمام فایل‌های json موجود در یک دایرکتوری خزش شده را برمی‌گرداند")
+async def get_crawl_directory_files(directory_name: str):
+    """
+    دریافت لیست فایل‌های json موجود در یک دایرکتوری خزش شده
+    
+    Args:
+        directory_name: نام دایرکتوری خزش شده
+    """
+    try:
+        # مسیر دایرکتوری مورد نظر
+        directory_path = Path(f"data/crawl/{directory_name}")
+        
+        if not directory_path.exists() or not directory_path.is_dir():
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "message": "دایرکتوری مورد نظر یافت نشد",
+                    "directory": directory_name
+                }
+            )
+            
+        # لیست تمام فایل‌های json
+        json_files = list(directory_path.glob("*.json"))
+        
+        files_data = []
+        for file_path in json_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    files_data.append({
+                        "filename": file_path.name,
+                        "title": data.get("metadata", {}).get("title", ""),
+                        "source": data.get("metadata", {}).get("source", ""),
+                        "date_added": data.get("metadata", {}).get("date_added", ""),
+                        "last_modified": data.get("metadata", {}).get("last_modified", "")
+                    })
+            except Exception as e:
+                log_error(f"Error reading file {file_path}: {str(e)}")
+                continue
+                
+        return {
+            "status": "success",
+            "directory": directory_name,
+            "count": len(files_data),
+            "files": files_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error(f"Error getting files from directory {directory_name}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "خطا در دریافت لیست فایل‌های دایرکتوری",
+                "error": str(e)
+            }
+        )
+
+@app.get("/get_file_content/{directory_name}/{filename}", tags=["Data Sources"])
+async def get_file_content(directory_name: str, filename: str):
+    """
+    دریافت محتوای یک فایل JSON از دایرکتوری مشخص شده
+    
+    Args:
+        directory_name (str): نام دایرکتوری حاوی فایل‌های خزش شده
+        filename (str): نام فایل JSON مورد نظر
+    
+    Returns:
+        dict: محتوای فایل JSON به همراه اطلاعات متا
+    """
+    try:
+        # مسیر فایل مورد نظر
+        file_path = Path(f"data/crawl/{directory_name}/{filename}")
+        
+        if not file_path.exists() or not file_path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "message": "فایل مورد نظر یافت نشد",
+                    "directory": directory_name,
+                    "filename": filename
+                }
+            )
+            
+        # خواندن محتوای فایل
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            return {
+                "status": "success",
+                "directory": directory_name,
+                "filename": filename,
+                "content": data
+            }
+        except Exception as e:
+            log_error(f"Error reading file {file_path}: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": "خطا در خواندن محتوای فایل",
+                    "error": str(e)
+                }
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error(f"Error getting file content for {filename} in {directory_name}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "خطا در دریافت محتوای فایل",
+                "error": str(e)
+            }
+        )
+
