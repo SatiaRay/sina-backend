@@ -84,7 +84,8 @@ class VectorStore:
             documents.append({
                 'text': results['documents'][0][i],
                 'metadata': results['metadatas'][0][i],
-                'score': results['distances'][0][i]
+                'score': results['distances'][0][i],
+                'id': results['ids'][0][i]
             })
             
         return documents
