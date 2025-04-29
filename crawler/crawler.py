@@ -7,8 +7,8 @@ from datetime import datetime
 import re
 from difflib import SequenceMatcher
 import hashlib
-from database.models import Document
-from database.repository import DocumentRepository
+from database.models import Document, CrawledDomain
+from database.repository import DocumentRepository, CrawledDomainRepository
 from database.models import SessionLocal
 
 # To run the crawler, use the following command:
@@ -37,13 +37,27 @@ def crawl(url, recursive=False):
     # Initialize database session
     db = SessionLocal()
     document_repo = DocumentRepository(db)
+    domain_repo = CrawledDomainRepository(db)
     
     try:
-        # Check if URL already exists in database
-        existing_docs = document_repo.get_by_source(url)
-        if existing_docs:
-            print(f"URL {url} already exists in the database. Skipping crawl.")
-            return
+        # Parse the URL to get domain
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc
+        
+        # Check if domain already exists in database
+        domain_obj = domain_repo.get_by_domain(domain)
+        if domain_obj:
+            print(f"Domain {domain} already exists in the database")
+        else:
+            # Try to access the URL first
+            response = requests.get(url, timeout=10)
+            if response.status_code != 200:
+                print(f"Failed to access {url}: Status code {response.status_code}")
+                return
+            
+            # Create domain record
+            domain_obj = domain_repo.create({"domain": domain})
+            print(f"Created new domain record: {domain}")
         
         # Keep track of visited URLs to avoid duplicates
         visited_urls = set()
@@ -51,7 +65,7 @@ def crawl(url, recursive=False):
         
         def process_url(current_url):
             current_url = current_url.split('#')[0]
-
+            
             if current_url in visited_urls:
                 return
             
@@ -84,9 +98,6 @@ def crawl(url, recursive=False):
                 # Clean the title to use as a filename
                 clean_title = re.sub(r'[^\w\-_]', '_', title)[:100]
                 
-                # Extract domain for folder structure
-                domain = urlparse(current_url).netloc
-                
                 # Get text content and ensure it's a string
                 text_content = str(soup.get_text())
                 
@@ -98,45 +109,46 @@ def crawl(url, recursive=False):
                 
                 # Create data structure
                 current_time = datetime.now().isoformat()
+                parsed_current_url = urlparse(current_url)
+                uri = parsed_current_url.path or '/'
+                
                 item = {
                     'url': current_url,
+                    'uri': uri,
                     'title': title,
                     'html': str(soup),
                     'text': text_content,
-                    'domain': domain,
                     'clean_title': clean_title
                 }
                 
                 crawled_data.append(item)
                 
                 try:
-                    # Create content JSON with html and markdown (text) fields
-                    content_json = json.dumps({
-                        'html': str(soup),
-                        'markdown': text_content  # markdown is equal to the text content
-                    })
-                    
-                    # Check if document with this source already exists
-                    existing_docs = document_repo.get_by_source(current_url)
+                    # Check if document with this URI already exists
+                    existing_docs = document_repo.get_by_uri(uri)
                     if existing_docs:
                         # Update existing document
                         document_repo.update(existing_docs[0].id, {
                             'title': title,
-                            'content': content_json,
-                            'source': current_url,
+                            'html': str(soup),
+                            'markdown': text_content,
+                            'uri': uri,
+                            'domain_id': domain_obj.id,
                             'embedding_id': None
                         })
-                        print(f"Updated existing document for URL: {current_url}")
+                        print(f"Updated existing document for URI: {uri}")
                     else:
                         # Create new document
                         document_data = {
                             'title': title,
-                            'content': content_json,
-                            'source': current_url,
+                            'html': str(soup),
+                            'markdown': text_content,
+                            'uri': uri,
+                            'domain_id': domain_obj.id,
                             'embedding_id': None  # Will be set later when processed by vector store
                         }
                         document_repo.create(document_data)
-                        print(f"Created new document for URL: {current_url}")
+                        print(f"Created new document for URI: {uri}")
                 except Exception as e:
                     print(f"Error storing document in database: {str(e)}")
                     # Rollback the session to clear any failed transaction
@@ -235,7 +247,7 @@ def remove_duplicate_content(crawled_data, document_repo):
             if len(processed_text) < 100:  # If less than 100 characters, keep original
                 processed_text = item['text']
                 processed_html = item['html']
-                print(f"Keeping original content for {item['url']} as processed content was too short")
+                print(f"Keeping original content for {item['uri']} as processed content was too short")
             
             # Create content JSON with processed content
             content_json = json.dumps({
@@ -244,16 +256,17 @@ def remove_duplicate_content(crawled_data, document_repo):
             })
             
             # Update document in database
-            existing_docs = document_repo.get_by_source(item['url'])
+            existing_docs = document_repo.get_by_uri(item['uri'])
             if existing_docs:  # Check if we found any documents
-                # Update the first document (should be only one due to unique source)
+                # Update the first document (should be only one due to unique URI)
                 document_repo.update(existing_docs[0].id, {
-                    'content': content_json,
+                    'html': processed_html,
+                    'markdown': processed_text,
                     'title': item['title']
                 })
-                print(f"Updated document in database for URL: {item['url']}")
+                print(f"Updated document in database for URI: {item['uri']}")
         except Exception as e:
-            print(f"Error updating document for URL {item['url']}: {str(e)}")
+            print(f"Error updating document for URI {item['uri']}: {str(e)}")
             # Rollback the session to clear any failed transaction
             document_repo.db.rollback()
 

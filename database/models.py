@@ -55,14 +55,14 @@ class Wizard(BaseModel):
         backref="children"
     )
 
-# Example model - Chat
+# Chat model
 class Chat(BaseModel):
     __tablename__ = "chats"
     
     title = Column(String(255))
     messages = relationship("Message", back_populates="chat")
 
-# Example model - Message
+# Message model
 class Message(BaseModel):
     __tablename__ = "messages"
     
@@ -71,13 +71,23 @@ class Message(BaseModel):
     chat_id = Column(Integer, ForeignKey("chats.id"))
     chat = relationship("Chat", back_populates="messages")
 
-# Example model - Document
+# CrawledDomain model
+class CrawledDomain(BaseModel):
+    __tablename__ = "crawled_domains"
+    
+    domain = Column(String(255), unique=True, nullable=False)
+    documents = relationship("Document", back_populates="domain")
+
+# Document model
 class Document(BaseModel):
     __tablename__ = "documents"
     
     title = Column(String(255))
-    content = Column(Text)
-    source = Column(String(255))
+    html = Column(Text)
+    markdown = Column(Text, nullable=True)
+    uri = Column(String(255))  # Changed from source to uri
+    domain_id = Column(Integer, ForeignKey("crawled_domains.id"), nullable=False)
+    domain = relationship("CrawledDomain", back_populates="documents")
     embedding_id = Column(String(255))  # Reference to vector store
 
 # Database dependency for FastAPI

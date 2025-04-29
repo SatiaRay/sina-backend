@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Type, TypeVar, Generic
 from datetime import datetime
-from .models import BaseModel, Chat, Message, Document, Wizard
+from .models import BaseModel, Chat, Message, Document, Wizard, CrawledDomain
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -103,12 +103,34 @@ class MessageRepository(BaseRepository[Message]):
     def get_by_chat(self, chat_id: int) -> List[Message]:
         return self.db.query(Message).filter(Message.chat_id == chat_id).all()
 
+class CrawledDomainRepository(BaseRepository[CrawledDomain]):
+    def __init__(self, db: Session):
+        super().__init__(CrawledDomain, db)
+
+    def get_by_domain(self, domain: str) -> Optional[CrawledDomain]:
+        return self.db.query(CrawledDomain).filter(CrawledDomain.domain == domain).first()
+
+    def get_or_create(self, domain: str) -> CrawledDomain:
+        existing = self.get_by_domain(domain)
+        if existing:
+            return existing
+        return self.create({"domain": domain})
+
 class DocumentRepository(BaseRepository[Document]):
     def __init__(self, db: Session):
         super().__init__(Document, db)
 
-    def get_by_source(self, source: str) -> List[Document]:
-        return self.db.query(Document).filter(Document.source == source).all()
+    def get_by_uri(self, uri: str) -> List[Document]:
+        return self.db.query(Document).filter(Document.uri == uri).all()
+
+    def get_by_domain(self, domain_id: int) -> List[Document]:
+        return self.db.query(Document).filter(Document.domain_id == domain_id).all()
 
     def get_by_embedding_id(self, embedding_id: str) -> Optional[Document]:
-        return self.db.query(Document).filter(Document.embedding_id == embedding_id).first() 
+        return self.db.query(Document).filter(Document.embedding_id == embedding_id).first()
+
+    def search_by_content(self, query: str) -> List[Document]:
+        return self.db.query(Document).filter(Document.content.ilike(f"%{query}%")).all()
+
+    def search_by_title(self, query: str) -> List[Document]:
+        return self.db.query(Document).filter(Document.title.ilike(f"%{query}%")).all() 
