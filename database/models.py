@@ -1,0 +1,97 @@
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+from datetime import datetime
+import os
+from dotenv import load_dotenv, find_dotenv
+
+# Force reload of environment variables
+print("Loading environment from:", find_dotenv())
+load_dotenv(override=True)
+
+# Debug: Print database configuration
+print("Environment Variables:")
+print(f"Current Directory: {os.getcwd()}")
+print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
+print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
+print("\nDatabase Configuration:")
+print(f"Host: {os.getenv('MYSQL_HOST')}")
+print(f"User: {os.getenv('MYSQL_USER')}")
+print(f"Database: {os.getenv('MYSQL_DATABASE')}")
+print(f"Port: {os.getenv('MYSQL_PORT')}")
+
+# Create SQLAlchemy engine
+DATABASE_URL = f"mysql+mysqlconnector://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{os.getenv('MYSQL_HOST')}:{os.getenv('MYSQL_PORT')}/{os.getenv('MYSQL_DATABASE')}"
+print(f"Database URL: {DATABASE_URL}")
+engine = create_engine(DATABASE_URL)
+
+# Create session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Create base class for models
+Base = declarative_base()
+
+# Base model with common fields
+class BaseModel(Base):
+    __abstract__ = True
+    
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+# Wizard model
+class Wizard(BaseModel):
+    __tablename__ = "wizards"
+    
+    title = Column(String(255), nullable=False)
+    context = Column(Text, nullable=True)
+    parent_id = Column(Integer, ForeignKey("wizards.id"), nullable=True)
+    enabled = Column(Boolean, default=True, nullable=False)
+    
+    # Relationship for self-referential hierarchy
+    parent = relationship(
+        "Wizard",
+        remote_side=lambda: [Wizard.id],
+        backref="children"
+    )
+
+# Example model - Chat
+class Chat(BaseModel):
+    __tablename__ = "chats"
+    
+    title = Column(String(255))
+    messages = relationship("Message", back_populates="chat")
+
+# Example model - Message
+class Message(BaseModel):
+    __tablename__ = "messages"
+    
+    content = Column(Text)
+    role = Column(String(50))  # user, assistant, system
+    chat_id = Column(Integer, ForeignKey("chats.id"))
+    chat = relationship("Chat", back_populates="messages")
+
+# Example model - Document
+class Document(BaseModel):
+    __tablename__ = "documents"
+    
+    title = Column(String(255))
+    content = Column(Text)
+    source = Column(String(255))
+    embedding_id = Column(String(255))  # Reference to vector store
+
+# Database dependency for FastAPI
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Create all tables
+def init_db():
+    Base.metadata.create_all(bind=engine)
+
+if __name__ == "__main__":
+    init_db()
+    print("Database tables created successfully!") 

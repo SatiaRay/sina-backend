@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
 from typing import List, Dict, Any
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from models.rag import RAGSystem
 from models.text_processor import TextProcessor
 from crawler.main import run_spider
@@ -34,11 +34,20 @@ from api.models import (ChatRequest,
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
 from models.agent_rag import AgentRAGSystem
+from .wizard import router as wizard_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
 
-load_dotenv()
+# Force reload environment variables
+print("Loading environment from:", find_dotenv())
+load_dotenv(override=True)
+
+# Debug: Print database configuration at startup
+print("Environment Variables at Startup:")
+print(f"Current Directory: {os.getcwd()}")
+print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
+print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
 
 app = FastAPI(
     title="Satya Support Chatbot API",
@@ -50,6 +59,7 @@ app = FastAPI(
     * **پرسش و پاسخ**: پرسش از چت‌بات و دریافت پاسخ براساس پایگاه دانش
     * **مدیریت دانش**: افزودن، به‌روزرسانی و حذف دانش از منابع مختلف (URL یا متن ساده)
     * **مدیریت منابع داده**: مشاهده و ویرایش منابع داده موجود
+    * **مدیریت ویزاردها**: مدیریت ویزاردهای سیستم
     
     برای استفاده از API، می‌توانید از اندپوینت‌های زیر استفاده کنید:
     
@@ -98,6 +108,9 @@ tags_metadata = [
 ]
 
 app.openapi_tags = tags_metadata
+
+# Add the wizard router
+app.include_router(wizard_router)
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
