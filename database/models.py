@@ -82,13 +82,49 @@ class CrawledDomain(BaseModel):
 class Document(BaseModel):
     __tablename__ = "documents"
     
+    id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255))
-    html = Column(Text)
-    markdown = Column(Text, nullable=True)
-    uri = Column(String(255))  # Changed from source to uri
-    domain_id = Column(Integer, ForeignKey("crawled_domains.id"), nullable=False)
+    _html = Column("html", Text(length=4294967295))  # MySQL LONGTEXT
+    markdown = Column(Text(length=4294967295), nullable=True)  # MySQL LONGTEXT
+    uri = Column(String(255))
+    domain_id = Column(Integer, ForeignKey("crawled_domains.id"))
+    embedding_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
     domain = relationship("CrawledDomain", back_populates="documents")
-    embedding_id = Column(String(255))  # Reference to vector store
+
+    @property
+    def html(self):
+        """Get decoded HTML content"""
+        return self.decode_html(self._html)
+
+    @html.setter
+    def html(self, value):
+        """Set encoded HTML content"""
+        self._html = self.encode_html(value)
+
+    def __init__(self, **kwargs):
+        if 'html' in kwargs:
+            kwargs['_html'] = self.encode_html(kwargs.pop('html'))
+        super().__init__(**kwargs)
+
+    @staticmethod
+    def encode_html(html_content):
+        """Encode HTML content for storage"""
+        if html_content is None:
+            return None
+        return html_content.encode('utf-8').hex()
+
+    @staticmethod
+    def decode_html(encoded_html):
+        """Decode HTML content from storage"""
+        if encoded_html is None:
+            return None
+        try:
+            return bytes.fromhex(encoded_html).decode('utf-8')
+        except:
+            return encoded_html  # Return original if decoding fails
 
 # Database dependency for FastAPI
 def get_db():

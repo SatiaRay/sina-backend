@@ -7,8 +7,12 @@ import json
 
 from database.models import get_db
 from database.repository import DocumentRepository, CrawledDomainRepository
+from models.html_to_markdown_agent import HTMLToMarkdownAgent
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+# Initialize the HTML to Markdown agent
+html_to_markdown_agent = HTMLToMarkdownAgent()
 
 # Pydantic models for request/response
 class DocumentBase(BaseModel):
@@ -102,13 +106,30 @@ def update_document(document_id: int, document: DocumentUpdate, db: Session = De
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
     
+    # Get current document
+    current_doc = document_repo.get(document_id)
+    if not current_doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
     # Verify domain exists if being updated
     if document.domain_id:
         domain = domain_repo.get(document.domain_id)
         if not domain:
             raise HTTPException(status_code=400, detail="Domain not found")
     
-    updated_doc = document_repo.update(document_id, document.model_dump(exclude_unset=True))
+    # If HTML is being updated, convert it to markdown
+    update_data = document.model_dump(exclude_unset=True)
+    if "html" in update_data:
+        markdown = html_to_markdown_agent.convert(update_data["html"])
+        if markdown is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to convert HTML to Markdown"
+            )
+        update_data["markdown"] = markdown
+    
+    # Update document
+    updated_doc = document_repo.update(document_id, update_data)
     if not updated_doc:
         raise HTTPException(status_code=404, detail="Document not found")
     

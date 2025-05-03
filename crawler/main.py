@@ -11,6 +11,7 @@ from twisted.internet import reactor
 from multiprocessing import Process, Queue
 from urllib.parse import urlparse, urljoin, urlunparse
 from datetime import datetime
+import re
 
 # غیرفعال کردن بررسی گواهی SSL
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -111,31 +112,59 @@ class SatyaSpider(scrapy.Spider):
         print(f"Cleaning content ...")
         soup = BeautifulSoup(html, 'html.parser')
         
-        # حذف اسکریپت‌ها و استایل‌ها
-        for script in soup(["script", "style"]):
-            script.decompose()
+        # Remove scripts, styles, and meta tags
+        for tag in soup(['script', 'style', 'meta', 'link']):
+            tag.decompose()
             
-        # حذف منوهای بالا (معمولاً در تگ‌های header یا nav هستند)
-        for header_element in soup.select('header, .header, #header, .top-menu, #top-menu, .main-menu, #main-menu, .navigation, #navigation, nav, .nav, #nav'):
-            header_element.decompose()
+        # Remove navigation elements
+        for nav in soup.select('nav, .nav, #nav, .navigation, #navigation, .menu, #menu, .mega-menu, .mega-sub-menu, .mega-menu-item, .mega-menu-link'):
+            nav.decompose()
             
-        # حذف منوهای کناری (معمولاً در تگ‌های sidebar یا aside هستند)
-        for sidebar_element in soup.select('sidebar, .sidebar, #sidebar, aside, .aside, #aside, .side-menu, #side-menu'):
-            sidebar_element.decompose()
+        # Remove header elements
+        for header in soup.select('header, .header, #header, .top-menu, #top-menu, .main-menu, #main-menu'):
+            header.decompose()
             
-        # حذف فوتر
-        for footer_element in soup.select('footer, .footer, #footer'):
-            footer_element.decompose()
+        # Remove sidebar elements
+        for sidebar in soup.select('sidebar, .sidebar, #sidebar, aside, .aside, #aside, .side-menu, #side-menu'):
+            sidebar.decompose()
             
-        # حذف ویجت‌ها و المان‌های جانبی
-        for widget in soup.select('.widget, #widget, .widgets, #widgets'):
+        # Remove footer elements
+        for footer in soup.select('footer, .footer, #footer'):
+            footer.decompose()
+            
+        # Remove widgets and side elements
+        for widget in soup.select('.widget, #widget, .widgets, #widgets, .sidebar-widget, #sidebar-widget'):
             widget.decompose()
             
-        # حذف باکس‌های لاگین و جستجو
-        for login_search in soup.select('.login, #login, .search, #search, .search-box, #search-box'):
-            login_search.decompose()
+        # Remove login and search boxes
+        for box in soup.select('.login, #login, .search, #search, .search-box, #search-box'):
+            box.decompose()
+            
+        # Remove empty divs and spans
+        for tag in soup.find_all(['div', 'span']):
+            if not tag.contents and not tag.string:
+                tag.decompose()
+                
+        # Remove elements with specific classes or IDs
+        for tag in soup.find_all(class_=lambda x: x and any(cls in x.lower() for cls in ['menu', 'nav', 'header', 'footer', 'sidebar', 'widget'])):
+            tag.decompose()
+            
+        for tag in soup.find_all(id=lambda x: x and any(id in x.lower() for id in ['menu', 'nav', 'header', 'footer', 'sidebar', 'widget'])):
+            tag.decompose()
+            
+        # Clean up the remaining content
+        content = str(soup)
         
-        return str(soup)
+        # Replace double quotes with single quotes
+        content = content.replace('"', "'")
+        
+        # Remove empty lines and extra whitespace
+        content = '\n'.join(line.strip() for line in content.split('\n') if line.strip())
+        
+        # Remove multiple consecutive newlines
+        content = re.sub(r'\n\s*\n', '\n\n', content)
+        
+        return content
 
     def extract_images(self, response):
         return [img.attrib['src'] for img in response.css('img') if 'src' in img.attrib]

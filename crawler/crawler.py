@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+import logging
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
 from datetime import datetime
@@ -10,6 +11,17 @@ import hashlib
 from database.models import Document, CrawledDomain
 from database.repository import DocumentRepository, CrawledDomainRepository
 from database.models import SessionLocal
+
+# Create logs directory if it doesn't exist
+log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(log_dir, exist_ok=True)
+
+# Configure logging
+logging.basicConfig(
+    filename=os.path.join(log_dir, 'crawler.log'),
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # To run the crawler, use the following command:
 # python -m crawler.main <url> [--recursive]
@@ -64,110 +76,76 @@ def crawl(url, recursive=False):
         crawled_data = []
         
         def process_url(current_url):
+            """Process a single URL and store its content in the database"""
             current_url = current_url.split('#')[0]
             
+            # Skip if already visited or is a media file
             if current_url in visited_urls:
                 return
-            
             visited_urls.add(current_url)
             
             if str(current_url).endswith(tuple(['.jpg', '.png', '.gif', '.jpeg', '.webp'])):
-                print(f"Skipping {current_url} because it is a media file")
+                logging.info(f"Skipping media file: {current_url}")
                 return
             
-            print(f"Crawling {current_url}")
+            logging.info(f"Processing URL: {current_url}")
             
             try:
-                # Fetch the page
+                # Fetch and parse the page
                 response = requests.get(current_url, timeout=10)
                 if response.status_code != 200:
-                    print(f"Failed to fetch {current_url}: Status code {response.status_code}")
+                    logging.error(f"Failed to fetch {current_url}: Status {response.status_code}")
                     return
                 
-                print(f"Fetched {current_url}")
-                
-                # Parse the HTML
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Remove script, style, link and img tags
-                for tag in soup.find_all(['script', 'style', 'link', 'img']):
+                # Clean HTML content
+                for tag in soup.find_all(['script', 'style', 'link', 'img', 'nav', 'header', 'footer', 'aside']):
                     tag.decompose()
                 
-                # Extract data and ensure it's a string
+                # Get title and content
                 title = str(soup.title.string) if soup.title else "Untitled"
-                # Clean the title to use as a filename
-                clean_title = re.sub(r'[^\w\-_]', '_', title)[:100]
+                html_content = str(soup)
+                text_content = soup.get_text(separator=' ', strip=True)
                 
-                # Get text content and ensure it's a string
-                text_content = str(soup.get_text())
-                
-                # Clean and validate content
-                text_content = text_content.strip()
                 if not text_content:
-                    print(f"Skipping {current_url} because it has no content")
+                    logging.warning(f"No content found in {current_url}")
                     return
                 
-                # Create data structure
-                current_time = datetime.now().isoformat()
-                parsed_current_url = urlparse(current_url)
-                uri = parsed_current_url.path or '/'
-                
-                item = {
-                    'url': current_url,
-                    'uri': uri,
+                # Prepare document data
+                parsed_url = urlparse(current_url)
+                document_data = {
                     'title': title,
-                    'html': str(soup),
-                    'text': text_content,
-                    'clean_title': clean_title
+                    'html': html_content,
+                    'markdown': text_content,
+                    'uri': parsed_url.path or '/',
+                    'domain_id': domain_obj.id,
+                    'embedding_id': None
                 }
                 
-                crawled_data.append(item)
-                
+                # Store in database
                 try:
-                    # Check if document with this URI already exists
-                    existing_docs = document_repo.get_by_uri(uri)
+                    existing_docs = document_repo.get_by_uri(document_data['uri'])
                     if existing_docs:
-                        # Update existing document
-                        document_repo.update(existing_docs[0].id, {
-                            'title': title,
-                            'html': str(soup),
-                            'markdown': text_content,
-                            'uri': uri,
-                            'domain_id': domain_obj.id,
-                            'embedding_id': None
-                        })
-                        print(f"Updated existing document for URI: {uri}")
+                        document_repo.update(existing_docs[0].id, document_data)
+                        logging.info(f"Updated document: {document_data['uri']}")
                     else:
-                        # Create new document
-                        document_data = {
-                            'title': title,
-                            'html': str(soup),
-                            'markdown': text_content,
-                            'uri': uri,
-                            'domain_id': domain_obj.id,
-                            'embedding_id': None  # Will be set later when processed by vector store
-                        }
                         document_repo.create(document_data)
-                        print(f"Created new document for URI: {uri}")
+                        logging.info(f"Created new document: {document_data['uri']}")
                 except Exception as e:
-                    print(f"Error storing document in database: {str(e)}")
-                    # Rollback the session to clear any failed transaction
+                    logging.error(f"Database error for {current_url}: {str(e)}")
                     db.rollback()
                 
-                # If recursive, find all links and process them
+                # Process linked pages if recursive mode
                 if recursive:
-                    links = soup.find_all('a', href=True)
-                    for link in links:
+                    for link in soup.find_all('a', href=True):
                         href = link['href']
-                        # Convert relative URLs to absolute
                         absolute_url = urljoin(current_url, href)
-                        # Only process URLs from the same domain
                         if urlparse(absolute_url).netloc == domain:
                             process_url(absolute_url)
             
             except Exception as e:
-                print(f"Error processing {current_url}: {str(e)}")
-                # Rollback the session to clear any failed transaction
+                logging.error(f"Error processing {current_url}: {str(e)}")
                 db.rollback()
         
         # Start crawling from the initial URL
