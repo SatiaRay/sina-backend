@@ -103,7 +103,7 @@ class AgentRAGSystem:
 
     
 
-    async def generate_response(self, question: str) -> Dict[str, Any]:
+    async def generate_response(self, question: str, sources = False) -> Dict[str, Any]:
         try:
             main_logger.info(f"Generating response for question: {question}")
             
@@ -132,10 +132,13 @@ class AgentRAGSystem:
             
             # Run through the agent system
             result = await Runner.run(self.triage_agent, input=full_input)
-            
-            return {
+
+            res = {
                 'answer': result.final_output,
-                'sources': [
+            }
+
+            if(sources):
+                res['sources'] = [
                     {
                         'text': doc['text'],
                         'metadata': doc['metadata'],
@@ -143,7 +146,8 @@ class AgentRAGSystem:
                     }
                     for doc in relevant_docs
                 ]
-            }
+            
+            return res
             
         except Exception as e:
             error_context = f"Question: {question}"

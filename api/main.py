@@ -141,6 +141,7 @@ async def log_requests(request: Request, call_next):
 # مدل‌های درخواست و پاسخ
 class QuestionRequest(BaseModel):
     question: str
+    attach_resources: bool = False
 
 class QuestionResponse(BaseModel):
     answer: str
@@ -176,7 +177,7 @@ async def ask_question_agent(request: Request, question_request: QuestionRequest
     try:
         api_logger.info(f"Processing question with agent: {question_request.question}")
         
-        response = await agent_rag.generate_response(question_request.question)
+        response = await agent_rag.generate_response(question_request.question, sources=question_request.attach_resources)
         
         api_logger.info("Successfully generated response with agent")
         return JSONResponse(content=response, media_type="application/json; charset=utf-8")
@@ -199,7 +200,7 @@ async def ask_question_agent(request: Request, question_request: QuestionRequest
 async def askme_question(
     request: QuestionRequest = Body(
         ...,
-        example={"question": "ساتیا چه قابلیت‌هایی دارد؟"}
+        example={"question": "ساتیا چه قابلیت‌هایی دارد؟", 'resources' : 0}
     )
 ):
     """

@@ -68,9 +68,7 @@ class HTMLToMarkdownAgent:
         print(f"Converting HTML to Markdown:\n\n{html_content}")
         try:
             result = await Runner.run(self.agent, input=f"Convert this HTML to Markdown:\n\n{html_content}")
-            if result and hasattr(result, 'final_output'):
-                return str(result.final_output)  # Ensure we return a string
-            return None
+            return str(result.final_output)
         except Exception as e:
             print(f"Error converting HTML to Markdown: {str(e)}")
             return None 

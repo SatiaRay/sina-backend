@@ -84,20 +84,33 @@ def crawl(url, recursive=False):
                 return
             visited_urls.add(current_url)
             
-            if str(current_url).endswith(tuple(['.jpg', '.png', '.gif', '.jpeg', '.webp'])):
-                logging.info(f"Skipping media file: {current_url}")
+            if str(current_url).endswith(tuple(['.jpg', '.png', '.gif', '.jpeg', '.webp', '.pdf', '.doc', '.docx', '.xls', '.xlsx'])):
+                print(f"Skipping media file: {current_url}")
                 return
             
-            logging.info(f"Processing URL: {current_url}")
+            print(f"Processing URL: {current_url}")
             
             try:
                 # Fetch and parse the page
                 response = requests.get(current_url, timeout=10)
                 if response.status_code != 200:
-                    logging.error(f"Failed to fetch {current_url}: Status {response.status_code}")
+                    print(f"Failed to fetch {current_url}: Status {response.status_code}")
                     return
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
+                if not soup:
+                    print(f"Failed to parse HTML for {current_url}")
+                    return
+                
+                # Find all <a> tags with href attribute
+                a_tags = soup.find_all('a', href=True)
+                
+                # Extract href values into a list
+                links = []
+                for a_tag in a_tags:
+                    href = a_tag.get('href', '')
+                    if href:  # Only add non-empty href values
+                        links.append(href)
                 
                 # Clean HTML content
                 for tag in soup.find_all(['script', 'style', 'link', 'img', 'nav', 'header', 'footer', 'aside']):
@@ -109,7 +122,7 @@ def crawl(url, recursive=False):
                 text_content = soup.get_text(separator=' ', strip=True)
                 
                 if not text_content:
-                    logging.warning(f"No content found in {current_url}")
+                    print(f"No content found in {current_url}")
                     return
                 
                 # Prepare document data
@@ -128,24 +141,35 @@ def crawl(url, recursive=False):
                     existing_docs = document_repo.get_by_uri(document_data['uri'])
                     if existing_docs:
                         document_repo.update(existing_docs[0].id, document_data)
-                        logging.info(f"Updated document: {document_data['uri']}")
+                        print(f"Updated document: {document_data['uri']}")
                     else:
                         document_repo.create(document_data)
-                        logging.info(f"Created new document: {document_data['uri']}")
+                        print(f"Created new document: {document_data['uri']}")
                 except Exception as e:
-                    logging.error(f"Database error for {current_url}: {str(e)}")
+                    print(f"Database error for {current_url}: {str(e)}")
                     db.rollback()
                 
-                # Process linked pages if recursive mode
+                # If recursive mode, find all links and process them
                 if recursive:
-                    for link in soup.find_all('a', href=True):
-                        href = link['href']
-                        absolute_url = urljoin(current_url, href)
-                        if urlparse(absolute_url).netloc == domain:
-                            process_url(absolute_url)
+                    for link in links:
+                        try:
+                            # Convert relative URLs to absolute
+                            absolute_url = urljoin(current_url, link)
+                            if not absolute_url:  # Skip if URL is invalid
+                                continue
+                                
+                            # Only process URLs from the same domain
+                            parsed_absolute_url = urlparse(absolute_url)
+                            if parsed_absolute_url.netloc == domain:
+                                process_url(absolute_url)
+                        except Exception as e:
+                            print(f"Error processing link {link} from {current_url}: {str(e)}")
+                            continue
             
+            except requests.exceptions.RequestException as e:
+                print(f"Network error for {current_url}: {str(e)}")
             except Exception as e:
-                logging.error(f"Error processing {current_url}: {str(e)}")
+                print(f"Error processing {current_url}: {str(e)}")
                 db.rollback()
         
         # Start crawling from the initial URL

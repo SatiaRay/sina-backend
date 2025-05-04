@@ -108,25 +108,25 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
 
 # Update a document
 @router.put("/{document_id}", response_model=DocumentResponse)
-def update_document(document_id: int, document: DocumentUpdate, db: Session = Depends(get_db)):
+async def update_document(document_id: int, document: DocumentUpdate, db: Session = Depends(get_db)):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
+
     # Get current document
     current_doc = document_repo.get(document_id)
     if not current_doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     # Verify domain exists if being updated
     if document.domain_id:
         domain = domain_repo.get(document.domain_id)
         if not domain:
             raise HTTPException(status_code=400, detail="Domain not found")
-    
+
     # If HTML is being updated, convert it to markdown
     update_data = document.model_dump(exclude_unset=True)
     if "html" in update_data:
-        markdown = html_to_markdown_agent.convert(update_data["html"])
+        markdown = await html_to_markdown_agent.convert(update_data["html"])  # <-- await here
         if markdown is None:
             raise HTTPException(
                 status_code=500,
@@ -135,12 +135,12 @@ def update_document(document_id: int, document: DocumentUpdate, db: Session = De
         update_data["markdown"] = markdown
 
     print(f"Updated document")
-    
+
     # Update document
     updated_doc = document_repo.update(document_id, update_data)
     if not updated_doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     domain = domain_repo.get(updated_doc.domain_id)
     return DocumentResponse(
         id=updated_doc.id,
@@ -154,6 +154,7 @@ def update_document(document_id: int, document: DocumentUpdate, db: Session = De
         updated_at=updated_doc.updated_at,
         domain=DomainInfo(id=domain.id, domain=domain.domain)
     )
+
 
 # Delete a document
 @router.delete("/{document_id}")
