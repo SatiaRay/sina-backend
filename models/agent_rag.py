@@ -25,6 +25,7 @@ SATIA_INSTRUCTIONS = """
 * اگر پاسخ سوال در اطلاعات ارائه شده موجود نیست، صادقانه بگویید: "متأسفانه اطلاعات کافی برای پاسخ به این سوال ندارم."
 * از حدس و گمان خودداری کنید و فقط بر اساس اطلاعات موجود پاسخ دهید.
 * وقتی سندی را در قالب html برای شما ارسال میکنم, در ساختن پاسخ به تگ های html توجه داشته باشید. برای مثال وقتی اطلاعاتی به صورت جدول و تگ <table> قرار داده شده, در پاسخ هم از همان قالب استفاده کن. یا لیست ها <ul> و <li> و ...
+* جداولی که در قالب markdown ارسال میشود را در پاسخ به صورت جداول html ارسال کن.
 
     @example:
         Context Information:
@@ -102,7 +103,7 @@ class AgentRAGSystem:
 
     
 
-    async def generate_response(self, question: str) -> Dict[str, Any]:
+    async def generate_response(self, question: str, sources = False) -> Dict[str, Any]:
         try:
             main_logger.info(f"Generating response for question: {question}")
             
@@ -131,10 +132,13 @@ class AgentRAGSystem:
             
             # Run through the agent system
             result = await Runner.run(self.triage_agent, input=full_input)
-            
-            return {
+
+            res = {
                 'answer': result.final_output,
-                'sources': [
+            }
+
+            if(sources):
+                res['sources'] = [
                     {
                         'text': doc['text'],
                         'metadata': doc['metadata'],
@@ -142,7 +146,8 @@ class AgentRAGSystem:
                     }
                     for doc in relevant_docs
                 ]
-            }
+            
+            return res
             
         except Exception as e:
             error_context = f"Question: {question}"
