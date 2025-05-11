@@ -174,6 +174,14 @@ class AgentRAGSystem:
             
             # Search for relevant documents
             relevant_docs = self.vector_store.search(question)
+
+            # Log the titles of relevant documents
+            if relevant_docs:
+                titles = [doc['metadata'].get('title', 'Untitled') for doc in relevant_docs]
+                main_logger.info(f"Relevant document founded in vector titles: {', '.join(titles)}")
+            else:
+                main_logger.info("No relevant documents found in vector")
+
             main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
             
             # Create a document title analyzer agent
@@ -211,6 +219,13 @@ class AgentRAGSystem:
                 doc for doc in relevant_docs 
                 if doc['id'] in selected_ids
             ]
+
+            # Log the titles of filtered documents
+            if filtered_docs:
+                filtered_titles = [doc['metadata'].get('title', 'Untitled') for doc in filtered_docs]
+                main_logger.info(f"Selected documents after filtering with AI: {', '.join(filtered_titles)}")
+            else:
+                main_logger.info("No documents remained after filtering with AI")
             
             return filtered_docs
             
