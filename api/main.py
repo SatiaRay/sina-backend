@@ -55,7 +55,8 @@ print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
 app = FastAPI(
     title=APP_NAME,
     version=APP_VERSION,
-    description="API for managing documents and knowledge base"
+    description="API for managing documents and knowledge base",
+    redirect_slashes=False
 )
 
 # Add CORS middleware

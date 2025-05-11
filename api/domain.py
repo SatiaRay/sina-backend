@@ -127,4 +127,11 @@ def get_domain_by_name(domain_name: str, db: Session = Depends(get_db)):
         updated_at=domain.updated_at,
         document_count=document_count
     )
-    return response 
+    return response
+
+# Add a route for the root path without trailing slash
+@router.get("", response_model=List[CrawledDomainResponse])
+def list_domains_no_slash(
+    db: Session = Depends(get_db)
+):
+    return list_domains(db) 

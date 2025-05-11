@@ -167,6 +167,14 @@ def delete_document(document_id: int, db: Session = Depends(get_db)):
     return {"message": "Document deleted successfully"}
 
 # List all documents
+@router.get("", response_model=List[DocumentResponse])
+def list_documents_no_slash(
+    domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
+    uri: Optional[str] = Query(None, description="Filter by URI"),
+    db: Session = Depends(get_db)
+):
+    return list_documents(domain_id, uri, db)
+
 @router.get("/", response_model=List[DocumentResponse])
 def list_documents(
     domain_id: Optional[int] = Query(None, description="Filter by domain ID"),

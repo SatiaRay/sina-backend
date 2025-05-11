@@ -63,7 +63,16 @@ def delete_wizard(wizard_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Wizard not found")
     return {"message": "Wizard deleted successfully"}
 
-# List all wizards
+# Add a route for the root path without trailing slash
+@router.get("", response_model=List[WizardResponse])
+def list_wizards_no_slash(
+    enabled_only: bool = Query(True, description="Only return enabled wizards"),
+    parent_id: Optional[int] = Query(None, description="Filter by parent ID"),
+    db: Session = Depends(get_db)
+):
+    return list_wizards(enabled_only, parent_id, db)
+
+# Original route with trailing slash
 @router.get("/", response_model=List[WizardResponse])
 def list_wizards(
     enabled_only: bool = Query(True, description="Only return enabled wizards"),
