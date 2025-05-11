@@ -78,7 +78,7 @@ class VectorStore:
             n_results=n_results,
             where=None,  # No filtering
             where_document=None,  # No document filtering
-            include=["documents", "metadatas", "distances", "ids"]
+            include=["documents", "metadatas", "distances"]  # Removed 'ids' as it's not allowed
         )
         
         # تبدیل نتایج به فرمت مورد نظر
@@ -92,8 +92,7 @@ class VectorStore:
                 documents.append({
                     'text': results['documents'][0][i],
                     'metadata': results['metadatas'][0][i],
-                    'score': similarity_score,
-                    'id': results['ids'][0][i]
+                    'score': similarity_score
                 })
             
         return documents
