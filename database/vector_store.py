@@ -78,7 +78,7 @@ class VectorStore:
             n_results=n_results,
             where=None,  # No filtering
             where_document=None,  # No document filtering
-            include=["documents", "metadatas", "distances"]  # Removed 'ids' as it's not allowed
+            include=["documents", "metadatas", "distances", "ids"]  # Added back 'ids'
         )
         
         # تبدیل نتایج به فرمت مورد نظر
@@ -89,10 +89,20 @@ class VectorStore:
             
             # Include document if similarity is above threshold (lower threshold = more results)
             if similarity_score > 0.3:  # Lower threshold from default
+                # Get the document ID from the results
+                doc_id = results['ids'][0][i]
+                
+                # Add ID to metadata
+                metadata = results['metadatas'][0][i]
+                if metadata is None:
+                    metadata = {}
+                metadata['id'] = doc_id
+                
                 documents.append({
                     'text': results['documents'][0][i],
-                    'metadata': results['metadatas'][0][i],
-                    'score': similarity_score
+                    'metadata': metadata,
+                    'score': similarity_score,
+                    'id': doc_id  # Keep the ID in the root level as well for backward compatibility
                 })
             
         return documents
