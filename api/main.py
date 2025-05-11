@@ -539,6 +539,12 @@ async def get_all_knowledge(url: str):
 @app.get("/data_sources", response_model=DataSourceListResponse, tags=["Data Sources"],
           summary="دریافت لیست منابع داده",
           description="این اندپوینت لیست تمام منابع داده موجود در پایگاه دانش را برمی‌گرداند")
+async def list_data_sources_no_slash():
+    return await list_data_sources()
+
+@app.get("/data_sources/", response_model=DataSourceListResponse, tags=["Data Sources"],
+          summary="دریافت لیست منابع داده",
+          description="این اندپوینت لیست تمام منابع داده موجود در پایگاه دانش را برمی‌گرداند")
 async def list_data_sources():
     """
     لیست تمام منابع داده و محتوای استخراج شده از آنها
