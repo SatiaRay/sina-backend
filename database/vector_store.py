@@ -72,21 +72,29 @@ class VectorStore:
         # تبدیل سوال به بردار
         query_embedding = self.embedding_model.encode(query).tolist()
         
-        # جستجو در کالکشن
+        # جستجو در کالکشن با تنظیمات جدید
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=n_results
+            n_results=n_results,
+            where=None,  # No filtering
+            where_document=None,  # No document filtering
+            include=["documents", "metadatas", "distances", "ids"]
         )
         
         # تبدیل نتایج به فرمت مورد نظر
         documents = []
         for i in range(len(results['documents'][0])):
-            documents.append({
-                'text': results['documents'][0][i],
-                'metadata': results['metadatas'][0][i],
-                'score': results['distances'][0][i],
-                'id': results['ids'][0][i]
-            })
+            # Calculate similarity score (1 - distance for cosine similarity)
+            similarity_score = 1 - results['distances'][0][i]
+            
+            # Include document if similarity is above threshold (lower threshold = more results)
+            if similarity_score > 0.3:  # Lower threshold from default
+                documents.append({
+                    'text': results['documents'][0][i],
+                    'metadata': results['metadatas'][0][i],
+                    'score': similarity_score,
+                    'id': results['ids'][0][i]
+                })
             
         return documents
 
