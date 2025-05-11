@@ -72,37 +72,25 @@ class VectorStore:
         # تبدیل سوال به بردار
         query_embedding = self.embedding_model.encode(query).tolist()
         
-        # جستجو در کالکشن با تنظیمات جدید
+        # جستجو در کالکشن
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=None,  # No filtering
-            where_document=None,  # No document filtering
-            include=["documents", "metadatas", "distances", "ids"]  # Added back 'ids'
+            n_results=n_results
         )
         
-        # تبدیل نتایج به فرمت مورد نظر
+        # تبدیل نتایج به فرمت مورد نظر و فیلتر بر اساس threshold
         documents = []
         for i in range(len(results['documents'][0])):
-            # Calculate similarity score (1 - distance for cosine similarity)
+            # تبدیل فاصله به امتیاز شباهت (1 - distance)
             similarity_score = 1 - results['distances'][0][i]
             
-            # Include document if similarity is above threshold (lower threshold = more results)
-            if similarity_score > 0.3:  # Lower threshold from default
-                # Get the document ID from the results
-                doc_id = results['ids'][0][i]
-                
-                # Add ID to metadata
-                metadata = results['metadatas'][0][i]
-                if metadata is None:
-                    metadata = {}
-                metadata['id'] = doc_id
-                
+            # فقط نتایج با امتیاز شباهت بالاتر از 0.3 را اضافه کن
+            if similarity_score >= 0.3:
                 documents.append({
                     'text': results['documents'][0][i],
-                    'metadata': metadata,
+                    'metadata': results['metadatas'][0][i],
                     'score': similarity_score,
-                    'id': doc_id  # Keep the ID in the root level as well for backward compatibility
+                    'id': results['ids'][0][i]
                 })
             
         return documents
