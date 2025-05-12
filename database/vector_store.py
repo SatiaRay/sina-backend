@@ -8,34 +8,44 @@ import json
 from pathlib import Path
 import uuid
 from datetime import datetime
+from openai import OpenAI
 
 load_dotenv()
 
 class VectorStore:
     def __init__(self):
-        # تنظیمات ChromaDB
-        self.persist_directory = os.getenv('CHROMA_PERSIST_DIRECTORY', './data/chroma')
-        self.collection_name = os.getenv('CHROMA_COLLECTION_NAME', 'satya_docs')
-        
-        # ایجاد دایرکتوری اگر وجود نداشت
-        os.makedirs(self.persist_directory, exist_ok=True)
-        
-        # ایجاد کلاینت ChromaDB
-        self.client = chromadb.PersistentClient(
-            path=self.persist_directory,
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
+        try:
+            # تنظیمات ChromaDB
+            self.persist_directory = os.getenv('CHROMA_PERSIST_DIRECTORY', './data/chroma')
+            self.collection_name = os.getenv('CHROMA_COLLECTION_NAME', 'satya_docs')
+            
+            # ایجاد دایرکتوری اگر وجود نداشت
+            os.makedirs(self.persist_directory, exist_ok=True)
+            
+            print(f"Initializing ChromaDB with directory: {self.persist_directory}")
+            # ایجاد کلاینت ChromaDB
+            self.client = chromadb.PersistentClient(
+                path=self.persist_directory,
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=True
+                )
             )
-        )
-        
-        # ایجاد یا دریافت کالکشن
-        self.collection = self._get_or_create_collection()
-        
-        # مدل تبدیل متن به بردار
-        self.embedding_model = SentenceTransformer(
-            os.getenv('EMBEDDING_MODEL', 'paraphrase-multilingual-MiniLM-L12-v2')
-        )
+            
+            print("Creating or getting collection...")
+            # ایجاد یا دریافت کالکشن
+            self.collection = self._get_or_create_collection()
+            
+            print("Initializing embedding model...")
+            # مدل تبدیل متن به بردار
+            self.embedding_model = SentenceTransformer(
+                os.getenv('EMBEDDING_MODEL', 'paraphrase-multilingual-MiniLM-L12-v2')
+            )
+            print("VectorStore initialization completed successfully")
+            
+        except Exception as e:
+            print(f"Error initializing VectorStore: {str(e)}")
+            raise
 
     def _get_or_create_collection(self):
         # ایجاد یا دریافت کالکشن
@@ -55,9 +65,19 @@ class VectorStore:
         
         # تولید ID‌های یکتا با استفاده از UUID
         ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(documents))]
+
         
-        # تبدیل متن‌ها به بردار
-        embeddings = self.embedding_model.encode(texts).tolist()
+        
+        # تبدیل متن‌ها به بردار با استفاده از OpenAI
+        client = OpenAI()
+        
+        embeddings = []
+        for text in texts:
+            response = client.embeddings.create(
+                input=text,
+                model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
+            )
+            embeddings.append(response.data[0].embedding)
         
         # اضافه کردن به کالکشن
         self.collection.add(
@@ -69,8 +89,13 @@ class VectorStore:
 
     def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """جستجوی اسناد مرتبط"""
-        # تبدیل سوال به بردار
-        query_embedding = self.embedding_model.encode(query).tolist()
+        # تبدیل سوال به بردار با استفاده از OpenAI
+        client = OpenAI()
+        response = client.embeddings.create(
+            input=query,
+            model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
+        )
+        query_embedding = response.data[0].embedding
         
         # جستجو در کالکشن
         results = self.collection.query(

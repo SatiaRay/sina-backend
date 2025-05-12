@@ -51,6 +51,20 @@ print(f"Current Directory: {os.getcwd()}")
 print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
 print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
 
+try:
+    # Initialize components with error handling
+    print("Initializing VectorStore...")
+    vector_store = VectorStore()
+    print("VectorStore initialized successfully")
+
+    print("Initializing AgentRAGSystem...")
+    agent_rag = AgentRAGSystem()
+    print("AgentRAGSystem initialized successfully")
+
+except Exception as e:
+    print(f"Error during initialization: {str(e)}")
+    raise
+
 # Create FastAPI app
 app = FastAPI(
     title=APP_NAME,
