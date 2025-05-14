@@ -7,6 +7,8 @@ from models.text_processor import TextProcessor
 import logging
 from util.logging_config import configure_logging, log_error
 import asyncio
+from fastapi import WebSocket
+from openai import OpenAI
 
 load_dotenv()
 main_logger, error_logger, api_logger = configure_logging()
@@ -24,23 +26,17 @@ SATIA_INSTRUCTIONS = """
 * اطلاعات ارائه شده را بر دانش خود مقدم بدانید و از دانش خود فقط برای تکمیل و واضح تر کردن پاسخ استفاده کنید
 * اگر پاسخ سوال در اطلاعات ارائه شده موجود نیست، صادقانه بگویید: "متأسفانه اطلاعات کافی برای پاسخ به این سوال ندارم."
 * از حدس و گمان خودداری کنید و فقط بر اساس اطلاعات موجود پاسخ دهید.
-* وقتی سندی را در قالب html برای شما ارسال میکنم, در ساختن پاسخ به تگ های html توجه داشته باشید. برای مثال وقتی اطلاعاتی به صورت جدول و تگ <table> قرار داده شده, در پاسخ هم از همان قالب استفاده کن. یا لیست ها <ul> و <li> و ...
+* از فاکتور گرفتن و حذف کردن اطلاعات مرتبط خودداری کنید. پاسخ شما باید کامل و بی نقص باشد
 * جداولی که در قالب markdown ارسال میشود را در پاسخ به صورت جداول html ارسال کن.
+* به هیچ وجه جداول را به صورت markdown ارسال نکن.
 
     @example:
         Context Information:
-        <table>
-            <tr>
-                <th>نام سرویس</th>
-                <th>سرعت</th>
-                <th>قیمت</th>
-            </tr>
-            <tr>
-                <td>سرویس 1</td>
-                <td>100 Mbps</td>
-                <td>100,000 تومان</td>
-            </tr>
-        </table>
+        سرویس لاله یک ماهه
+
+        | نام سرویس | زمان  |  سرعت   | گیگ بین‌الملل | قیمت (تومان) |
+        |---------------|---------------|---------|--------|------------|
+        |   لاله یک   | 1 ماه |   تا 20 |        65     |     134.000   |
 
         User Question:
         شرایط سرویس های اینترنت به چه صورتی است ؟
@@ -50,21 +46,22 @@ SATIA_INSTRUCTIONS = """
         <table>
             <tr>
                 <th>نام سرویس</th>
+                <th>زمان</th>
                 <th>سرعت</th>
-                <th>قیمت</th>
+                <th>گیگ بین الملل</th>
+                <th>(تومان) قیمت</th>
             </tr>
             <tr>
-                <td>سرویس 1</td>
-                <td>100 Mbps</td>
-                <td>100,000 تومان</td>
+                <td>لاله یک</td>
+                <td>1 ماه</td>
+                <td>20</td>
+                <td>65</td>
+                <td>134.000</td>
             </tr>
         </table>  
         
 
-        
-
-* از فاکتور گرفتن و حذف کردن اطلاعات مرتبط خودداری کنید. پاسخ شما باید کامل و بی نقص باشد
-
+    
 """
 
 class AgentRAGSystem:
@@ -233,3 +230,59 @@ class AgentRAGSystem:
             error_context = f"Question: {question}"
             log_error(error_logger, e, error_context)
             raise 
+
+    async def generate_response_socket(self, question: str, websocket: WebSocket):
+        try:
+            main_logger.info(f"Generating response for question: {question}")
+            
+            # Search for relevant documents
+            relevant_docs = await self.get_relevant_docs(question)
+            main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
+            print(f"Found {len(relevant_docs)} relevant documents")
+            
+            # Sort documents by score
+            relevant_docs = sorted(relevant_docs, key=lambda x: x.get('score', 1.0))
+            
+            # Format context with scores
+            context_parts = []
+            for doc in relevant_docs:
+                score = doc.get('score', 1.0)
+                text = doc['text']
+                context_parts.append(f"[Score: {score:.3f}]\n{text}")
+            
+            context = "\n\n---\n\n".join(context_parts)
+            
+            # Combine question and context
+            full_input = f"""
+            # Instructions
+
+            {SATIA_INSTRUCTIONS}
+            
+            Context Information:
+            {context}
+            
+            User Question: {question}"""
+
+            client = OpenAI()
+
+            stream = client.responses.create(
+                model=os.getenv("GPT_MODEL"),
+                input=[
+                    {"role": "developer", "content": full_input},
+                ],
+                stream=True,
+            )
+
+            print("Send response in socket ...")
+            
+            # Send events to the client as they are received from OpenAI
+            for event in stream:
+                if event.type == 'response.output_text.delta':
+                    delta = event.delta
+                    await websocket.send_text(delta)
+
+            
+        except Exception as e:
+            error_context = f"Question: {question}"
+            log_error(error_logger, e, error_context)
+            raise

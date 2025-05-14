@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from fastapi import FastAPI, HTTPException, Depends, Body, Request
+from fastapi import FastAPI, HTTPException, Depends, Body, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
@@ -208,6 +208,34 @@ async def ask_question_agent(request: Request, question_request: QuestionRequest
                 "error": str(e)
             }
         )
+    
+@app.websocket("/ws/ask")
+async def ask_question_agent_socket(websocket: WebSocket):
+    await websocket.accept()
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            question_data = json.loads(data)
+            question = question_data.get("question", "")
+
+            print(question)
+
+            if not question:
+                await websocket.send_text("Error: No question provided.")
+                continue
+
+            api_logger.info(f"Processing question with agent: {question}")
+
+            await agent_rag.generate_response_socket(question, websocket=websocket)
+
+    except WebSocketDisconnect:
+        api_logger.info("WebSocket disconnected")
+    except Exception as e:
+        log_error(error_logger, e, f"Failed while processing: {str(e)}")
+        await websocket.send_text(f"Error: {str(e)}")
+    finally:
+        await websocket.close()
 
 @app.post("/askme", response_model=QuestionResponse, tags=["Chat"],
           summary="پرسش از چت‌بات (مترادف ask)",
