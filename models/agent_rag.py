@@ -189,7 +189,7 @@ class AgentRAGSystem:
                 Return only the IDs of the documents that are most relevant to answering the question.
                 Format your response as a comma-separated list of document IDs.
                 """,
-                model=os.getenv("GPT_MODEL")
+                model=os.getenv("GPT_TITLE_ANALYZER_MODEL")
             )
             
             # Prepare the input for the agent
