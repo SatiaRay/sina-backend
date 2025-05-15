@@ -234,7 +234,7 @@ class AgentRAGSystem:
 
     async def generate_response_socket(self, question: str, websocket: WebSocket):
         try:
-            # main_logger.info(f"Generating response for question: {question}")
+            main_logger.info(f"Generating response for question: {question}")
             
             # Search for relevant documents
             relevant_docs = await self.get_relevant_docs(question)
@@ -273,7 +273,6 @@ class AgentRAGSystem:
             for event in stream:
                 if event.type == 'response.output_text.delta':
                     delta = event.delta
-                    print("Delta: " + delta, flush=True)
                     await websocket.send_text(delta)
                     await asyncio.sleep(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', 0.0001))
             
