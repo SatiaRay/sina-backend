@@ -10,6 +10,7 @@ import asyncio
 from fastapi import WebSocket
 from openai import OpenAI
 from anyio import to_thread
+from chat_agent_rag_interface import ChatAgentRagInterface
 
 load_dotenv()
 main_logger, error_logger, api_logger = configure_logging()
@@ -65,7 +66,7 @@ SATIA_INSTRUCTIONS = """
     
 """
 
-class AgentRAGSystem:
+class ChatAgentRag(ChatAgentRagInterface):
     def __init__(self):
         self.vector_store = VectorStore()
         self.text_processor = TextProcessor()

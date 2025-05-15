@@ -33,7 +33,7 @@ from api.models import (ChatRequest,
                       AddKnowledgeRequest)
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
-from models.agent_rag import AgentRAGSystem
+from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from .wizard import router as wizard_router
 from .document import router as document_router
 from .domain import router as domain_router
@@ -172,7 +172,7 @@ class UrlRequest(BaseModel):
 # rag_system = RAGSystem()
 # text_processor = TextProcessor()
 vector_store = VectorStore()
-agent_rag = AgentRAGSystem()
+agent_rag = ChatAgentRagProxy()
 
 @app.get("/")
 async def root():

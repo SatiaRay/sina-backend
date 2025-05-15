@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean, JSON, Enum, TEXT
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -55,22 +55,6 @@ class Wizard(BaseModel):
         backref="children"
     )
 
-# Chat model
-class Chat(BaseModel):
-    __tablename__ = "chats"
-    
-    title = Column(String(255))
-    messages = relationship("Message", back_populates="chat")
-
-# Message model
-class Message(BaseModel):
-    __tablename__ = "messages"
-    
-    content = Column(Text)
-    role = Column(String(50))  # user, assistant, system
-    chat_id = Column(Integer, ForeignKey("chats.id"))
-    chat = relationship("Chat", back_populates="messages")
-
 # CrawledDomain model
 class CrawledDomain(BaseModel):
     __tablename__ = "crawled_domains"
@@ -125,6 +109,30 @@ class Document(BaseModel):
             return bytes.fromhex(encoded_html).decode('utf-8')
         except:
             return encoded_html  # Return original if decoding fails
+        
+class Chat(BaseModel):
+    __tablename__ = 'chats'
+    session_id = Column(Integer, primary_key=True)
+    status = Column(String(20), default='active')
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    chat_history = relationship('ChatHistory', backref='session', lazy=True)
+
+class ChatHistory(BaseModel):
+    __tablename__ = 'chat_history'
+    message_id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey('chats.session_id'), nullable=False)
+    role = Column(Enum('developer', 'assistance', 'user', 'system', name='role_enum'))
+    body = Column(TEXT, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Renamed 'metadata' to 'extra_metadata'
+    extra_metadata = Column(JSON, nullable=True)
+
+ 
 
 # Database dependency for FastAPI
 def get_db():
