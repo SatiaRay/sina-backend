@@ -275,6 +275,7 @@ class AgentRAGSystem:
                     delta = event.delta
                     print("Delta: " + delta, flush=True)
                     await websocket.send_text(delta)
+                    await asyncio.sleep(1)
             
         except Exception as e:
             error_context = f"Question: {question}"
