@@ -234,12 +234,12 @@ class AgentRAGSystem:
 
     async def generate_response_socket(self, question: str, websocket: WebSocket):
         try:
-            main_logger.info(f"Generating response for question: {question}")
+            # main_logger.info(f"Generating response for question: {question}")
             
             # Search for relevant documents
             relevant_docs = await self.get_relevant_docs(question)
-            main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
-            print(f"Found {len(relevant_docs)} relevant documents")
+            # main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
+            print(f"Found {len(relevant_docs)} relevant documents", flush=True)
             
             # Sort documents by score
             relevant_docs = sorted(relevant_docs, key=lambda x: x.get('score', 1.0))
@@ -267,12 +267,13 @@ class AgentRAGSystem:
             # In your async function:
             stream = await to_thread.run_sync(self.stream_openai_response, full_input)
 
-            print("Send response in socket ...")
+            print("Send response in socket ...", flush=True)
             
             # Send events to the client as they are received from OpenAI
             for event in stream:
                 if event.type == 'response.output_text.delta':
                     delta = event.delta
+                    print("Delta: " + delta, flush=True)
                     await websocket.send_text(delta)
             
         except Exception as e:
