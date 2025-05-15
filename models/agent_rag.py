@@ -9,6 +9,7 @@ from util.logging_config import configure_logging, log_error
 import asyncio
 from fastapi import WebSocket
 from openai import OpenAI
+from anyio import to_thread
 
 load_dotenv()
 main_logger, error_logger, api_logger = configure_logging()
@@ -237,8 +238,8 @@ class AgentRAGSystem:
             
             # Search for relevant documents
             relevant_docs = await self.get_relevant_docs(question)
-            main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
-            print(f"Found {len(relevant_docs)} relevant documents")
+            # main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
+            print(f"Found {len(relevant_docs)} relevant documents", flush=True)
             
             # Sort documents by score
             relevant_docs = sorted(relevant_docs, key=lambda x: x.get('score', 1.0))
@@ -263,26 +264,31 @@ class AgentRAGSystem:
             
             User Question: {question}"""
 
-            client = OpenAI()
+            # In your async function:
+            stream = await to_thread.run_sync(self.stream_openai_response, full_input)
 
-            stream = client.responses.create(
-                model=os.getenv("GPT_MODEL"),
-                input=[
-                    {"role": "developer", "content": full_input},
-                ],
-                stream=True,
-            )
-
-            print("Send response in socket ...")
+            print("Send response in socket ...", flush=True)
             
             # Send events to the client as they are received from OpenAI
             for event in stream:
                 if event.type == 'response.output_text.delta':
                     delta = event.delta
                     await websocket.send_text(delta)
-
+                    await asyncio.sleep(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', 0.0001))
             
         except Exception as e:
             error_context = f"Question: {question}"
             log_error(error_logger, e, error_context)
             raise
+
+
+    def stream_openai_response(self, full_input):
+        client = OpenAI()
+
+        return client.responses.create(
+           model=os.getenv("GPT_MODEL"),
+           input=[
+               {"role": "developer", "content": full_input},
+           ],
+           stream=True,
+        )
