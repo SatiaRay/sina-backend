@@ -90,7 +90,9 @@ class ChatRepository(BaseRepository[Chat]):
         super().__init__(Chat, db)
 
     def get_with_messages(self, id: int) -> Optional[Chat]:
-        return self.db.query(Chat).filter(Chat.id == id).first()
+        return self.db.query(Chat).filter(Chat.session_id == id).first()
+    
+    
 
     def get_all_with_messages(self) -> List[Chat]:
         return self.db.query(Chat).all()

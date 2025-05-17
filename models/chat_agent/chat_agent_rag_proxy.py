@@ -41,17 +41,33 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         print("Open streaming socket ...")
 
         try:
-            # Get response from agent
-            response = await self.agent.generate_response_socket(question, websocket)
+            # Get or create chat session
+            chat = self.__get_chat(request=None, websocket=websocket)
+            
+            # Get chat history
+            chat_history = await self.chat_repository.get_chat_history(chat.id)
+            # Get last 50 messages
+            last_50_messages = chat_history[-50:] if len(chat_history) > 50 else chat_history
+            
+            # Format messages for the agent
+            formatted_history = [
+                {
+                    "role": msg.role,
+                    "body": msg.message
+                }
+                for msg in last_50_messages
+            ]
+            
+            # Generate response with history
+            response = await self.agent.generate_response_socket(question, websocket, history=formatted_history)
             
             # Store AI response in chat history
-            if isinstance(response, dict) and "response" in response:
-                self.__update_chat_history(response["response"], "assistant", websocket=websocket)
+            self.__update_chat_history(response, role=" ", websocket=websocket)
             
             return response
         except Exception as e:
             error_msg = f"Error: {str(e)}"
-            self.__update_chat_history(error_msg, "assistant", websocket=websocket)
+            self.__update_chat_history(error_msg, role="assistant", websocket=websocket)
             return {
                 "status": "error",
                 "error": str(e)
@@ -76,7 +92,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             # Create new chat if not exists
             if not chat:
                 chat_data = {
-                    "id": session_id
+                    "session_id": session_id
                 }
                 chat = self.chat_repository.create(chat_data)
                 self.db.commit()

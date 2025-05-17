@@ -112,7 +112,7 @@ class Document(BaseModel):
         
 class Chat(BaseModel):
     __tablename__ = 'chats'
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     session_id = Column(Integer, primary_key=True)
     status = Column(String(20), default='active')
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -122,9 +122,9 @@ class Chat(BaseModel):
 
 class ChatHistory(BaseModel):
     __tablename__ = 'chat_history'
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     chat_id = Column(Integer, ForeignKey('chats.id'), nullable=False)
-    role = Column(Enum('developer', 'assistance', 'user', 'system', name='role_enum'))
+    role = Column(Enum('developer', 'assistant', 'user', 'system', name='role_enum'))
     body = Column(TEXT, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)

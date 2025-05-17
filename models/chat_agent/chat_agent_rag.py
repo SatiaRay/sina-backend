@@ -1,5 +1,5 @@
 from agents import Agent, Runner
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 from database.vector_store import VectorStore
@@ -233,13 +233,12 @@ class ChatAgentRag(ChatAgentRagInterface):
             log_error(error_logger, e, error_context)
             raise 
 
-    async def generate_response_socket(self, question: str, websocket: WebSocket):
+    async def generate_response_socket(self, question: str, websocket: WebSocket, history: Optional[List[Dict[str, str]]] = None):
         try:
             main_logger.info(f"Generating response for question: {question}")
             
             # Search for relevant documents
             relevant_docs = await self.get_relevant_docs(question)
-            # main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
             print(f"Found {len(relevant_docs)} relevant documents", flush=True)
             
             # Sort documents by score
@@ -254,7 +253,17 @@ class ChatAgentRag(ChatAgentRagInterface):
             
             context = "\n\n---\n\n".join(context_parts)
             
-            # Combine question and context
+            # Format chat history if provided
+            history_text = ""
+            if history:
+                history_parts = []
+                for msg in history:
+                    role = msg.get('role', 'user')
+                    content = msg.get('body', '')
+                    history_parts.append(f"{role.capitalize()}: {content}")
+                history_text = "\n\nPrevious Conversation:\n" + "\n".join(history_parts)
+            
+            # Combine question, context, and history
             full_input = f"""
             # Instructions
 
@@ -263,20 +272,29 @@ class ChatAgentRag(ChatAgentRagInterface):
             Context Information:
             {context}
             
+            {history_text}
+            
             User Question: {question}"""
 
             # In your async function:
             stream = await to_thread.run_sync(self.stream_openai_response, full_input)
 
             print("Send response in socket ...", flush=True)
+
+            full_response = ""
             
             # Send events to the client as they are received from OpenAI
             for event in stream:
                 if event.type == 'response.output_text.delta':
                     delta = event.delta
+                    full_response += delta
                     await websocket.send_text(delta)
                     sleep_duration = float(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', '0.0001'))
                     await asyncio.sleep(sleep_duration)
+
+            print("Response complete !")
+
+            return full_response
             
         except Exception as e:
             error_context = f"Question: {question}"
