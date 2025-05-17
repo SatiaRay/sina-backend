@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from fastapi import FastAPI, HTTPException, Depends, Body, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, Body, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
@@ -58,7 +58,7 @@ try:
     print("VectorStore initialized successfully")
 
     print("Initializing AgentRAGSystem...")
-    agent_rag = AgentRAGSystem()
+    agent_rag = ChatAgentRagProxy()
     print("AgentRAGSystem initialized successfully")
 
 except Exception as e:
@@ -210,7 +210,7 @@ async def ask_question_agent(request: Request, question_request: QuestionRequest
         )
     
 @app.websocket("/ws/ask")
-async def ask_question_agent_socket(websocket: WebSocket):
+async def ask_question_agent_socket(websocket: WebSocket, session_id: str = Query(..., description="Session ID is required")):
     await websocket.accept()
 
     try:

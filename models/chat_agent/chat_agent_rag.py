@@ -10,7 +10,7 @@ import asyncio
 from fastapi import WebSocket
 from openai import OpenAI
 from anyio import to_thread
-from chat_agent_rag_interface import ChatAgentRagInterface
+from .chat_agent_rag_interface import ChatAgentRagInterface
 
 load_dotenv()
 main_logger, error_logger, api_logger = configure_logging()
@@ -275,7 +275,8 @@ class ChatAgentRag(ChatAgentRagInterface):
                 if event.type == 'response.output_text.delta':
                     delta = event.delta
                     await websocket.send_text(delta)
-                    await asyncio.sleep(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', 0.0001))
+                    sleep_duration = float(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', '0.0001'))
+                    await asyncio.sleep(sleep_duration)
             
         except Exception as e:
             error_context = f"Question: {question}"
