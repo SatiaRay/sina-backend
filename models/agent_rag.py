@@ -274,7 +274,8 @@ class AgentRAGSystem:
                 if event.type == 'response.output_text.delta':
                     delta = event.delta
                     await websocket.send_text(delta)
-                    await asyncio.sleep(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', 0.0001))
+                    delay = str(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', "0.0001"))
+                    await asyncio.sleep(float(delay))
             
         except Exception as e:
             error_context = f"Question: {question}"

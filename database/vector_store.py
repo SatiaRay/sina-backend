@@ -159,14 +159,27 @@ class VectorStore:
         self.delete_all()
         self.add_documents(documents)
 
-    def update_document(self, document: Dict):
+    def update_document(self, document_id: str, text: str, metadata: dict):
         """Update a document in the vector store"""
-        embedding = self.embedding_model.encode([document["text"]])[0]
+
+        # تبدیل متن‌ها به بردار با استفاده از OpenAI
+        client = OpenAI()
+
+        print("Send modification to ebmedding model ...")
+        
+        response = client.embeddings.create(
+            input=text,
+            model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
+        )
+        embedding = response.data[0].embedding
+
+        print("Embedding done !")
+
         self.collection.update(
-            embeddings=[embedding.tolist()],
-            documents=[document["text"]],
-            metadatas=[document["metadata"]],
-            ids=[document["id"]]
+            embeddings=[embedding],
+            documents=[text],
+            metadatas=[metadata],
+            ids=[document_id]
         )
 
     def delete_document(self, document_id: str):
@@ -288,4 +301,23 @@ class VectorStore:
             }
         except Exception as e:
             print(f"Error getting document: {str(e)}")
-            return None 
+            return None
+
+    def get_document(self, document_id: str) -> dict:
+        """Get a document from the vector store by its ID"""
+        try:
+            result = self.collection.get(ids=[document_id])
+            if not result['ids']:
+                return None
+                
+            return {
+                'id': result['ids'][0],
+                'text': result['documents'][0],
+                'metadata': result['metadatas'][0]
+            }
+        except Exception as e:
+            print(f"Error getting document: {str(e)}")
+            return None
+        
+    
+    

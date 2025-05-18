@@ -169,6 +169,10 @@ class DocumentRequest(BaseModel):
 class UrlRequest(BaseModel):
     url: HttpUrl
 
+class DocumentUpdateRequest(BaseModel):
+    text: str
+    metadata: Optional[dict] = None
+
 # نمونه‌های کلاس‌ها
 # rag_system = RAGSystem()
 # text_processor = TextProcessor()
@@ -615,6 +619,8 @@ async def list_data_sources():
     """
     try:
         docs = vector_store.get_all_documents()
+
+        print(docs)
 
         # گروه‌بندی اسناد بر اساس URL
         url_groups = {}
@@ -1172,6 +1178,162 @@ async def delete_data_source(document_id: str):
         raise e
     except Exception as e:
         print(f"Error in delete_data_source: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/data_sources/{document_id}", tags=["Data Sources"],
+          summary="بروزرسانی یک سند",
+          description="این اندپوینت یک سند موجود را با استفاده از شناسه آن بروزرسانی می‌کند")
+async def update_document(document_id: str, update_request: DocumentUpdateRequest):
+    """
+    بروزرسانی یک سند با استفاده از شناسه آن
+    
+    - **document_id**: شناسه سند
+    - **text**: متن جدید سند
+    - **metadata**: متادیتای جدید سند (اختیاری)
+    
+    **نمونه درخواست:**
+    ```json
+    {
+      "text": "متن جدید سند",
+      "metadata": {
+        "source": "https://example.com",
+        "title": "عنوان جدید"
+      }
+    }
+    ```
+    
+    **نمونه خروجی:**
+    ```json
+    {
+      "message": "سند با موفقیت بروزرسانی شد",
+      "document_id": "doc_123"
+    }
+    ```
+    """
+    try:
+        # Get all documents to verify document exists
+        doc = vector_store.get_document(document_id=document_id)
+
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        
+        # Update document in vector store
+        vector_store.update_document(
+            document_id=document_id,
+            text=update_request.text,
+            metadata=doc['metadata']
+        )
+        
+        return JSONResponse(
+            content={
+                "message": "سند با موفقیت بروزرسانی شد",
+                "document_id": document_id
+            },
+            media_type="application/json; charset=utf-8"
+        )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error in update_document: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/data_sources/{document_id}", tags=["Data Sources"],
+          summary="دریافت یک سند",
+          description="این اندپوینت یک سند را با استفاده از شناسه آن برمی‌گرداند")
+async def get_document(document_id: str):
+    """
+    دریافت یک سند با استفاده از شناسه آن
+    
+    - **document_id**: شناسه سند
+    
+    **نمونه خروجی:**
+    ```json
+    {
+      "id": "doc_123",
+      "text": "متن سند",
+      "metadata": {
+        "source": "https://example.com",
+        "title": "عنوان سند"
+      }
+    }
+    ```
+    """
+    try:
+        # Get document from vector store
+        document = vector_store.get_document(document_id)
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        return JSONResponse(
+            content=document,
+            media_type="application/json; charset=utf-8"
+        )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error in get_document: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/data_sources/{document_id}", tags=["Documents"],
+          summary="دریافت اطلاعات یک سند",
+          description="این اندپوینت اطلاعات کامل یک سند را با استفاده از شناسه آن برمی‌گرداند")
+async def get_document_info(document_id: str):
+    """
+    دریافت اطلاعات کامل یک سند با استفاده از شناسه آن
+    
+    - **document_id**: شناسه سند
+    
+    **نمونه خروجی:**
+    ```json
+    {
+      "id": "doc_123",
+      "text": "متن سند",
+      "metadata": {
+        "source": "https://example.com",
+        "title": "عنوان سند",
+        "created_at": "2024-03-20T10:30:00",
+        "status": "approved"
+      },
+      "similarity_score": 0.95,
+      "chunk_index": 2,
+      "total_chunks": 5
+    }
+    ```
+    """
+    try:
+        # Get document from vector store
+        document = vector_store.get_document(document_id)
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Get all documents to calculate chunk index and total chunks
+        all_docs = vector_store.get_all_documents()
+        source_docs = [doc for doc in all_docs if doc['metadata'].get('source') == document['metadata'].get('source')]
+        
+        # Find chunk index
+        chunk_index = next((i for i, doc in enumerate(source_docs) if doc['id'] == document_id), -1)
+        
+        # Add additional information
+        document_info = {
+            **document,
+            'chunk_index': chunk_index,
+            'total_chunks': len(source_docs)
+        }
+        
+        return JSONResponse(
+            content=document_info,
+            media_type="application/json; charset=utf-8"
+        )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error in get_document_info: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
