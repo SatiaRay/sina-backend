@@ -22,6 +22,7 @@ class Chunk(BaseModel):
         }
 
 class DataSource(BaseModel):
+    source_id: str
     url: str
     imported_by: str
     import_date: datetime

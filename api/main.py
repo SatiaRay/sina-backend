@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 import logging
 from bs4 import BeautifulSoup
+import hashlib
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
@@ -399,6 +400,9 @@ async def delete_all_knowledge():
         return {"message": "تمام داده‌ها با موفقیت حذف شدند"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+    
 
 @app.post("/store_knowledge", tags=["Knowledge Management"],
          summary="ذخیره متن در پایگاه دانش",
@@ -596,6 +600,7 @@ async def list_data_sources():
     {
       "sources": [
         {
+          "source_id": "abc123",
           "url": "https://www.satia.co/about",
           "imported_by": "You",
           "import_date": "2023-06-15T12:30:45",
@@ -610,10 +615,11 @@ async def list_data_sources():
     """
     try:
         docs = vector_store.get_all_documents()
-        
+
         # گروه‌بندی اسناد بر اساس URL
         url_groups = {}
         for doc in docs:
+
             url = doc['metadata'].get('source', '')
             if not url:
                 continue
@@ -625,7 +631,9 @@ async def list_data_sources():
                 else:
                     import_date = datetime.now()
                     
+                    
                 url_groups[url] = {
+                    'source_id': doc['id'],
                     'chunks': [],
                     'import_date': import_date,
                     'status': '✓'
@@ -643,6 +651,7 @@ async def list_data_sources():
         for url, data in url_groups.items():
             if data['chunks']:
                 source = DataSource(
+                    source_id=data['source_id'],
                     url=url,
                     imported_by="You",
                     import_date=data['import_date'],
@@ -1129,6 +1138,41 @@ async def store_vector(
             status_code=500,
             detail=f"خطا در ذخیره متن در پایگاه داده برداری: {str(e)}"
         )
+
+@app.delete("/data_sources/{document_id}", tags=["Data Sources"],
+          summary="حذف یک منبع داده",
+          description="این اندپوینت یک منبع داده را با استفاده از شناسه آن حذف می‌کند")
+async def delete_data_source(document_id: str):
+    """
+    حذف یک منبع داده با استفاده از شناسه آن
+    
+    - **document_id**: شناسه منبع داده
+    
+    **نمونه خروجی:**
+    ```json
+    {
+      "message": "منبع داده با موفقیت حذف شد",
+      "deleted_chunks": 10
+    }
+    ```
+    """
+    try:
+        vector = VectorStore()
+
+        vector.delete_document(document_id)
+        
+        return JSONResponse(
+            content={
+                "message": "منبع داده با موفقیت حذف شد",
+            },
+            media_type="application/json; charset=utf-8"
+        )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error in delete_data_source: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

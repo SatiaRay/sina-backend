@@ -177,6 +177,7 @@ class VectorStore:
         """دریافت اسناد در انتظار بررسی"""
         try:
             # Get all documents
+
             result = self.collection.get()
             
             # Filter pending documents
