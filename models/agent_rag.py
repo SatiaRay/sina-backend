@@ -30,6 +30,7 @@ SATIA_INSTRUCTIONS = """
 * از فاکتور گرفتن و حذف کردن اطلاعات مرتبط خودداری کنید. پاسخ شما باید کامل و بی نقص باشد
 * جداولی که در قالب markdown ارسال میشود را در پاسخ به صورت جداول html ارسال کن.
 * به هیچ وجه جداول را به صورت markdown ارسال نکن.
+* آدرس لینک هایی که داخل markdown قرار داده شده را در پاسخ به صورت تگ a با href برابر با آدرس آن لینک قرار دهید. همچنین target="__blank" تا در صفحه ی دیگری لینک باز شود.
 
     @example:
         Context Information:
@@ -61,8 +62,15 @@ SATIA_INSTRUCTIONS = """
             </tr>
         </table>  
         
+    @example
+        Context Information:
+        برای مشاهده نمایندگی های شرکت ساتیا بر روی این <https://satia.co/agencies> کلیک کنید
 
-    
+        User Question:
+        نمایندگی های ساتیا؟
+
+        Assistant Response:
+        برای مشاهده نمایندگی های شرکت ساتیا بر روی این <a href="https://satia.co/agencies">لینک</a> کلیک کنید.
 """
 
 class AgentRAGSystem:

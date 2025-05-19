@@ -35,6 +35,7 @@ from api.models import (ChatRequest,
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
 from models.agent_rag import AgentRAGSystem
+from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from .wizard import router as wizard_router
 from .document import router as document_router
 from .domain import router as domain_router
@@ -89,6 +90,7 @@ app.include_router(wizard_router)
 app.include_router(document_router)
 app.include_router(domain_router)
 app.include_router(crawl_router)
+
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
@@ -1146,6 +1148,65 @@ async def store_vector(
             status_code=500,
             detail=f"خطا در ذخیره متن در پایگاه داده برداری: {str(e)}"
         )
+    
+
+
+class AddManuallyKnowledgeRequest:
+    def __init__(self, text: str, metadata: dict):
+        self.text = text
+        self.metadata = metadata
+
+@app.post("/add_manually_knowledge", tags=["Knowledge Management"],
+          summary="افزودن دانش به صورت دستی (تبدیل HTML به Markdown)",
+          description="این اندپوینت مشابه /store_vector است اما ابتدا متن HTML را به مارک‌داون تبدیل می‌کند و سپس در پایگاه داده برداری ذخیره می‌کند.")
+async def add_manually_knowledge(
+    request: StoreVectorRequest = Body(
+        ...,
+        example={
+            "text": "<p class='content'>ساتیا یک پلتفرم مدیریت منابع سازمانی است که...</p>",
+            "metadata": {
+                "source": "دستی",
+                "title": "درباره ساتیا",
+                "author": "تیم ساتیا",
+                "date": "2024-04-26"
+            }
+        }
+    )
+):
+    try:
+        text = request.text
+
+        # Convert HTML to Markdown using RAG model
+        convertor_agent = HTMLToMarkdownAgent()
+        markdown_result = await convertor_agent.convert(text)
+        markdown_text = markdown_result if isinstance(markdown_result, str) else str(markdown_result)
+
+        # Initialize vector store
+        vector_store = VectorStore()
+
+        # Create document structure with markdown text
+        document = {
+            "text": markdown_text,
+            "metadata": request.metadata
+        }
+
+        # Add document to vector store
+        vector_store.add_documents([document])
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "متن (مارک‌داون) با موفقیت در پایگاه داده برداری ذخیره شد",
+                "status": "success"
+            }
+        )
+    except Exception as e:
+        log_error(error_logger, str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"خطا در ذخیره متن مارک‌داون در پایگاه داده برداری: {str(e)}"
+        )
+
 
 @app.delete("/data_sources/{document_id}", tags=["Data Sources"],
           summary="حذف یک منبع داده",
