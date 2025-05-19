@@ -74,6 +74,7 @@ def crawl(url, recursive=False):
         # Keep track of visited URLs to avoid duplicates
         visited_urls = set()
         crawled_data = []
+        docs = []
         
         def process_url(current_url):
             """Process a single URL and store its content in the database"""
@@ -135,15 +136,18 @@ def crawl(url, recursive=False):
                     'domain_id': domain_obj.id,
                     'embedding_id': None
                 }
+
                 
                 # Store in database
                 try:
                     existing_docs = document_repo.get_by_uri(document_data['uri'])
                     if existing_docs:
                         document_repo.update(existing_docs[0].id, document_data)
+                        docs.append(existing_docs[0].id)
                         print(f"Updated document: {document_data['uri']}")
                     else:
-                        document_repo.create(document_data)
+                        new_doc = document_repo.create(document_data)
+                        docs.append(new_doc.id)
                         print(f"Created new document: {document_data['uri']}")
                 except Exception as e:
                     print(f"Database error for {current_url}: {str(e)}")
@@ -177,6 +181,8 @@ def crawl(url, recursive=False):
         
         # After crawling all URLs, remove duplicate content
         remove_duplicate_content(crawled_data, document_repo)
+
+        return docs
         
     finally:
         # Close database session

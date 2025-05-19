@@ -12,7 +12,7 @@ import hashlib
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from fastapi import FastAPI, HTTPException, Depends, Body, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, Body, Request, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
@@ -38,6 +38,7 @@ from models.agent_rag import AgentRAGSystem
 from .wizard import router as wizard_router
 from .document import router as document_router
 from .domain import router as domain_router
+from api.crawl import router as crawl_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -87,6 +88,7 @@ app.add_middleware(
 app.include_router(wizard_router)
 app.include_router(document_router)
 app.include_router(domain_router)
+app.include_router(crawl_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
