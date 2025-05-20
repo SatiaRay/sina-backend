@@ -37,6 +37,7 @@ from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from .wizard import router as wizard_router
 from .document import router as document_router
 from .domain import router as domain_router
+from .chat import router as chat_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -86,6 +87,7 @@ app.add_middleware(
 app.include_router(wizard_router)
 app.include_router(document_router)
 app.include_router(domain_router)
+app.include_router(chat_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
