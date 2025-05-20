@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Type, TypeVar, Generic
 from datetime import datetime
-from .models import BaseModel, Chat, Message, Document, Wizard, CrawledDomain
+from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -16,11 +16,10 @@ class BaseRepository(Generic[T]):
     def get_all(self) -> List[T]:
         return self.db.query(self.model_class).all()
 
-    def create(self, obj_in: dict) -> T:
-        db_obj = self.model_class(**obj_in)
+    def create(self, data: dict):
+        db_obj = self.model_class(**data)
         self.db.add(db_obj)
-        self.db.commit()
-        self.db.refresh(db_obj)
+        self.db.flush()  # Flush to get the ID
         return db_obj
 
     def update(self, id: int, obj_in: dict) -> Optional[T]:
@@ -91,17 +90,26 @@ class ChatRepository(BaseRepository[Chat]):
         super().__init__(Chat, db)
 
     def get_with_messages(self, id: int) -> Optional[Chat]:
-        return self.db.query(Chat).filter(Chat.id == id).first()
+        return self.db.query(Chat).filter(Chat.session_id == id).first()
 
     def get_all_with_messages(self) -> List[Chat]:
         return self.db.query(Chat).all()
-
-class MessageRepository(BaseRepository[Message]):
+    
+class ChatHistoryRepository(BaseRepository[ChatHistory]):
     def __init__(self, db: Session):
-        super().__init__(Message, db)
+        super().__init__(ChatHistory, db)
 
-    def get_by_chat(self, chat_id: int) -> List[Message]:
-        return self.db.query(Message).filter(Message.chat_id == chat_id).all()
+    def get_chat_history_by_chat_id(self, chat_id: int, limit:int = 20) -> List[ChatHistory]:
+        """
+        Retrieves all chat history messages associated with a specific chat.
+        """
+        return self.db.query(ChatHistory).filter(ChatHistory.chat_id == chat_id).limit(limit=limit).all()
+
+    def get_with_chat_history(self, id: int) -> Optional[Chat]:
+        """
+        Retrieves a Chat and its associated ChatHistory messages.
+        """
+        return self.db.query(Chat).filter(Chat.id == id).join(Chat.chat_history).first()
 
 class CrawledDomainRepository(BaseRepository[CrawledDomain]):
     def __init__(self, db: Session):

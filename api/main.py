@@ -34,12 +34,11 @@ from api.models import (ChatRequest,
                       AddKnowledgeRequest)
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
-from models.agent_rag import AgentRAGSystem
-from models.html_to_markdown_agent import HTMLToMarkdownAgent
+from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from .wizard import router as wizard_router
 from .document import router as document_router
 from .domain import router as domain_router
-from api.crawl import router as crawl_router
+from .chat import router as chat_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -61,7 +60,7 @@ try:
     print("VectorStore initialized successfully")
 
     print("Initializing AgentRAGSystem...")
-    agent_rag = AgentRAGSystem()
+    agent_rag = ChatAgentRagProxy()
     print("AgentRAGSystem initialized successfully")
 
 except Exception as e:
@@ -90,7 +89,7 @@ app.include_router(wizard_router)
 app.include_router(document_router)
 app.include_router(domain_router)
 app.include_router(crawl_router)
-
+app.include_router(chat_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
@@ -181,7 +180,7 @@ class DocumentUpdateRequest(BaseModel):
 # rag_system = RAGSystem()
 # text_processor = TextProcessor()
 vector_store = VectorStore()
-agent_rag = AgentRAGSystem()
+agent_rag = ChatAgentRagProxy()
 
 @app.get("/")
 async def root():
@@ -219,7 +218,7 @@ async def ask_question_agent(request: Request, question_request: QuestionRequest
         )
     
 @app.websocket("/ws/ask")
-async def ask_question_agent_socket(websocket: WebSocket):
+async def ask_question_agent_socket(websocket: WebSocket, session_id: str = Query(..., description="Session ID is required")):
     await websocket.accept()
 
     try:

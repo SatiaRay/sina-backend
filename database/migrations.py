@@ -13,7 +13,7 @@ DATABASE_URL = f"mysql+mysqlconnector://{os.getenv('MYSQL_USER')}:{os.getenv('MY
 
 def init_db():
     """Initialize the database by creating all tables"""
-    from .models import Base, Document, CrawledDomain, Wizard, Chat, Message
+    from .models import Base, Document, CrawledDomain, Wizard, Chat, ChatHistory
     
     # Create engine
     engine = create_engine(DATABASE_URL)

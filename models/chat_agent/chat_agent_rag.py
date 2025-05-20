@@ -1,5 +1,5 @@
 from agents import Agent, Runner
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 from database.vector_store import VectorStore
@@ -10,6 +10,7 @@ import asyncio
 from fastapi import WebSocket
 from openai import OpenAI
 from anyio import to_thread
+from .chat_agent_rag_interface import ChatAgentRagInterface
 
 load_dotenv()
 main_logger, error_logger, api_logger = configure_logging()
@@ -73,7 +74,7 @@ SATIA_INSTRUCTIONS = """
         برای مشاهده نمایندگی های شرکت ساتیا بر روی این <a href="https://satia.co/agencies">لینک</a> کلیک کنید.
 """
 
-class AgentRAGSystem:
+class ChatAgentRag(ChatAgentRagInterface):
     def __init__(self):
         self.vector_store = VectorStore()
         self.text_processor = TextProcessor()
@@ -240,13 +241,12 @@ class AgentRAGSystem:
             log_error(error_logger, e, error_context)
             raise 
 
-    async def generate_response_socket(self, question: str, websocket: WebSocket):
+    async def generate_response_socket(self, question: str, websocket: WebSocket, history: Optional[List[Dict[str, str]]] = None):
         try:
             main_logger.info(f"Generating response for question: {question}")
             
             # Search for relevant documents
             relevant_docs = await self.get_relevant_docs(question)
-            # main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
             print(f"Found {len(relevant_docs)} relevant documents", flush=True)
             
             # Sort documents by score
@@ -261,7 +261,17 @@ class AgentRAGSystem:
             
             context = "\n\n---\n\n".join(context_parts)
             
-            # Combine question and context
+            # Format chat history if provided
+            history_text = ""
+            if history:
+                history_parts = []
+                for msg in history:
+                    role = msg.get('role', 'user')
+                    content = msg.get('body', '')
+                    history_parts.append(f"{role.capitalize()}: {content}")
+                history_text = "\n\nPrevious Conversation:\n" + "\n".join(history_parts)
+            
+            # Combine question, context, and history
             full_input = f"""
             # Instructions
 
@@ -270,17 +280,22 @@ class AgentRAGSystem:
             Context Information:
             {context}
             
+            {history_text}
+            
             User Question: {question}"""
 
             # In your async function:
             stream = await to_thread.run_sync(self.stream_openai_response, full_input)
 
             print("Send response in socket ...", flush=True)
+
+            full_response = ""
             
             # Send events to the client as they are received from OpenAI
             for event in stream:
                 if event.type == 'response.output_text.delta':
                     delta = event.delta
+                    full_response += delta
                     await websocket.send_text(delta)
                     delay = str(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', "0.0001"))
                     await asyncio.sleep(float(delay))
