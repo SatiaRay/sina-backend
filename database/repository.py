@@ -91,8 +91,6 @@ class ChatRepository(BaseRepository[Chat]):
 
     def get_with_messages(self, id: int) -> Optional[Chat]:
         return self.db.query(Chat).filter(Chat.session_id == id).first()
-    
-    
 
     def get_all_with_messages(self) -> List[Chat]:
         return self.db.query(Chat).all()
@@ -101,11 +99,11 @@ class ChatHistoryRepository(BaseRepository[ChatHistory]):
     def __init__(self, db: Session):
         super().__init__(ChatHistory, db)
 
-    def get_chat_history_by_chat_id(self, chat_id: int) -> List[ChatHistory]:
+    def get_chat_history_by_chat_id(self, chat_id: int, limit:int = 20) -> List[ChatHistory]:
         """
         Retrieves all chat history messages associated with a specific chat.
         """
-        return self.db.query(ChatHistory).filter(ChatHistory.chat_id == chat_id).all()
+        return self.db.query(ChatHistory).filter(ChatHistory.chat_id == chat_id).limit(limit=limit).all()
 
     def get_with_chat_history(self, id: int) -> Optional[Chat]:
         """

@@ -38,26 +38,23 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         self.__update_chat_history(question, "user", websocket=websocket)
 
         print("Chat history has been updated !")
-        print("Open streaming socket ...")
 
         try:
             # Get or create chat session
             chat = self.__get_chat(request=None, websocket=websocket)
             
             # Get chat history
-            chat_history = await self.chat_repository.get_chat_history(chat.id)
-            # Get last 50 messages
-            last_50_messages = chat_history[-50:] if len(chat_history) > 50 else chat_history
-            
+            chat_history = self.chat_history_repository.get_chat_history_by_chat_id(chat_id=chat.id, limit=50)
+
             # Format messages for the agent
             formatted_history = [
                 {
                     "role": msg.role,
-                    "body": msg.message
+                    "body": msg.body
                 }
-                for msg in last_50_messages
+                for msg in chat_history
             ]
-            
+
             # Generate response with history
             response = await self.agent.generate_response_socket(question, websocket, history=formatted_history)
             
