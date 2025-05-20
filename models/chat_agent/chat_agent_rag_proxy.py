@@ -59,7 +59,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             response = await self.agent.generate_response_socket(question, websocket, history=formatted_history)
             
             # Store AI response in chat history
-            self.__update_chat_history(response, role=" ", websocket=websocket)
+            self.__update_chat_history(response, role="assistant", websocket=websocket)
             
             return response
         except Exception as e:

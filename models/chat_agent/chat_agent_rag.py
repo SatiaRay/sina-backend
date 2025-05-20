@@ -299,6 +299,8 @@ class ChatAgentRag(ChatAgentRagInterface):
                     await websocket.send_text(delta)
                     delay = str(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', "0.0001"))
                     await asyncio.sleep(float(delay))
+
+            return full_response
             
         except Exception as e:
             error_context = f"Question: {question}"
