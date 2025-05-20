@@ -39,6 +39,7 @@ from .wizard import router as wizard_router
 from .document import router as document_router
 from .domain import router as domain_router
 from .chat import router as chat_router
+from .crawl import router as crawl_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
