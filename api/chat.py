@@ -20,6 +20,7 @@ class ChatHistoryResponse(BaseModel):
 async def get_chat_history(
     session_id: str,
     limit: Optional[int] = Query(default=20, ge=1, le=100),
+    offset: Optional[int] = Query(default=0, ge=0),
     db: Session = Depends(get_db)
 ):
     """
@@ -27,6 +28,7 @@ async def get_chat_history(
     
     - **session_id**: شناسه جلسه چت
     - **limit**: تعداد پیام‌های مورد نظر (پیش‌فرض: 20)
+    - **offset**: تعداد پیام‌های رد شده (پیش‌فرض: 0)
     
     **نمونه خروجی:**
     ```json
@@ -61,11 +63,12 @@ async def get_chat_history(
                 }
             )
         
-        # Then get the chat history for this chat
+        # Then get the chat history for this chat with offset
         history = db.query(ChatHistory)\
             .filter(ChatHistory.chat_id == chat.id)\
             .order_by(ChatHistory.created_at.desc())\
-            .limit(limit)\
+            .offset(int(offset))\
+            .limit(int(limit))\
             .all()
         
         if not history:
@@ -74,7 +77,8 @@ async def get_chat_history(
                 detail={
                     "message": "تاریخچه چت یافت نشد",
                     "session_id": session_id,
-                    "chat_id": chat.id
+                    "chat_id": chat.id,
+                    "offset": offset
                 }
             )
         
