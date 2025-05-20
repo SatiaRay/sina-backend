@@ -40,6 +40,7 @@ from .document import router as document_router
 from .domain import router as domain_router
 from .chat import router as chat_router
 from .crawl import router as crawl_router
+from models.html_to_markdown_agent import HTMLToMarkdownAgent
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -624,26 +625,23 @@ async def list_data_sources():
     try:
         docs = vector_store.get_all_documents()
 
-        print(docs)
-
-        # گروه‌بندی اسناد بر اساس URL
-        url_groups = {}
+        # گروه‌بندی اسناد بر اساس source_id
+        source_groups = {}
         for doc in docs:
-
-            url = doc['metadata'].get('source', '')
-            if not url:
+            source_id = doc['id']
+            if not source_id:
                 continue
                 
-            if url not in url_groups:
+            if source_id not in source_groups:
                 created_at = doc['metadata'].get('created_at')
                 if isinstance(created_at, str):
                     import_date = datetime.fromisoformat(created_at)
                 else:
                     import_date = datetime.now()
                     
-                    
-                url_groups[url] = {
-                    'source_id': doc['id'],
+                source_groups[source_id] = {
+                    'source_id': source_id,
+                    'url': doc['metadata'].get('source', ''),
                     'chunks': [],
                     'import_date': import_date,
                     'status': '✓'
@@ -651,18 +649,18 @@ async def list_data_sources():
             
             # فقط اضافه کردن chunks با متن معنی‌دار
             if doc['text'].strip():
-                url_groups[url]['chunks'].append(Chunk(
+                source_groups[source_id]['chunks'].append(Chunk(
                     text=doc['text'],
                     metadata=doc['metadata']
                 ))
         
         # تبدیل به فرمت مورد نظر
         sources = []
-        for url, data in url_groups.items():
+        for source_id, data in source_groups.items():
             if data['chunks']:
                 source = DataSource(
                     source_id=data['source_id'],
-                    url=url,
+                    url=data['url'],
                     imported_by="You",
                     import_date=data['import_date'],
                     status=data['status'],
