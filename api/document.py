@@ -40,6 +40,10 @@ class DocumentUpdate(BaseModel):
     domain_id: Optional[int] = None
     embedding_id: Optional[int] = None
 
+class VectorizeDocumentRequest(BaseModel):
+    html: str
+    metadata: Optional[dict] = None
+
 class DomainInfo(BaseModel):
     id: int
     domain: str
@@ -125,15 +129,7 @@ async def update_document(document_id: int, document: DocumentUpdate, db: Sessio
 
     # If HTML is being updated, convert it to markdown
     update_data = document.model_dump(exclude_unset=True)
-    if "html" in update_data:
-        markdown = await html_to_markdown_agent.convert(update_data["html"])  # <-- await here
-        if markdown is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to convert HTML to Markdown"
-            )
-        update_data["markdown"] = markdown
-
+  
     print(f"Updated document")
 
     # Update document
@@ -296,4 +292,90 @@ def search_documents_by_title(
             domain=DomainInfo(id=domain.id, domain=domain.domain)
         ))
     return response
+
+@router.post("/{document_id}/vectorize", tags=["documents"],
+          summary="تبدیل و ذخیره سند در پایگاه داده برداری",
+          description="این اندپوینت HTML را به Markdown تبدیل کرده و در پایگاه داده برداری ذخیره می‌کند")
+async def vectorize_document(
+    document_id: int,
+    request: VectorizeDocumentRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    تبدیل HTML به Markdown و ذخیره در پایگاه داده برداری
+    
+    - **document_id**: شناسه سند
+    - **html**: محتوای HTML سند
+    - **metadata**: متادیتای سند (اختیاری)
+    
+    **نمونه درخواست:**
+    ```json
+    {
+      "html": "<p>متن HTML</p>",
+      "metadata": {
+        "source": "https://example.com",
+        "title": "عنوان سند"
+      }
+    }
+    ```
+    
+    **نمونه خروجی:**
+    ```json
+    {
+      "message": "سند با موفقیت در پایگاه داده برداری ذخیره شد",
+      "document_id": "doc_123",
+      "markdown": "# متن Markdown"
+    }
+    ```
+    """
+    try:
+        # Get document from database to verify it exists
+        document_repo = DocumentRepository(db)
+        document = document_repo.get(document_id)
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Convert HTML to Markdown
+        markdown = await html_to_markdown_agent.convert(request.html)
+        if markdown is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to convert HTML to Markdown"
+            )
+        
+        # Prepare metadata
+        metadata = request.metadata or {}
+        metadata.update({
+            "document_id": document_id,
+            "title": document.title,
+            "uri": document.uri,
+            "domain_id": document.domain_id,
+            "created_at": datetime.now().isoformat()
+        })
+        
+        # Create document for vector store
+        vector_doc = {
+            "text": markdown,
+            "metadata": metadata
+        }
+        
+        # Add to vector store
+        vector_store.add_documents([vector_doc])
+        
+        return JSONResponse(
+            content={
+                "message": "سند با موفقیت در پایگاه داده برداری ذخیره شد",
+                "document_id": f"doc_{document_id}",
+                "markdown": markdown
+            },
+            media_type="application/json; charset=utf-8"
+        )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error in vectorize_document: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
