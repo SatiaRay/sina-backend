@@ -148,6 +148,7 @@ def crawl(url, recursive=False):
                     else:
                         new_doc = document_repo.create(document_data)
                         docs.append(new_doc.id)
+                        db.commit()
                         print(f"Created new document: {document_data['uri']}")
                 except Exception as e:
                     print(f"Database error for {current_url}: {str(e)}")

@@ -1,12 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, HttpUrl
 from typing import Optional, List, Dict, Any
 from fastapi.responses import JSONResponse
 from datetime import datetime
 import logging
 from crawler.crawler import crawl
-from database.models import Document, get_db
+from database.models import Document, CrawledDomain, get_db
 from sqlalchemy.orm import Session
+from urllib.parse import urlparse
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -64,17 +65,40 @@ async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
         start_time = datetime.now()
         logger.info(f"Starting crawl for URL: {request.url} (recursive: {request.recursive})")
         
-        # Start crawling
+        # Start crawling and get document IDs
         doc_ids = crawl(str(request.url), recursive=request.recursive)
+
+        print(doc_ids)
         
-        # Get document details from database
+        # Get document details
         doc_details = []
-        
         for doc_id in doc_ids:
             # Get document from database
             doc = db.query(Document).filter(Document.id == doc_id).first()
-            domain=doc.domain.domain if doc.domain else ''
             if doc:
+
+                print(doc)
+                # Extract domain from URI if no domain exists
+                if not doc.domain:
+                    parsed_uri = urlparse(doc.uri)
+                    domain_name = parsed_uri.netloc
+                    if not domain_name:  # If URI is relative
+                        domain_name = urlparse(str(request.url)).netloc
+                    
+                    # Create new domain if it doesn't exist
+                    domain = db.query(CrawledDomain).filter(CrawledDomain.domain == domain_name).first()
+                    if not domain:
+                        domain = CrawledDomain(domain=domain_name)
+                        db.add(domain)
+                        db.commit()
+                        db.refresh(domain)
+                    
+                    # Update document with new domain
+                    doc.domain_id = domain.id
+                    db.commit()
+                
+                # Get domain for URL construction
+                domain = doc.domain.domain if doc.domain else ''
                 doc_details.append(DocumentInfo(
                     id=str(doc.id),
                     url=domain + doc.uri,

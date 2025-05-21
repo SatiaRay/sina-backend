@@ -19,7 +19,7 @@ class BaseRepository(Generic[T]):
     def create(self, data: dict):
         db_obj = self.model_class(**data)
         self.db.add(db_obj)
-        self.db.flush()  # Flush to get the ID
+        self.db.commit()
         return db_obj
 
     def update(self, id: int, obj_in: dict) -> Optional[T]:
