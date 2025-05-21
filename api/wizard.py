@@ -37,6 +37,12 @@ def create_wizard(wizard: WizardCreate, db: Session = Depends(get_db)):
     wizard_repo = WizardRepository(db)
     return wizard_repo.create(wizard.model_dump())
 
+# Add a route for the root path without trailing slash
+@router.post("", response_model=WizardResponse)
+def create_wizard_no_slash(wizard: WizardCreate, db: Session = Depends(get_db)):
+    wizard_repo = WizardRepository(db)
+    return wizard_repo.create(wizard.model_dump())
+
 # Get a wizard by ID
 @router.get("/{wizard_id}", response_model=WizardResponse)
 def get_wizard(wizard_id: int, db: Session = Depends(get_db)):
