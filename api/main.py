@@ -13,6 +13,7 @@ root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
 from fastapi import FastAPI, HTTPException, Depends, Body, Request, WebSocket, WebSocketDisconnect, Query
+from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
@@ -41,6 +42,8 @@ from .domain import router as domain_router
 from .chat import router as chat_router
 from .crawl import router as crawl_router
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
+from database.repository import DocumentRepository
+from database.models import get_db
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -1169,7 +1172,8 @@ async def add_manually_knowledge(
                 "date": "2024-04-26"
             }
         }
-    )
+    ),
+    db : Session = Depends(get_db)
 ):
     try:
         text = request.text
@@ -1189,7 +1193,17 @@ async def add_manually_knowledge(
         }
 
         # Add document to vector store
-        vector_store.add_documents([document])
+        id = vector_store.add_documents([document])[0]
+
+        # Store in database
+        repo = DocumentRepository(db)
+        repo.create({
+            'html' : request.text,
+            'markdown' : markdown_text,
+            'title' : request.metadata['title'],
+            'vector_id' : id,
+            'type' : 'manual'
+        })
 
         return JSONResponse(
             status_code=200,

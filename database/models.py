@@ -70,9 +70,10 @@ class Document(BaseModel):
     title = Column(String(255))
     _html = Column("html", Text(length=4294967295))  # MySQL LONGTEXT
     markdown = Column(Text(length=4294967295), nullable=True)  # MySQL LONGTEXT
-    uri = Column(String(255))
-    domain_id = Column(Integer, ForeignKey("crawled_domains.id"))
-    embedding_id = Column(Integer, nullable=True)
+    uri = Column(String(255), nullable=True)
+    domain_id = Column(Integer, ForeignKey("crawled_domains.id"), nullable=True)
+    vector_id = Column(String(255), nullable=True)
+    type = Column(Enum('manual', 'crawl'), default="crawl")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

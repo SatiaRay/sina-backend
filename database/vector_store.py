@@ -87,6 +87,8 @@ class VectorStore:
             ids=ids
         )
 
+        return ids
+
     def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """جستجوی اسناد مرتبط"""
         # تبدیل سوال به بردار با استفاده از OpenAI
