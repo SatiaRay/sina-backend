@@ -108,7 +108,12 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
 
 # Update a document
 @router.put("/{document_id}", response_model=DocumentResponse)
-async def update_document(document_id: int, document: DocumentUpdate, db: Session = Depends(get_db)):
+async def update_document(
+    document_id: int, 
+    document: DocumentUpdate, 
+    update_vector: bool = Query(False, description="Whether to update the vector store with the new content"),
+    db: Session = Depends(get_db)
+):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
 
@@ -132,6 +137,50 @@ async def update_document(document_id: int, document: DocumentUpdate, db: Sessio
     updated_doc = document_repo.update(document_id, update_data)
     if not updated_doc:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Update vector store if requested
+    if update_vector and (document.html or document.markdown):
+        try:
+            # Convert HTML to Markdown if HTML is provided
+            markdown = document.markdown
+            if document.html:
+                markdown = await html_to_markdown_agent.convert(document.html)
+                if markdown is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Failed to convert HTML to Markdown"
+                    )
+            
+            # Prepare metadata with proper type handling
+            metadata = {
+                "document_id": str(document_id),  # Convert to string
+                "title": updated_doc.title or "",  # Use empty string if None
+                "uri": updated_doc.uri or "",  # Use empty string if None
+                "domain_id": str(updated_doc.domain_id) if updated_doc.domain_id else "0",  # Convert to string, use "0" if None
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            # Create document for vector store
+            vector_doc = {
+                "text": markdown,
+                "metadata": metadata
+            }
+            
+            # Update in vector store
+            if updated_doc.vector_id:
+                # Delete old vector document
+                vector_store.delete_vector(updated_doc.vector_id)
+            
+            # Add new vector document
+            vector_id = vector_store.add_documents([vector_doc])[0]
+            
+            # Update document with new vector_id
+            document_repo.update(document_id, {"vector_id": vector_id})
+                
+        except Exception as e:
+            print(f"Error updating vector store: {str(e)}")
+            traceback.print_exc()
+            # Don't raise error, just log it since vector update is optional
 
     domain = domain_repo.get(updated_doc.domain_id)
     return DocumentResponse(

@@ -64,9 +64,9 @@ try:
     vector_store = VectorStore()
     print("VectorStore initialized successfully")
 
-    # print("Initializing AgentRAGSystem...")
-    # agent_rag = ChatAgentRagProxy()
-    # print("AgentRAGSystem initialized successfully")
+    print("Initializing AgentRAGSystem...")
+    agent_rag = ChatAgentRagProxy()
+    print("AgentRAGSystem initialized successfully")
 
 except Exception as e:
     print(f"Error during initialization: {str(e)}")
@@ -94,7 +94,7 @@ app.include_router(wizard_router)
 app.include_router(document_router)
 app.include_router(domain_router)
 app.include_router(crawl_router)
-# app.include_router(chat_router)
+app.include_router(chat_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [

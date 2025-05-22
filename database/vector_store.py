@@ -184,9 +184,9 @@ class VectorStore:
             ids=[document_id]
         )
 
-    def delete_document(self, document_id: str):
-        """Delete a document from the vector store"""
-        self.collection.delete(ids=[document_id])
+    def delete_vector(self, vector_id: str):
+        """Delete a vector from the vector store"""
+        self.collection.delete(ids=[vector_id])
 
     def get_pending_documents(self, offset: int = 0, limit: int = 50) -> List[Dict]:
         """دریافت اسناد در انتظار بررسی"""
