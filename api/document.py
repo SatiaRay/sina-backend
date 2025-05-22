@@ -27,7 +27,6 @@ class DocumentBase(BaseModel):
     markdown: str
     uri: str
     domain_id: int
-    embedding_id: Optional[int] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -38,7 +37,6 @@ class DocumentUpdate(BaseModel):
     markdown: Optional[str] = None
     uri: Optional[str] = None
     domain_id: Optional[int] = None
-    embedding_id: Optional[int] = None
 
 class VectorizeDocumentRequest(BaseModel):
     html: str
@@ -80,7 +78,6 @@ def create_document(document: DocumentCreate, db: Session = Depends(get_db)):
         markdown=created_doc.markdown,
         uri=created_doc.uri,
         domain_id=created_doc.domain_id,
-        embedding_id=created_doc.embedding_id,
         created_at=created_doc.created_at,
         updated_at=created_doc.updated_at,
         domain=DomainInfo(id=domain.id, domain=domain.domain)
@@ -104,7 +101,6 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
         markdown=document.markdown,
         uri=document.uri,
         domain_id=document.domain_id,
-        embedding_id=document.embedding_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
         domain=DomainInfo(id=domain.id, domain=domain.domain)
@@ -145,7 +141,6 @@ async def update_document(document_id: int, document: DocumentUpdate, db: Sessio
         markdown=updated_doc.markdown,
         uri=updated_doc.uri,
         domain_id=updated_doc.domain_id,
-        embedding_id=updated_doc.embedding_id,
         created_at=updated_doc.created_at,
         updated_at=updated_doc.updated_at,
         domain=DomainInfo(id=domain.id, domain=domain.domain)
@@ -199,7 +194,6 @@ def list_documents(
             markdown=doc.markdown,
             uri=doc.uri,
             domain_id=doc.domain_id,
-            embedding_id=doc.embedding_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
             domain=DomainInfo(id=domain.id, domain=domain.domain)
@@ -225,7 +219,6 @@ def get_document_by_uri(uri: str, db: Session = Depends(get_db)):
         markdown=doc.markdown,
         uri=doc.uri,
         domain_id=doc.domain_id,
-        embedding_id=doc.embedding_id,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
         domain=DomainInfo(id=domain.id, domain=domain.domain)
@@ -255,7 +248,6 @@ def search_documents_by_content(
             markdown=doc.markdown,
             uri=doc.uri,
             domain_id=doc.domain_id,
-            embedding_id=doc.embedding_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
             domain=DomainInfo(id=domain.id, domain=domain.domain)
@@ -286,7 +278,6 @@ def search_documents_by_title(
             markdown=doc.markdown,
             uri=doc.uri,
             domain_id=doc.domain_id,
-            embedding_id=doc.embedding_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
             domain=DomainInfo(id=domain.id, domain=domain.domain)
@@ -324,6 +315,7 @@ async def vectorize_document(
     {
       "message": "سند با موفقیت در پایگاه داده برداری ذخیره شد",
       "document_id": "doc_123",
+      "vector_id": "vec_123",
       "markdown": "# متن Markdown"
     }
     ```
@@ -361,12 +353,19 @@ async def vectorize_document(
         }
         
         # Add to vector store
-        vector_store.add_documents([vector_doc])
+        vector_id = vector_store.add_documents([vector_doc])[0]
+        
+        # Update document with vector_id
+        update_data = {
+            "vector_id": vector_id
+        }
+        document_repo.update(document_id, update_data)
         
         return JSONResponse(
             content={
                 "message": "سند با موفقیت در پایگاه داده برداری ذخیره شد",
                 "document_id": f"doc_{document_id}",
+                "vector_id": vector_id,
                 "markdown": markdown
             },
             media_type="application/json; charset=utf-8"

@@ -134,9 +134,6 @@ class DocumentRepository(BaseRepository[Document]):
     def get_by_domain(self, domain_id: int) -> List[Document]:
         return self.db.query(Document).filter(Document.domain_id == domain_id).all()
 
-    def get_by_embedding_id(self, embedding_id: str) -> Optional[Document]:
-        return self.db.query(Document).filter(Document.embedding_id == embedding_id).first()
-
     def search_by_content(self, query: str) -> List[Document]:
         return self.db.query(Document).filter(Document.content.ilike(f"%{query}%")).all()
 

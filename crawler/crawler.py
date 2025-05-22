@@ -133,8 +133,7 @@ def crawl(url, recursive=False):
                     'html': html_content,
                     'markdown': text_content,
                     'uri': parsed_url.path or '/',
-                    'domain_id': domain_obj.id,
-                    'embedding_id': None
+                    'domain_id': domain_obj.id
                 }
 
                 
