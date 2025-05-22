@@ -83,6 +83,44 @@ def create_document(document: DocumentCreate, db: Session = Depends(get_db)):
         domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
     )
 
+# Get manual documents with pagination
+@router.get("/manual", response_model=List[DocumentResponse],
+          summary="دریافت اسناد دستی",
+          description="این اندپوینت لیست اسناد با نوع دستی را با پشتیبانی از صفحه‌بندی برمی‌گرداند")
+def get_manual_documents(
+    limit: int = Query(10, description="تعداد اسناد در هر صفحه", ge=1, le=100),
+    offset: int = Query(0, description="شماره صفحه (شروع از 0)", ge=0),
+    db: Session = Depends(get_db)
+):
+    document_repo = DocumentRepository(db)
+    domain_repo = CrawledDomainRepository(db)
+    
+    # Query manual documents with pagination
+    query = document_repo.db.query(document_repo.model_class).filter(
+        document_repo.model_class.type == 'manual'
+    ).order_by(document_repo.model_class.created_at.desc())
+    
+    # Apply pagination
+    documents = query.offset(offset).limit(limit).all()
+    
+    # Create response with domain info
+    response = []
+    for doc in documents:
+        domain = domain_repo.get(doc.domain_id) if doc.domain_id else None
+        response.append(DocumentResponse(
+            id=doc.id,
+            title=doc.title,
+            html=doc.html,
+            markdown=doc.markdown,
+            uri=doc.uri,
+            domain_id=doc.domain_id,
+            created_at=doc.created_at,
+            updated_at=doc.updated_at,
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        ))
+    
+    return response
+
 # Get a document by ID
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(document_id: int, db: Session = Depends(get_db)):
