@@ -36,11 +36,11 @@ class VectorStore:
             # ایجاد یا دریافت کالکشن
             self.collection = self._get_or_create_collection()
             
-            print("Initializing embedding model...")
-            # مدل تبدیل متن به بردار
-            self.embedding_model = SentenceTransformer(
-                os.getenv('EMBEDDING_MODEL', 'paraphrase-multilingual-MiniLM-L12-v2')
-            )
+            # print("Initializing embedding model...")
+            # # مدل تبدیل متن به بردار
+            # self.embedding_model = SentenceTransformer(
+            #     os.getenv('EMBEDDING_MODEL', 'paraphrase-multilingual-MiniLM-L12-v2')
+            # )
             print("VectorStore initialization completed successfully")
             
         except Exception as e:

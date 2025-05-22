@@ -64,9 +64,9 @@ try:
     vector_store = VectorStore()
     print("VectorStore initialized successfully")
 
-    print("Initializing AgentRAGSystem...")
-    agent_rag = ChatAgentRagProxy()
-    print("AgentRAGSystem initialized successfully")
+    # print("Initializing AgentRAGSystem...")
+    # agent_rag = ChatAgentRagProxy()
+    # print("AgentRAGSystem initialized successfully")
 
 except Exception as e:
     print(f"Error during initialization: {str(e)}")
@@ -94,7 +94,7 @@ app.include_router(wizard_router)
 app.include_router(document_router)
 app.include_router(domain_router)
 app.include_router(crawl_router)
-app.include_router(chat_router)
+# app.include_router(chat_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
@@ -1186,6 +1186,17 @@ async def add_manually_knowledge(
         # Initialize vector store
         vector_store = VectorStore()
 
+        # Store in database
+        repo = DocumentRepository(db)
+        doc = repo.create({
+            'html' : request.text,
+            'markdown' : markdown_text,
+            'title' : request.metadata['title'],
+            'type' : 'manual'
+        })
+
+        request.metadata['document_id'] = doc.id
+
         # Create document structure with markdown text
         document = {
             "text": markdown_text,
@@ -1195,14 +1206,8 @@ async def add_manually_knowledge(
         # Add document to vector store
         id = vector_store.add_documents([document])[0]
 
-        # Store in database
-        repo = DocumentRepository(db)
-        repo.create({
-            'html' : request.text,
-            'markdown' : markdown_text,
-            'title' : request.metadata['title'],
-            'vector_id' : id,
-            'type' : 'manual'
+        repo.update(doc.id, {
+            'vector_id' : id
         })
 
         return JSONResponse(

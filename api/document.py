@@ -25,8 +25,8 @@ class DocumentBase(BaseModel):
     title: str
     html: str
     markdown: str
-    uri: str
-    domain_id: int
+    uri: Optional[str] = None
+    domain_id: Optional[int] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -53,7 +53,7 @@ class DocumentResponse(DocumentBase):
     id: int
     created_at: datetime
     updated_at: datetime
-    domain: DomainInfo
+    domain: Optional[DomainInfo] = None
 
     class Config:
         from_attributes = True
@@ -80,7 +80,7 @@ def create_document(document: DocumentCreate, db: Session = Depends(get_db)):
         domain_id=created_doc.domain_id,
         created_at=created_doc.created_at,
         updated_at=created_doc.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain)
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
     )
 
 # Get a document by ID
@@ -103,7 +103,7 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
         domain_id=document.domain_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain)
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
     )
 
 # Update a document
@@ -143,7 +143,7 @@ async def update_document(document_id: int, document: DocumentUpdate, db: Sessio
         domain_id=updated_doc.domain_id,
         created_at=updated_doc.created_at,
         updated_at=updated_doc.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain)
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
     )
 
 
@@ -196,7 +196,7 @@ def list_documents(
             domain_id=doc.domain_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain)
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
         ))
     return response
 
@@ -221,7 +221,7 @@ def get_document_by_uri(uri: str, db: Session = Depends(get_db)):
         domain_id=doc.domain_id,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain)
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
     )
 
 # Search documents by content
@@ -250,7 +250,7 @@ def search_documents_by_content(
             domain_id=doc.domain_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain)
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
         ))
     return response
 
@@ -280,7 +280,7 @@ def search_documents_by_title(
             domain_id=doc.domain_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain)
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
         ))
     return response
 
@@ -377,4 +377,42 @@ async def vectorize_document(
         print(f"Error in vectorize_document: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+# Get document by vector_id
+@router.get("/vector/{vector_id}", response_model=DocumentResponse,
+          summary="دریافت سند با استفاده از شناسه برداری",
+          description="این اندپوینت سندی که شناسه برداری آن با مقدار ورودی برابر است را برمی‌گرداند")
+def get_document_by_vector_id(vector_id: str, db: Session = Depends(get_db)):
+    document_repo = DocumentRepository(db)
+    domain_repo = CrawledDomainRepository(db)
+    
+    # Query document with matching vector_id
+    query = document_repo.db.query(document_repo.model_class).filter(
+        document_repo.model_class.vector_id == vector_id
+    )
+    document = query.first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No document found with vector_id: {vector_id}"
+        )
+    
+    # Get domain info if domain_id exists
+    domain = None
+    if document.domain_id:
+        domain = domain_repo.get(document.domain_id)
+    
+    return DocumentResponse(
+        id=document.id,
+        title=document.title,
+        html=document.html,
+        markdown=document.markdown,
+        uri=document.uri,
+        domain_id=document.domain_id,
+        created_at=document.created_at,
+        updated_at=document.updated_at,
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+    )
+
 
