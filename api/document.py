@@ -14,6 +14,7 @@ from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
 import os
 from rq import Queue
+from rq.job import Job
 import uuid
 
 from database.models import get_db, SessionLocal
@@ -559,8 +560,9 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+document_websocket_router = APIRouter()
 
-@router.websocket("/ws/vectorize/{job_id}")
+@document_websocket_router.websocket("/ws/documents/vectorize/{job_id}")
 async def websocket_vectorize_status(websocket: WebSocket, job_id: str):
     await websocket.accept()
 
@@ -595,7 +597,10 @@ async def websocket_vectorize_status(websocket: WebSocket, job_id: str):
     except WebSocketDisconnect:
         print("Client disconnected")
     except Exception as e:
-        logger.error(f"Error in websocket for vectorize job {job_id}: {e}")
+        await websocket.send_json({
+                    'event': 'error',
+                    'msg' : f"Error in websocket for vectorize job {job_id}: {e}"
+                })
         traceback.print_exc()
         await websocket.close(code=1011)  # Close with an error code
 
