@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query,WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, HttpUrl
 from typing import Optional, List, Dict, Any
 from fastapi.responses import JSONResponse
@@ -10,12 +10,19 @@ from sqlalchemy.orm import Session
 from urllib.parse import urlparse
 from rq import Queue
 from redis import Redis
+import uuid
+import asyncio
+from rq.job import Job
+import traceback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Re-use the existing redis connection if it's defined globally or accessible
+redis_con = Redis(host="192.168.171.6") # Ensure this is accessible
 
 class CrawlRequest(BaseModel):
     url: HttpUrl
@@ -28,6 +35,7 @@ class DocumentInfo(BaseModel):
 
 class CrawlResponse(BaseModel):
     message: str
+    job_id: str
 
 @router.post("/crawl", response_model=CrawlResponse, tags=["Crawler"],
           summary="خزش یک URL",
@@ -62,15 +70,20 @@ async def crawl_url(request: CrawlRequest):
     }
     ```
     """
+    start_time = datetime.now()
+
     try:
         # Add crawl task to queue
         redis_con = Redis(host="192.168.171.6")
         q = Queue(connection=redis_con)
-        q.enqueue(crawl_task, request.url, request.recursive)
+        # job_id = str(uuid.uuid4())
+        job_id = "job_4234789"
+        q.enqueue(crawl_task, request.url, request.recursive, job_id = job_id)
 
         # Prepare response
         response = CrawlResponse(
             message="لینک وارد شده برای خزش در صف قرار داده شد.",
+            job_id=job_id
         )
         
         return JSONResponse(
@@ -92,14 +105,27 @@ async def crawl_url(request: CrawlRequest):
 
 def crawl_task(url: str, recursive: bool = False):
         from database.models import SessionLocal
+        from rq import get_current_job
+
+        job = get_current_job()
+
+        if job is None:
+            # fallback or error handling
+            pass
+
+        # Update progress metadata
+        job.meta['progress'] = f"Start crawling ..."
+        job.save_meta()
 
         # Start crawling and get document IDs
         doc_ids = crawl(str(url), recursive=recursive)
 
+        # Update progress metadata
+        job.meta['progress'] = f"Crawl done. Saving data ..."
+        job.save_meta()
+
         db = SessionLocal()
 
-        print(doc_ids)
-        
         # Get document details
         doc_details = []
         for doc_id in doc_ids:
@@ -133,3 +159,28 @@ def crawl_task(url: str, recursive: bool = False):
                     url=domain + doc.uri,
                     title=doc.title
                 ))
+        
+        job.meta['progress'] = f"Finished"
+        job.save_meta()
+
+@router.websocket("/ws/jobs/{job_id}")
+async def websocket_job_status(websocket: WebSocket, job_id: str):
+    await websocket.accept()
+    await websocket.send_json({"msg" : "hello"})
+    try:
+        # Use the existing redis_con
+        redis_conn = Redis(host="192.168.171.6")
+        while True:
+            job = Job.fetch(job_id, connection=redis_conn)
+            progress = job.meta.get('progress', 'Queued')
+            await websocket.send_json({"progress": progress, "status": job.get_status()})
+
+            if job.is_finished or job.is_failed:
+                break
+            await asyncio.sleep(1)  # Poll every second
+    except WebSocketDisconnect:
+        print("Client disconnected")
+    except Exception as e: # Added a general exception handler for debugging
+        logger.error(f"Error in websocket for job {job_id}: {e}")
+        traceback.print_exc()
+        await websocket.close(code=1011) # Close with an error code
