@@ -118,14 +118,14 @@ def crawl_task(url: str, recursive: bool = False):
         job.meta['progress'] = f"Start crawling ..."
         job.save_meta()
 
+        db = SessionLocal()
+
         # Start crawling and get document IDs
-        doc_ids = crawl(str(url), recursive=recursive)
+        doc_ids = crawl(str(url), recursive=recursive, db=db)
 
         # Update progress metadata
         job.meta['progress'] = f"Crawl done. Saving data ..."
         job.save_meta()
-
-        db = SessionLocal()
 
         # Get document details
         doc_details = []

@@ -8,6 +8,8 @@ from datetime import datetime
 import re
 from difflib import SequenceMatcher
 import hashlib
+
+from sqlalchemy.orm import Session
 from database.models import Document, CrawledDomain
 from database.repository import DocumentRepository, CrawledDomainRepository
 from database.models import SessionLocal
@@ -35,7 +37,7 @@ logging.basicConfig(
 # Use the --recursive flag to crawl all linked pages within the same domain.
 
 
-def crawl(url, recursive=False):
+def crawl(url, recursive=False, db: Session = None):
     """
     Crawl a URL and optionally its sub-URLs recursively.
     
@@ -47,7 +49,7 @@ def crawl(url, recursive=False):
         None
     """
     # Initialize database session
-    db = SessionLocal()
+    db = db or SessionLocal()
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
     
