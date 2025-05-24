@@ -106,6 +106,7 @@ async def crawl_url(request: CrawlRequest):
         )
 
 def crawl_task(url: str, recursive: bool = False):
+    try:
         from database.models import SessionLocal
         from rq import get_current_job
 
@@ -165,6 +166,9 @@ def crawl_task(url: str, recursive: bool = False):
         job.meta['doc_ids'] = doc_ids
         
         job.meta['progress'] = f"Finished"
+        job.save_meta()
+    except Exception as e: # Added a general exception handler for debugging
+        job.meta['error'] = {'message' : e}
         job.save_meta()
 
 @router.websocket("/ws/jobs/{job_id}")
