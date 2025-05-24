@@ -94,7 +94,7 @@ def crawl_task(url: str, recursive: bool = False):
      # Start crawling and get document IDs
         doc_ids = crawl(str(url), recursive=recursive)
 
-        db = Depends(get_db)
+        db = get_db()
 
         print(doc_ids)
         
