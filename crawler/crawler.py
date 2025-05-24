@@ -141,7 +141,11 @@ def crawl(url, recursive=False, db: Session = None):
                 
                 # Store in database
                 try:
-                    existing_docs = document_repo.get_by_uri(document_data['uri'])
+                    # Check if document already exists for this domain
+                    existing_docs = document_repo.db.query(document_repo.model_class).filter(
+                        document_repo.model_class.uri == document_data['uri'],
+                        document_repo.model_class.domain_id == domain_obj.id
+                    ).all()
                     if existing_docs:
                         document_repo.update(existing_docs[0].id, document_data)
                         docs.append(existing_docs[0].id)
