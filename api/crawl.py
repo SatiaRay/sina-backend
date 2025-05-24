@@ -35,6 +35,7 @@ class DocumentInfo(BaseModel):
 
 class CrawlResponse(BaseModel):
     message: str
+    url: str
     job_id: str
 
 @router.post("/crawl", response_model=CrawlResponse, tags=["Crawler"],
@@ -82,6 +83,7 @@ async def crawl_url(request: CrawlRequest):
         # Prepare response
         response = CrawlResponse(
             message="لینک وارد شده برای خزش در صف قرار داده شد.",
+            url= request.url
             job_id=job_id
         )
         
