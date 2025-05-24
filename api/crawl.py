@@ -76,8 +76,7 @@ async def crawl_url(request: CrawlRequest):
         # Add crawl task to queue
         redis_con = Redis(host="192.168.171.6")
         q = Queue(connection=redis_con)
-        # job_id = str(uuid.uuid4())
-        job_id = "job_4234789"
+        job_id = str(uuid.uuid4())
         q.enqueue(crawl_task, request.url, request.recursive, job_id = job_id)
 
         # Prepare response
@@ -166,14 +165,18 @@ def crawl_task(url: str, recursive: bool = False):
 @router.websocket("/ws/jobs/{job_id}")
 async def websocket_job_status(websocket: WebSocket, job_id: str):
     await websocket.accept()
-    await websocket.send_json({"msg" : "hello"})
+
+    last_progress = None;
+
     try:
         # Use the existing redis_con
         redis_conn = Redis(host="192.168.171.6")
         while True:
             job = Job.fetch(job_id, connection=redis_conn)
             progress = job.meta.get('progress', 'Queued')
-            await websocket.send_json({"progress": progress, "status": job.get_status()})
+            if progress is not last_progress:
+                last_progress = progress
+                await websocket.send_json({"progress": progress, "status": job.get_status()})
 
             if job.is_finished or job.is_failed:
                 break
