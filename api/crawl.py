@@ -32,7 +32,7 @@ class CrawlResponse(BaseModel):
 @router.post("/crawl", response_model=CrawlResponse, tags=["Crawler"],
           summary="خزش یک URL",
           description="این اندپوینت یک URL را خزش کرده و محتوای آن را استخراج می‌کند")
-async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
+async def crawl_url(request: CrawlRequest):
     """
     خزش یک URL و استخراج محتوای آن
     
@@ -66,7 +66,7 @@ async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
         # Add crawl task to queue
         redis_con = Redis(host="192.168.171.6")
         q = Queue(connection=redis_con)
-        q.enqueue(crawl_task, request.url, db, request.recursive)
+        q.enqueue(crawl_task, request.url, request.recursive)
 
         # Prepare response
         response = CrawlResponse(
@@ -90,9 +90,11 @@ async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
             }
         )
 
-def crawl_task(url: str, db: Session, recursive: bool = False):
+def crawl_task(url: str, recursive: bool = False):
      # Start crawling and get document IDs
         doc_ids = crawl(str(url), recursive=recursive)
+
+        db = Depends(get_db)
 
         print(doc_ids)
         
