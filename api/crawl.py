@@ -83,7 +83,7 @@ async def crawl_url(request: CrawlRequest):
         # Prepare response
         response = CrawlResponse(
             message="لینک وارد شده برای خزش در صف قرار داده شد.",
-            url= request.url,
+            url= str(request.url),
             job_id=job_id
         )
         
@@ -160,6 +160,8 @@ def crawl_task(url: str, recursive: bool = False):
                     url=domain + doc.uri,
                     title=doc.title
                 ))
+
+        job.meta['doc_ids'] = doc_ids
         
         job.meta['progress'] = f"Finished"
         job.save_meta()
@@ -175,10 +177,15 @@ async def websocket_job_status(websocket: WebSocket, job_id: str):
         redis_conn = Redis(host="192.168.171.6")
         while True:
             job = Job.fetch(job_id, connection=redis_conn)
-            progress = job.meta.get('progress', 'Queued')
+
+            doc_ids = job.meta.get('doc_ids', None)
+            if doc_ids:
+                await websocket.send_json({'event': 'docs_created', 'doc_ids' : doc_ids})
+
+            progress = job.meta.get('progress', 'Queued')            
             if progress is not last_progress:
                 last_progress = progress
-                await websocket.send_json({"progress": progress, "status": job.get_status()})
+                await websocket.send_json({'event' : 'change_progress', "progress": progress, "status": job.get_status()})
 
             if job.is_finished or job.is_failed:
                 break
