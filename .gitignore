@@ -6,3 +6,4 @@ logs/
 *.log
 /vector_backup
 .env
+*__pycache__*

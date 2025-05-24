@@ -37,7 +37,7 @@ from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from .wizard import router as wizard_router
-from .document import router as document_router
+from .document import router as document_router, document_websocket_router
 from .domain import router as domain_router
 from .chat import router as chat_router
 from .crawl import router as crawl_router
@@ -92,6 +92,7 @@ app.add_middleware(
 # Include routers
 app.include_router(wizard_router)
 app.include_router(document_router)
+app.include_router(document_websocket_router)
 app.include_router(domain_router)
 app.include_router(crawl_router)
 app.include_router(chat_router)

@@ -14,6 +14,7 @@ import uuid
 import asyncio
 from rq.job import Job
 import traceback
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -75,7 +76,7 @@ async def crawl_url(request: CrawlRequest):
 
     try:
         # Add crawl task to queue
-        redis_con = Redis(host="192.168.171.6")
+        redis_con = Redis(host=os.getenv('REDIS_HOST'))
         q = Queue(connection=redis_con)
         job_id = str(uuid.uuid4())
         q.enqueue(crawl_task, request.url, request.recursive, job_id = job_id)
