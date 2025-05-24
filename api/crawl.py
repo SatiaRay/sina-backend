@@ -91,10 +91,12 @@ async def crawl_url(request: CrawlRequest):
         )
 
 def crawl_task(url: str, recursive: bool = False):
-     # Start crawling and get document IDs
+        from database.models import SessionLocal
+
+        # Start crawling and get document IDs
         doc_ids = crawl(str(url), recursive=recursive)
 
-        db = get_db()
+        db = SessionLocal()
 
         print(doc_ids)
         
