@@ -8,6 +8,8 @@ from crawler.crawler import crawl
 from database.models import Document, CrawledDomain, get_db
 from sqlalchemy.orm import Session
 from urllib.parse import urlparse
+from rq import Queue
+from redis import Redis
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,12 +28,11 @@ class DocumentInfo(BaseModel):
 
 class CrawlResponse(BaseModel):
     message: str
-    docs: List[DocumentInfo]
 
 @router.post("/crawl", response_model=CrawlResponse, tags=["Crawler"],
           summary="خزش یک URL",
           description="این اندپوینت یک URL را خزش کرده و محتوای آن را استخراج می‌کند")
-async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
+async def crawl_url(request: CrawlRequest):
     """
     خزش یک URL و استخراج محتوای آن
     
@@ -62,11 +63,36 @@ async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
     ```
     """
     try:
-        start_time = datetime.now()
-        logger.info(f"Starting crawl for URL: {request.url} (recursive: {request.recursive})")
+        # Add crawl task to queue
+        redis_con = Redis(host="192.168.171.6")
+        q = Queue(connection=redis_con)
+        q.enqueue(crawl_task, request.url, request.recursive)
+
+        # Prepare response
+        response = CrawlResponse(
+            message="لینک وارد شده برای خزش در صف قرار داده شد.",
+        )
         
-        # Start crawling and get document IDs
-        doc_ids = crawl(str(request.url), recursive=request.recursive)
+        return JSONResponse(
+            content=response.dict(),
+            media_type="application/json; charset=utf-8"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error during crawl: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "message": f"خطا در خزش: {str(e)}",
+                "start_time": start_time.isoformat() if 'start_time' in locals() else None,
+                "end_time": datetime.now().isoformat()
+            }
+        )
+
+def crawl_task(url: str, recursive: bool = False, db: Session = Depends(get_db)):
+     # Start crawling and get document IDs
+        doc_ids = crawl(str(url), recursive=recursive)
 
         print(doc_ids)
         
@@ -77,13 +103,12 @@ async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
             doc = db.query(Document).filter(Document.id == doc_id).first()
             if doc:
 
-                print(doc)
                 # Extract domain from URI if no domain exists
                 if not doc.domain:
                     parsed_uri = urlparse(doc.uri)
                     domain_name = parsed_uri.netloc
                     if not domain_name:  # If URI is relative
-                        domain_name = urlparse(str(request.url)).netloc
+                        domain_name = urlparse(str(url)).netloc
                     
                     # Create new domain if it doesn't exist
                     domain = db.query(CrawledDomain).filter(CrawledDomain.domain == domain_name).first()
@@ -104,26 +129,3 @@ async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
                     url=domain + doc.uri,
                     title=doc.title
                 ))
-        
-        # Prepare response
-        response = CrawlResponse(
-            message=f"خزش با موفقیت انجام شد (تعداد صفحات: {len(doc_details)})",
-            docs=doc_details
-        )
-        
-        return JSONResponse(
-            content=response.dict(),
-            media_type="application/json; charset=utf-8"
-        )
-        
-    except Exception as e:
-        logger.error(f"Error during crawl: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "status": "error",
-                "message": f"خطا در خزش: {str(e)}",
-                "start_time": start_time.isoformat() if 'start_time' in locals() else None,
-                "end_time": datetime.now().isoformat()
-            }
-        )
