@@ -9,98 +9,173 @@ from pathlib import Path
 import uuid
 from datetime import datetime
 from openai import OpenAI
+import threading
+import time
+import traceback
 
 load_dotenv()
 
 class VectorStore:
+    _instance = None
+    _lock = threading.Lock()
+    _collection = None
+    _last_refresh = 0
+    _refresh_interval = 1  # Refresh interval in seconds
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super(VectorStore, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self):
-        try:
-            # تنظیمات ChromaDB
-            self.persist_directory = os.getenv('CHROMA_PERSIST_DIRECTORY', './data/chroma')
-            self.collection_name = os.getenv('CHROMA_COLLECTION_NAME', 'satya_docs')
-            
-            # ایجاد دایرکتوری اگر وجود نداشت
-            os.makedirs(self.persist_directory, exist_ok=True)
-            
-            print(f"Initializing ChromaDB with directory: {self.persist_directory}")
-            # ایجاد کلاینت ChromaDB
-            self.client = chromadb.PersistentClient(
-                path=self.persist_directory,
-                settings=Settings(
-                    anonymized_telemetry=False,
-                    allow_reset=True
+        if not hasattr(self, 'initialized'):
+            try:
+                # تنظیمات ChromaDB
+                self.persist_directory = os.getenv('CHROMA_PERSIST_DIRECTORY', './data/chroma')
+                self.collection_name = os.getenv('CHROMA_COLLECTION_NAME', 'satya_docs')
+                
+                # ایجاد دایرکتوری اگر وجود نداشت
+                os.makedirs(self.persist_directory, exist_ok=True)
+                
+                print(f"Initializing ChromaDB with directory: {self.persist_directory}")
+                # ایجاد کلاینت ChromaDB
+                self.client = chromadb.PersistentClient(
+                    path=self.persist_directory,
+                    settings=Settings(
+                        anonymized_telemetry=False,
+                        allow_reset=True
+                    )
                 )
-            )
-            
-            print("Creating or getting collection...")
-            # ایجاد یا دریافت کالکشن
-            self._refresh_collection()
-            
-            # print("Initializing embedding model...")
-            # # مدل تبدیل متن به بردار
-            # self.embedding_model = SentenceTransformer(
-            #     os.getenv('EMBEDDING_MODEL', 'paraphrase-multilingual-MiniLM-L12-v2')
-            # )
-            print("VectorStore initialization completed successfully")
-            
-        except Exception as e:
-            print(f"Error initializing VectorStore: {str(e)}")
-            raise
+                
+                print("Creating or getting collection...")
+                # ایجاد یا دریافت کالکشن
+                self._ensure_collection()
+                
+                print("VectorStore initialization completed successfully")
+                self.initialized = True
+                
+            except Exception as e:
+                print(f"Error initializing VectorStore: {str(e)}")
+                raise
 
-    def _refresh_collection(self):
-        """Refresh the collection instance to ensure it's up-to-date"""
-        try:
-            self.collection = self.client.get_or_create_collection(
-                name=self.collection_name,
-                metadata={"hnsw:space": "cosine"}
-            )
-        except Exception as e:
-            print(f"Error refreshing collection: {str(e)}")
-            raise
+    def _ensure_collection(self):
+        """Ensure collection is up-to-date with automatic refresh"""
+        current_time = time.time()
+        if (self._collection is None or 
+            current_time - self._last_refresh > self._refresh_interval):
+            with self._lock:
+                if (self._collection is None or 
+                    current_time - self._last_refresh > self._refresh_interval):
+                    try:
+                        self._collection = self.client.get_or_create_collection(
+                            name=self.collection_name,
+                            metadata={"hnsw:space": "cosine"}
+                        )
+                        self._last_refresh = current_time
+                    except Exception as e:
+                        print(f"Error refreshing collection: {str(e)}")
+                        raise
 
-    def _get_or_create_collection(self):
-        """Get or create collection with refresh"""
-        self._refresh_collection()
-        return self.collection
+    @property
+    def collection(self):
+        """Get the current collection instance with automatic refresh"""
+        self._ensure_collection()
+        return self._collection
 
     def add_documents(self, documents: List[Dict[str, Any]]):
         """اضافه کردن اسناد به پایگاه داده برداری"""
         if not documents:
+            print("No documents provided to add")
             return
             
-        # استخراج متن‌ها و متادیتاها
-        texts = [doc['text'] for doc in documents]
-        metadatas = [doc['metadata'] for doc in documents]
-        
-        # تولید ID‌های یکتا با استفاده از UUID
-        ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(documents))]
-        
+        try:
+            # استخراج متن‌ها و متادیتاها
+            texts = [doc['text'] for doc in documents]
+            metadatas = [doc['metadata'] for doc in documents]
+            
+            # تولید ID‌های یکتا با استفاده از UUID
+            ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(documents))]
+            
+            print(f"Preparing to add {len(documents)} documents to vector store")
+            
+            # تبدیل متن‌ها به بردار با استفاده از OpenAI
+            client = OpenAI()
+            
+            embeddings = []
+            for i, text in enumerate(texts):
+                print(f"Generating embedding for document {i+1}/{len(texts)}")
+                response = client.embeddings.create(
+                    input=text,
+                    model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
+                )
+                embeddings.append(response.data[0].embedding)
+            
+            print("All embeddings generated successfully")
+            
+            # اضافه کردن به کالکشن
+            with self._lock:
+                print("Acquiring lock for collection update")
+                # Force collection refresh before adding
+                self._collection = None
+                self._ensure_collection()
+                
+                print("Adding documents to collection")
+                self.collection.add(
+                    embeddings=embeddings,
+                    documents=texts,
+                    metadatas=metadatas,
+                    ids=ids
+                )
+                
+                # Verify the documents were added
+                added_docs = self.collection.get(ids=ids)
+                if len(added_docs['ids']) != len(ids):
+                    raise Exception(f"Failed to add all documents. Expected {len(ids)}, got {len(added_docs['ids'])}")
+                
+                print(f"Successfully added {len(ids)} documents to collection")
+                self._last_refresh = time.time()  # Force refresh after modification
+            
+            return ids
+            
+        except Exception as e:
+            print(f"Error adding documents to vector store: {str(e)}")
+            traceback.print_exc()
+            raise Exception(f"Failed to add documents: {str(e)}")
+
+    def delete_vector(self, vector_id: str):
+        """Delete a vector from the vector store"""
+        with self._lock:
+            self.collection.delete(ids=[vector_id])
+            self._last_refresh = time.time()  # Force refresh after modification
+
+    def update_document(self, document_id: str, text: str, metadata: dict):
+        """Update a document in the vector store"""
         # تبدیل متن‌ها به بردار با استفاده از OpenAI
         client = OpenAI()
-        
-        embeddings = []
-        for text in texts:
-            response = client.embeddings.create(
-                input=text,
-                model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
-            )
-            embeddings.append(response.data[0].embedding)
-        
-        # اضافه کردن به کالکشن
-        self._refresh_collection()  # Refresh before adding
-        self.collection.add(
-            embeddings=embeddings,
-            documents=texts,
-            metadatas=metadatas,
-            ids=ids
-        )
 
-        return ids
+        print("Send modification to ebmedding model ...")
+        
+        response = client.embeddings.create(
+            input=text,
+            model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
+        )
+        embedding = response.data[0].embedding
+
+        print("Embedding done !")
+
+        with self._lock:
+            self.collection.update(
+                embeddings=[embedding],
+                documents=[text],
+                metadatas=[metadata],
+                ids=[document_id]
+            )
+            self._last_refresh = time.time()  # Force refresh after modification
 
     def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """جستجوی اسناد مرتبط"""
-        self._refresh_collection()  # Refresh before searching
-        
         # تبدیل سوال به بردار با استفاده از OpenAI
         client = OpenAI()
         response = client.embeddings.create(
@@ -134,8 +209,6 @@ class VectorStore:
 
     def get_all_documents(self) -> List[Dict[str, Any]]:
         """دریافت تمام اسناد موجود در پایگاه داده به همراه شناسه‌های آنها"""
-        self._refresh_collection()  # Refresh before getting all documents
-        
         # دریافت تمام اسناد
         results = self.collection.get()
         return [
@@ -149,9 +222,27 @@ class VectorStore:
 
     def delete_all(self):
         """Delete all documents and recreate the collection"""
-        self._refresh_collection()  # Refresh before deleting
-        self.client.delete_collection(self.collection_name)
-        self._refresh_collection()  # Refresh after recreating
+        with self._lock:
+            self.client.delete_collection(self.collection_name)
+            self._collection = None  # Force collection refresh
+            self._ensure_collection()
+            self._last_refresh = time.time()
+
+    def get_document(self, document_id: str) -> dict:
+        """Get a document from the vector store by its ID"""
+        try:
+            result = self.collection.get(ids=[document_id])
+            if not result['ids']:
+                return None
+                
+            return {
+                'id': result['ids'][0],
+                'text': result['documents'][0],
+                'metadata': result['metadatas'][0]
+            }
+        except Exception as e:
+            print(f"Error getting document: {str(e)}")
+            return None
 
     def backup(self, backup_path: str = "data/backup"):
         # پشتیبان‌گیری از داده‌ها
@@ -169,35 +260,6 @@ class VectorStore:
         
         self.delete_all()
         self.add_documents(documents)
-
-    def update_document(self, document_id: str, text: str, metadata: dict):
-        """Update a document in the vector store"""
-        self._refresh_collection()  # Refresh before updating
-
-        # تبدیل متن‌ها به بردار با استفاده از OpenAI
-        client = OpenAI()
-
-        print("Send modification to ebmedding model ...")
-        
-        response = client.embeddings.create(
-            input=text,
-            model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
-        )
-        embedding = response.data[0].embedding
-
-        print("Embedding done !")
-
-        self.collection.update(
-            embeddings=[embedding],
-            documents=[text],
-            metadatas=[metadata],
-            ids=[document_id]
-        )
-
-    def delete_vector(self, vector_id: str):
-        """Delete a vector from the vector store"""
-        self._refresh_collection()  # Refresh before deleting
-        self.collection.delete(ids=[vector_id])
 
     def get_pending_documents(self, offset: int = 0, limit: int = 50) -> List[Dict]:
         """دریافت اسناد در انتظار بررسی"""
@@ -309,23 +371,6 @@ class VectorStore:
                 
             return {
                 'document_id': result['ids'][0],
-                'text': result['documents'][0],
-                'metadata': result['metadatas'][0]
-            }
-        except Exception as e:
-            print(f"Error getting document: {str(e)}")
-            return None
-
-    def get_document(self, document_id: str) -> dict:
-        """Get a document from the vector store by its ID"""
-        try:
-            self._refresh_collection()  # Refresh before getting document
-            result = self.collection.get(ids=[document_id])
-            if not result['ids']:
-                return None
-                
-            return {
-                'id': result['ids'][0],
                 'text': result['documents'][0],
                 'metadata': result['metadatas'][0]
             }
