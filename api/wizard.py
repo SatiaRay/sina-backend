@@ -1,3 +1,4 @@
+from optparse import Option
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -31,6 +32,36 @@ class WizardResponse(WizardBase):
     class Config:
         from_attributes = True
 
+# Get root wizards - This must come BEFORE the {wizard_id} route
+@router.get("/roots", response_model=List[WizardResponse])
+async def get_root_wizards(
+    enabled_only: bool = True,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all root wizards (wizards without parents)
+    
+    - **enabled_only**: If True, only return enabled wizards
+    """
+    try:
+        repo = WizardRepository(db)
+        wizards = repo.get_root_wizards(enabled_only=enabled_only)
+        return wizards
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Get enabled wizards
+@router.get("/enabled", response_model=List[WizardResponse])
+def get_enabled_wizards(db: Session = Depends(get_db)):
+    wizard_repo = WizardRepository(db)
+    return wizard_repo.get_enabled_wizards()
+
+# Get disabled wizards
+@router.get("/disabled", response_model=List[WizardResponse])
+def get_disabled_wizards(db: Session = Depends(get_db)):
+    wizard_repo = WizardRepository(db)
+    return wizard_repo.get_disabled_wizards()
+
 # Create a new wizard
 @router.post("/", response_model=WizardResponse)
 def create_wizard(wizard: WizardCreate, db: Session = Depends(get_db)):
@@ -42,32 +73,6 @@ def create_wizard(wizard: WizardCreate, db: Session = Depends(get_db)):
 def create_wizard_no_slash(wizard: WizardCreate, db: Session = Depends(get_db)):
     wizard_repo = WizardRepository(db)
     return wizard_repo.create(wizard.model_dump())
-
-# Get a wizard by ID
-@router.get("/{wizard_id}", response_model=WizardResponse)
-def get_wizard(wizard_id: int, db: Session = Depends(get_db)):
-    wizard_repo = WizardRepository(db)
-    wizard = wizard_repo.get(wizard_id)
-    if not wizard:
-        raise HTTPException(status_code=404, detail="Wizard not found")
-    return wizard
-
-# Update a wizard
-@router.put("/{wizard_id}", response_model=WizardResponse)
-def update_wizard(wizard_id: int, wizard: WizardUpdate, db: Session = Depends(get_db)):
-    wizard_repo = WizardRepository(db)
-    updated_wizard = wizard_repo.update(wizard_id, wizard.model_dump(exclude_unset=True))
-    if not updated_wizard:
-        raise HTTPException(status_code=404, detail="Wizard not found")
-    return updated_wizard
-
-# Delete a wizard
-@router.delete("/{wizard_id}")
-def delete_wizard(wizard_id: int, db: Session = Depends(get_db)):
-    wizard_repo = WizardRepository(db)
-    if not wizard_repo.delete(wizard_id):
-        raise HTTPException(status_code=404, detail="Wizard not found")
-    return {"message": "Wizard deleted successfully"}
 
 # Add a route for the root path without trailing slash
 @router.get("", response_model=List[WizardResponse])
@@ -90,6 +95,45 @@ def list_wizards(
         return wizard_repo.get_by_parent(parent_id, enabled_only)
     return wizard_repo.get_all()
 
+# Get a wizard by ID - This must come AFTER all specific paths
+@router.get("/{wizard_id}", response_model=WizardResponse)
+async def get_wizard(
+    wizard_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get a specific wizard by ID
+    
+    - **wizard_id**: The ID of the wizard to retrieve
+    """
+    try:
+        repo = WizardRepository(db)
+        wizard = repo.get(wizard_id)
+        if not wizard:
+            raise HTTPException(status_code=404, detail="Wizard not found")
+        return wizard
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Update a wizard
+@router.put("/{wizard_id}", response_model=WizardResponse)
+def update_wizard(wizard_id: int, wizard: WizardUpdate, db: Session = Depends(get_db)):
+    wizard_repo = WizardRepository(db)
+    updated_wizard = wizard_repo.update(wizard_id, wizard.model_dump(exclude_unset=True))
+    if not updated_wizard:
+        raise HTTPException(status_code=404, detail="Wizard not found")
+    return updated_wizard
+
+# Delete a wizard
+@router.delete("/{wizard_id}")
+def delete_wizard(wizard_id: int, db: Session = Depends(get_db)):
+    wizard_repo = WizardRepository(db)
+    if not wizard_repo.delete(wizard_id):
+        raise HTTPException(status_code=404, detail="Wizard not found")
+    return {"message": "Wizard deleted successfully"}
+
 # Get wizard hierarchy
 @router.get("/{wizard_id}/hierarchy", response_model=List[WizardResponse])
 def get_wizard_hierarchy(
@@ -102,15 +146,6 @@ def get_wizard_hierarchy(
     if not hierarchy:
         raise HTTPException(status_code=404, detail="Wizard not found")
     return hierarchy
-
-# Get root wizards
-@router.get("/roots", response_model=List[WizardResponse])
-def get_root_wizards(
-    enabled_only: bool = Query(True, description="Only return enabled wizards"),
-    db: Session = Depends(get_db)
-):
-    wizard_repo = WizardRepository(db)
-    return wizard_repo.get_root_wizards(enabled_only)
 
 # Enable a wizard
 @router.post("/{wizard_id}/enable", response_model=WizardResponse)
@@ -128,16 +163,5 @@ def disable_wizard(wizard_id: int, db: Session = Depends(get_db)):
     wizard = wizard_repo.disable_wizard(wizard_id)
     if not wizard:
         raise HTTPException(status_code=404, detail="Wizard not found")
-    return wizard
+    return wizard 
 
-# Get enabled wizards
-@router.get("/enabled", response_model=List[WizardResponse])
-def get_enabled_wizards(db: Session = Depends(get_db)):
-    wizard_repo = WizardRepository(db)
-    return wizard_repo.get_enabled_wizards()
-
-# Get disabled wizards
-@router.get("/disabled", response_model=List[WizardResponse])
-def get_disabled_wizards(db: Session = Depends(get_db)):
-    wizard_repo = WizardRepository(db)
-    return wizard_repo.get_disabled_wizards() 

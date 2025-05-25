@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from typing import List, Optional, Type, TypeVar, Generic
+from typing import List, Optional, Type, TypeVar, Generic, override
 from datetime import datetime
 from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain
 
@@ -42,6 +42,16 @@ class BaseRepository(Generic[T]):
 class WizardRepository(BaseRepository[Wizard]):
     def __init__(self, db: Session):
         super().__init__(Wizard, db)
+
+    @override
+    def get(self, id: int) -> Optional[T]:
+        wizard = self.db.query(self.model_class).filter(self.model_class.id == id).first()
+
+        if wizard :
+            childer = self.db.query(self.model_class).filter(self.model_class.parent_id == wizard.id).all()
+            wizard.children = childer
+        
+        return wizard
 
     def get_by_parent(self, parent_id: Optional[int], enabled_only: bool = True) -> List[Wizard]:
         query = self.db.query(Wizard).filter(Wizard.parent_id == parent_id)

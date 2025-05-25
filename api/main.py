@@ -60,9 +60,9 @@ print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
 print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
 
 try:
-    print("Initializing AgentRAGSystem...")
-    agent_rag = ChatAgentRagProxy()
-    print("AgentRAGSystem initialized successfully")
+    # print("Initializing AgentRAGSystem...")
+    # agent_rag = ChatAgentRagProxy()
+    # print("AgentRAGSystem initialized successfully")
 
     # Global vector store instance
     vector_store = None
@@ -81,16 +81,16 @@ try:
         vector_store = VectorStore()
         print("VectorStore instance refreshed successfully")
 
-    def refresh_chat_agent_proxy(data=None):
-        """Callback to refresh ChatAgentRagProxy instance"""
-        global agent_rag
-        print("Refreshing ChatAgentRagProxy instance...")
-        agent_rag = ChatAgentRagProxy()
-        print("ChatAgentRagProxy instance refreshed successfully")
+    # def refresh_chat_agent_proxy(data=None):
+    #     """Callback to refresh ChatAgentRagProxy instance"""
+    #     global agent_rag
+    #     print("Refreshing ChatAgentRagProxy instance...")
+    #     agent_rag = ChatAgentRagProxy()
+    #     print("ChatAgentRagProxy instance refreshed successfully")
 
     # Subscribe to collection modification events
     event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_vector_store)
-    event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_chat_agent_proxy)
+    # event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_chat_agent_proxy)
 
 except Exception as e:
     print(f"Error during initialization: {str(e)}")
@@ -121,7 +121,7 @@ app.include_router(document_router)
 app.include_router(document_websocket_router)
 app.include_router(domain_router)
 app.include_router(crawl_router)
-app.include_router(chat_router)
+# app.include_router(chat_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
