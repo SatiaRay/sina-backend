@@ -34,7 +34,7 @@ class VectorStore:
             
             print("Creating or getting collection...")
             # ایجاد یا دریافت کالکشن
-            self.collection = self._get_or_create_collection()
+            self._refresh_collection()
             
             # print("Initializing embedding model...")
             # # مدل تبدیل متن به بردار
@@ -47,12 +47,21 @@ class VectorStore:
             print(f"Error initializing VectorStore: {str(e)}")
             raise
 
+    def _refresh_collection(self):
+        """Refresh the collection instance to ensure it's up-to-date"""
+        try:
+            self.collection = self.client.get_or_create_collection(
+                name=self.collection_name,
+                metadata={"hnsw:space": "cosine"}
+            )
+        except Exception as e:
+            print(f"Error refreshing collection: {str(e)}")
+            raise
+
     def _get_or_create_collection(self):
-        # ایجاد یا دریافت کالکشن
-        return self.client.get_or_create_collection(
-            name=self.collection_name,
-            metadata={"hnsw:space": "cosine"}
-        )
+        """Get or create collection with refresh"""
+        self._refresh_collection()
+        return self.collection
 
     def add_documents(self, documents: List[Dict[str, Any]]):
         """اضافه کردن اسناد به پایگاه داده برداری"""
@@ -65,8 +74,6 @@ class VectorStore:
         
         # تولید ID‌های یکتا با استفاده از UUID
         ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(documents))]
-
-        
         
         # تبدیل متن‌ها به بردار با استفاده از OpenAI
         client = OpenAI()
@@ -80,6 +87,7 @@ class VectorStore:
             embeddings.append(response.data[0].embedding)
         
         # اضافه کردن به کالکشن
+        self._refresh_collection()  # Refresh before adding
         self.collection.add(
             embeddings=embeddings,
             documents=texts,
@@ -91,6 +99,8 @@ class VectorStore:
 
     def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """جستجوی اسناد مرتبط"""
+        self._refresh_collection()  # Refresh before searching
+        
         # تبدیل سوال به بردار با استفاده از OpenAI
         client = OpenAI()
         response = client.embeddings.create(
@@ -123,9 +133,9 @@ class VectorStore:
         return documents
 
     def get_all_documents(self) -> List[Dict[str, Any]]:
-        """
-        دریافت تمام اسناد موجود در پایگاه داده به همراه شناسه‌های آنها
-        """
+        """دریافت تمام اسناد موجود در پایگاه داده به همراه شناسه‌های آنها"""
+        self._refresh_collection()  # Refresh before getting all documents
+        
         # دریافت تمام اسناد
         results = self.collection.get()
         return [
@@ -138,11 +148,10 @@ class VectorStore:
         ]
 
     def delete_all(self):
-        # حذف کالکشن
+        """Delete all documents and recreate the collection"""
+        self._refresh_collection()  # Refresh before deleting
         self.client.delete_collection(self.collection_name)
-        
-        # ایجاد مجدد کالکشن
-        self.collection = self._get_or_create_collection()
+        self._refresh_collection()  # Refresh after recreating
 
     def backup(self, backup_path: str = "data/backup"):
         # پشتیبان‌گیری از داده‌ها
@@ -163,6 +172,7 @@ class VectorStore:
 
     def update_document(self, document_id: str, text: str, metadata: dict):
         """Update a document in the vector store"""
+        self._refresh_collection()  # Refresh before updating
 
         # تبدیل متن‌ها به بردار با استفاده از OpenAI
         client = OpenAI()
@@ -186,6 +196,7 @@ class VectorStore:
 
     def delete_vector(self, vector_id: str):
         """Delete a vector from the vector store"""
+        self._refresh_collection()  # Refresh before deleting
         self.collection.delete(ids=[vector_id])
 
     def get_pending_documents(self, offset: int = 0, limit: int = 50) -> List[Dict]:
@@ -308,6 +319,7 @@ class VectorStore:
     def get_document(self, document_id: str) -> dict:
         """Get a document from the vector store by its ID"""
         try:
+            self._refresh_collection()  # Refresh before getting document
             result = self.collection.get(ids=[document_id])
             if not result['ids']:
                 return None
