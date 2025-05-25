@@ -34,7 +34,8 @@ class VectorStore:
             
             print("Creating or getting collection...")
             # ایجاد یا دریافت کالکشن
-            self.collection = self._get_or_create_collection()
+
+            self.__refresh()
             
             # print("Initializing embedding model...")
             # # مدل تبدیل متن به بردار
@@ -53,6 +54,11 @@ class VectorStore:
             name=self.collection_name,
             metadata={"hnsw:space": "cosine"}
         )
+
+    def __refresh(self):
+        self.collection = None
+
+        self.collection = self._get_or_create_collection()
 
     def add_documents(self, documents: List[Dict[str, Any]]):
         """اضافه کردن اسناد به پایگاه داده برداری"""
@@ -78,7 +84,7 @@ class VectorStore:
                 model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
             )
             embeddings.append(response.data[0].embedding)
-        
+
         # اضافه کردن به کالکشن
         self.collection.add(
             embeddings=embeddings,
@@ -86,6 +92,8 @@ class VectorStore:
             metadatas=metadatas,
             ids=ids
         )
+
+        self.__refresh()
 
         return ids
 
@@ -187,6 +195,8 @@ class VectorStore:
     def delete_vector(self, vector_id: str):
         """Delete a vector from the vector store"""
         self.collection.delete(ids=[vector_id])
+
+        self.__refresh()
 
     def get_pending_documents(self, offset: int = 0, limit: int = 50) -> List[Dict]:
         """دریافت اسناد در انتظار بررسی"""
