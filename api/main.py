@@ -60,38 +60,43 @@ print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
 print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
 
 try:
-    # Initialize components with error handling
-    print("Initializing VectorStore...")
-    vector_store = VectorStore()
-    print("VectorStore initialized successfully")
-
     print("Initializing AgentRAGSystem...")
     agent_rag = ChatAgentRagProxy()
     print("AgentRAGSystem initialized successfully")
+
+    # Global vector store instance
+    vector_store = None
+
+    def get_vector_store():
+        """Get or create VectorStore instance"""
+        global vector_store
+        if vector_store is None:
+            vector_store = VectorStore()
+        return vector_store
+
+    def refresh_vector_store(data=None):
+        """Callback to refresh VectorStore instance"""
+        global vector_store
+        print("Refreshing VectorStore instance...")
+        vector_store = VectorStore()
+        print("VectorStore instance refreshed successfully")
+
+    def refresh_chat_agent_proxy(data=None):
+        """Callback to refresh ChatAgentRagProxy instance"""
+        global agent_rag
+        print("Refreshing ChatAgentRagProxy instance...")
+        agent_rag = ChatAgentRagProxy()
+        print("ChatAgentRagProxy instance refreshed successfully")
+
+    # Subscribe to collection modification events
+    event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_vector_store)
+    event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_chat_agent_proxy)
 
 except Exception as e:
     print(f"Error during initialization: {str(e)}")
     raise
 
-# Global vector store instance
-vector_store = None
 
-def get_vector_store():
-    """Get or create VectorStore instance"""
-    global vector_store
-    if vector_store is None:
-        vector_store = VectorStore()
-    return vector_store
-
-def refresh_vector_store(data=None):
-    """Callback to refresh VectorStore instance"""
-    global vector_store
-    print("Refreshing VectorStore instance...")
-    vector_store = VectorStore()
-    print("VectorStore instance refreshed successfully")
-
-# Subscribe to collection modification events
-event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_vector_store)
 
 # Create FastAPI app
 app = FastAPI(
@@ -1341,104 +1346,14 @@ async def update_document(document_id: str, update_request: DocumentUpdateReques
         print(f"Error in update_document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/data_sources/{document_id}", tags=["Data Sources"],
-          summary="دریافت یک سند",
-          description="این اندپوینت یک سند را با استفاده از شناسه آن برمی‌گرداند")
-async def get_document(document_id: str):
-    """
-    دریافت یک سند با استفاده از شناسه آن
+# @app.get("/data_sources/{document_id}", tags=["Data Sources"],
+#           summary="دریافت یک سند",
+#           description="این اندپوینت یک سند را با استفاده از شناسه آن برمی‌گرداند")
+# async def get_document(document_id: str):
+#     """
+#     دریافت یک سند با استفاده از شناسه آن
     
-    - **document_id**: شناسه سند
+#     - **document_id**: شناسه سند
     
-    **نمونه خروجی:**
-    ```json
-    {
-      "id": "doc_123",
-      "text": "متن سند",
-      "metadata": {
-        "source": "https://example.com",
-        "title": "عنوان سند"
-      }
-    }
-    ```
-    """
-    try:
-        # Get document from vector store
-        document = get_vector_store().get_document(document_id)
-        
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        return JSONResponse(
-            content=document,
-            media_type="application/json; charset=utf-8"
-        )
-        
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        print(f"Error in get_document: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/data_sources/{document_id}", tags=["Documents"],
-          summary="دریافت اطلاعات یک سند",
-          description="این اندپوینت اطلاعات کامل یک سند را با استفاده از شناسه آن برمی‌گرداند")
-async def get_document_info(document_id: str):
-    """
-    دریافت اطلاعات کامل یک سند با استفاده از شناسه آن
-    
-    - **document_id**: شناسه سند
-    
-    **نمونه خروجی:**
-    ```json
-    {
-      "id": "doc_123",
-      "text": "متن سند",
-      "metadata": {
-        "source": "https://example.com",
-        "title": "عنوان سند",
-        "created_at": "2024-03-20T10:30:00",
-        "status": "approved"
-      },
-      "similarity_score": 0.95,
-      "chunk_index": 2,
-      "total_chunks": 5
-    }
-    ```
-    """
-    try:
-        # Get document from vector store
-        document = get_vector_store().get_document(document_id)
-        
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        # Get all documents to calculate chunk index and total chunks
-        all_docs = get_vector_store().get_all_documents()
-        source_docs = [doc for doc in all_docs if doc['metadata'].get('source') == document['metadata'].get('source')]
-        
-        # Find chunk index
-        chunk_index = next((i for i, doc in enumerate(source_docs) if doc['id'] == document_id), -1)
-        
-        # Add additional information
-        document_info = {
-            **document,
-            'chunk_index': chunk_index,
-            'total_chunks': len(source_docs)
-        }
-        
-        return JSONResponse(
-            content=document_info,
-            media_type="application/json; charset=utf-8"
-        )
-        
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        print(f"Error in get_document_info: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001) 
-
+#     **نمونه خروجی:**
+#     ```

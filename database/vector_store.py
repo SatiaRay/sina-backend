@@ -92,8 +92,6 @@ class VectorStore:
             ids=ids
         )
 
-        self.__refresh()
-        
         # Publish event for document addition
         event_bus.publish(VectorStoreEvent.DOCUMENT_ADDED, {
             'ids': ids,
@@ -211,7 +209,6 @@ class VectorStore:
     def delete_vector(self, vector_id: str):
         """Delete a vector from the vector store"""
         self.collection.delete(ids=[vector_id])
-        self.__refresh()
         
         # Publish event for document deletion
         event_bus.publish(VectorStoreEvent.DOCUMENT_DELETED, {
