@@ -1226,14 +1226,14 @@ async def add_manually_knowledge(
         )
 
 
-@app.delete("/data_sources/{document_id}", tags=["Data Sources"],
+@app.delete("/data_sources/{vector_id}", tags=["Data Sources"],
           summary="حذف یک منبع داده",
           description="این اندپوینت یک منبع داده را با استفاده از شناسه آن حذف می‌کند")
-async def delete_data_source(document_id: str):
+async def delete_data_source(vector_id: str):
     """
     حذف یک منبع داده با استفاده از شناسه آن
     
-    - **document_id**: شناسه منبع داده
+    - **vector_id**: شناسه منبع داده
     
     **نمونه خروجی:**
     ```json
@@ -1246,7 +1246,7 @@ async def delete_data_source(document_id: str):
     try:
         vector = VectorStore()
 
-        vector.delete_document(document_id)
+        vector.delete_vector(vector_id)
         
         return JSONResponse(
             content={
