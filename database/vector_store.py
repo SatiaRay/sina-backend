@@ -9,6 +9,7 @@ from pathlib import Path
 import uuid
 from datetime import datetime
 from openai import OpenAI
+from util.event_bus import event_bus, VectorStoreEvent
 
 load_dotenv()
 
@@ -34,7 +35,6 @@ class VectorStore:
             
             print("Creating or getting collection...")
             # ایجاد یا دریافت کالکشن
-
             self.__refresh()
             
             # print("Initializing embedding model...")
@@ -57,7 +57,6 @@ class VectorStore:
 
     def __refresh(self):
         self.collection = None
-
         self.collection = self._get_or_create_collection()
 
     def add_documents(self, documents: List[Dict[str, Any]]):
@@ -94,6 +93,13 @@ class VectorStore:
         )
 
         self.__refresh()
+        
+        # Publish event for document addition
+        event_bus.publish(VectorStoreEvent.DOCUMENT_ADDED, {
+            'ids': ids,
+            'documents': documents
+        })
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
         return ids
 
@@ -151,6 +157,9 @@ class VectorStore:
         
         # ایجاد مجدد کالکشن
         self.collection = self._get_or_create_collection()
+        
+        # Publish event for collection modification
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
     def backup(self, backup_path: str = "data/backup"):
         # پشتیبان‌گیری از داده‌ها
@@ -171,7 +180,6 @@ class VectorStore:
 
     def update_document(self, document_id: str, text: str, metadata: dict):
         """Update a document in the vector store"""
-
         # تبدیل متن‌ها به بردار با استفاده از OpenAI
         client = OpenAI()
 
@@ -191,18 +199,30 @@ class VectorStore:
             metadatas=[metadata],
             ids=[document_id]
         )
+        
+        # Publish event for document update
+        event_bus.publish(VectorStoreEvent.DOCUMENT_UPDATED, {
+            'id': document_id,
+            'text': text,
+            'metadata': metadata
+        })
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
     def delete_vector(self, vector_id: str):
         """Delete a vector from the vector store"""
         self.collection.delete(ids=[vector_id])
-
         self.__refresh()
+        
+        # Publish event for document deletion
+        event_bus.publish(VectorStoreEvent.DOCUMENT_DELETED, {
+            'id': vector_id
+        })
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
     def get_pending_documents(self, offset: int = 0, limit: int = 50) -> List[Dict]:
         """دریافت اسناد در انتظار بررسی"""
         try:
             # Get all documents
-
             result = self.collection.get()
             
             # Filter pending documents
@@ -257,6 +277,14 @@ class VectorStore:
                     metadatas=[metadata]
                 )
             
+            # Publish event for document update
+            event_bus.publish(VectorStoreEvent.DOCUMENT_UPDATED, {
+                'id': document_id,
+                'text': edited_text,
+                'metadata': metadata
+            })
+            event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
+
             return True
         except Exception as e:
             print(f"Error updating document status: {str(e)}")

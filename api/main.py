@@ -44,6 +44,7 @@ from .crawl import router as crawl_router
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.repository import DocumentRepository
 from database.models import get_db
+from util.event_bus import event_bus, VectorStoreEvent
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -71,6 +72,26 @@ try:
 except Exception as e:
     print(f"Error during initialization: {str(e)}")
     raise
+
+# Global vector store instance
+vector_store = None
+
+def get_vector_store():
+    """Get or create VectorStore instance"""
+    global vector_store
+    if vector_store is None:
+        vector_store = VectorStore()
+    return vector_store
+
+def refresh_vector_store(data=None):
+    """Callback to refresh VectorStore instance"""
+    global vector_store
+    print("Refreshing VectorStore instance...")
+    vector_store = VectorStore()
+    print("VectorStore instance refreshed successfully")
+
+# Subscribe to collection modification events
+event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_vector_store)
 
 # Create FastAPI app
 app = FastAPI(
@@ -409,7 +430,7 @@ async def delete_all_knowledge():
     حذف تمام داده‌های موجود در پایگاه دانش
     """
     try:
-        vector_store.delete_all()
+        get_vector_store().delete_all()
         return {"message": "تمام داده‌ها با موفقیت حذف شدند"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -483,7 +504,7 @@ async def store_knowledge(
         
         try:
             # اضافه کردن به vector store
-            vector_store.add_documents(processed_docs)
+            get_vector_store().add_documents(processed_docs)
         except Exception as e:
             error_msg = f"خطا در ذخیره‌سازی در vector store: {str(e)}"
             with open(log_file, 'a', encoding='utf-8') as f:
@@ -565,7 +586,7 @@ async def add_text_knowledge(request: PlainTextRequest):
         }
         
         # افزودن به پایگاه دانش
-        rag_system.vector_store.add_documents([{
+        get_vector_store().add_documents([{
             "text": processed_text,
             "metadata": metadata
         }])
@@ -627,7 +648,7 @@ async def list_data_sources():
     ```
     """
     try:
-        docs = vector_store.get_all_documents()
+        docs = get_vector_store().get_all_documents()
 
         # گروه‌بندی اسناد بر اساس source_id
         source_groups = {}
@@ -689,7 +710,7 @@ async def get_source_chunks(url: str):
     - **url**: آدرس منبع داده
     """
     try:
-        docs = vector_store.get_all_documents()
+        docs = get_vector_store().get_all_documents()
         chunks = []
         
         for doc in docs:
@@ -982,7 +1003,7 @@ async def add_plaintext(
             )
         
         # اضافه کردن به vector store
-        vector_store.add_documents(processed_docs)
+        get_vector_store().add_documents(processed_docs)
         
         # ذخیره دیتا در یک فایل JSON برای پشتیبان‌گیری
         try:
@@ -1068,7 +1089,7 @@ async def search_vector_docs(
     """
     try:
         # جستجو در vector store
-        relevant_docs = vector_store.search(request.question, request.limit)
+        relevant_docs = get_vector_store().search(request.question, request.limit)
         
         # تبدیل نتایج به فرمت مناسب
         results = []
@@ -1293,14 +1314,14 @@ async def update_document(document_id: str, update_request: DocumentUpdateReques
     """
     try:
         # Get all documents to verify document exists
-        doc = vector_store.get_document(document_id=document_id)
+        doc = get_vector_store().get_document(document_id=document_id)
 
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
         
         
         # Update document in vector store
-        vector_store.update_document(
+        get_vector_store().update_document(
             document_id=document_id,
             text=update_request.text,
             metadata=doc['metadata']
@@ -1343,7 +1364,7 @@ async def get_document(document_id: str):
     """
     try:
         # Get document from vector store
-        document = vector_store.get_document(document_id)
+        document = get_vector_store().get_document(document_id)
         
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
@@ -1387,13 +1408,13 @@ async def get_document_info(document_id: str):
     """
     try:
         # Get document from vector store
-        document = vector_store.get_document(document_id)
+        document = get_vector_store().get_document(document_id)
         
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         
         # Get all documents to calculate chunk index and total chunks
-        all_docs = vector_store.get_all_documents()
+        all_docs = get_vector_store().get_all_documents()
         source_docs = [doc for doc in all_docs if doc['metadata'].get('source') == document['metadata'].get('source')]
         
         # Find chunk index
