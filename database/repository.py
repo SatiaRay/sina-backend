@@ -5,43 +5,53 @@ from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomai
 
 T = TypeVar('T', bound=BaseModel)
 
-class BaseRepository(Generic[T]):
-    def __init__(self, model_class: Type[T], db: Session):
-        self.model_class = model_class
+class Repository(Generic[T]):
+    def __init__(self, db: Session, model_class: Type[T]):
         self.db = db
-
-    def get(self, id: int) -> Optional[T]:
-        return self.db.query(self.model_class).filter(self.model_class.id == id).first()
+        self.model_class = model_class
 
     def get_all(self) -> List[T]:
         return self.db.query(self.model_class).all()
 
-    def create(self, data: dict):
-        db_obj = self.model_class(**data)
-        self.db.add(db_obj)
-        self.db.commit()
-        return db_obj
+    def get(self, id: int) -> Optional[T]:
+        return self.db.query(self.model_class).filter(self.model_class.id == id).first()
 
-    def update(self, id: int, obj_in: dict) -> Optional[T]:
-        db_obj = self.get(id)
-        if db_obj:
-            for key, value in obj_in.items():
-                setattr(db_obj, key, value)
+    def create(self, data: dict) -> T:
+        instance = self.model_class(**data)
+        self.db.add(instance)
+        self.db.commit()
+        self.db.refresh(instance)
+        return instance
+
+    def update(self, id: int, data: dict) -> Optional[T]:
+        instance = self.get(id)
+        if instance:
+            for key, value in data.items():
+                setattr(instance, key, value)
             self.db.commit()
-            self.db.refresh(db_obj)
-        return db_obj
+            self.db.refresh(instance)
+        return instance
 
     def delete(self, id: int) -> bool:
-        db_obj = self.get(id)
-        if db_obj:
-            self.db.delete(db_obj)
+        instance = self.get(id)
+        if instance:
+            self.db.delete(instance)
             self.db.commit()
             return True
         return False
 
-class WizardRepository(BaseRepository[Wizard]):
+class WizardRepository(Repository[Wizard]):
     def __init__(self, db: Session):
-        super().__init__(Wizard, db)
+        super().__init__(db, Wizard)
+
+    def get(self, id: int) -> Optional[T]:
+        wizard = self.db.query(self.model_class).filter(self.model_class.id == id).first()
+
+        if wizard :
+            childer = self.db.query(self.model_class).filter(self.model_class.parent_id == wizard.id).all()
+            wizard.children = childer
+        
+        return wizard
 
     def get_by_parent(self, parent_id: Optional[int], enabled_only: bool = True) -> List[Wizard]:
         query = self.db.query(Wizard).filter(Wizard.parent_id == parent_id)
@@ -85,9 +95,9 @@ class WizardRepository(BaseRepository[Wizard]):
     def get_disabled_wizards(self) -> List[Wizard]:
         return self.db.query(Wizard).filter(Wizard.enabled == False).all()
 
-class ChatRepository(BaseRepository[Chat]):
+class ChatRepository(Repository[Chat]):
     def __init__(self, db: Session):
-        super().__init__(Chat, db)
+        super().__init__(db, Chat)
 
     def get_with_messages(self, id: int) -> Optional[Chat]:
         return self.db.query(Chat).filter(Chat.session_id == id).first()
@@ -95,9 +105,9 @@ class ChatRepository(BaseRepository[Chat]):
     def get_all_with_messages(self) -> List[Chat]:
         return self.db.query(Chat).all()
     
-class ChatHistoryRepository(BaseRepository[ChatHistory]):
+class ChatHistoryRepository(Repository[ChatHistory]):
     def __init__(self, db: Session):
-        super().__init__(ChatHistory, db)
+        super().__init__(db, ChatHistory)
 
     def get_chat_history_by_chat_id(self, chat_id: int, limit:int = 20) -> List[ChatHistory]:
         """
@@ -111,9 +121,9 @@ class ChatHistoryRepository(BaseRepository[ChatHistory]):
         """
         return self.db.query(Chat).filter(Chat.id == id).join(Chat.chat_history).first()
 
-class CrawledDomainRepository(BaseRepository[CrawledDomain]):
+class CrawledDomainRepository(Repository[CrawledDomain]):
     def __init__(self, db: Session):
-        super().__init__(CrawledDomain, db)
+        super().__init__(db, CrawledDomain)
 
     def get_by_domain(self, domain: str) -> Optional[CrawledDomain]:
         return self.db.query(CrawledDomain).filter(CrawledDomain.domain == domain).first()
@@ -124,9 +134,9 @@ class CrawledDomainRepository(BaseRepository[CrawledDomain]):
             return existing
         return self.create({"domain": domain})
 
-class DocumentRepository(BaseRepository[Document]):
+class DocumentRepository(Repository[Document]):
     def __init__(self, db: Session):
-        super().__init__(Document, db)
+        super().__init__(db, Document)
 
     def get_by_uri(self, uri: str) -> List[Document]:
         return self.db.query(Document).filter(Document.uri == uri).all()
