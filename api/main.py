@@ -121,7 +121,7 @@ app.include_router(document_router)
 app.include_router(document_websocket_router)
 app.include_router(domain_router)
 app.include_router(crawl_router)
-# app.include_router(chat_router)
+app.include_router(chat_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
