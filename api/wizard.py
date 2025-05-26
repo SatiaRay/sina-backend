@@ -28,12 +28,16 @@ class WizardResponse(WizardBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    children: List['WizardResponse'] = []
 
     class Config:
         from_attributes = True
 
+# Update the forward reference for children
+WizardResponse.model_rebuild()
+
 # Get root wizards - This must come BEFORE the {wizard_id} route
-@router.get("/roots", response_model=List[WizardResponse])
+@router.get("/hierarchy/roots", response_model=List[WizardResponse])
 async def get_root_wizards(
     enabled_only: bool = True,
     db: Session = Depends(get_db)
