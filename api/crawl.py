@@ -179,7 +179,7 @@ async def websocket_job_status(websocket: WebSocket, job_id: str):
 
     try:
         # Use the existing redis_con
-        redis_conn = Redis(host="192.168.171.6")
+        redis_conn = Redis(host=os.getenv('REDIS_HOST'))
         while True:
             job = Job.fetch(job_id, connection=redis_conn)
 
