@@ -3,7 +3,7 @@ import json
 import requests
 import logging
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, urlunparse
 from datetime import datetime
 import re
 from difflib import SequenceMatcher
@@ -36,6 +36,37 @@ logging.basicConfig(
 # and store it in the database for later retrieval and processing.
 # Use the --recursive flag to crawl all linked pages within the same domain.
 
+def clean_domain(url: str) -> str:
+    """
+    Clean domain name by removing www. and ensuring proper URL structure
+    
+    Args:
+        url: The URL to clean
+        
+    Returns:
+        Cleaned URL with proper domain structure
+    """
+    try:
+        # Parse the URL
+        parsed = urlparse(url)
+        
+        # Remove www. from netloc using regex
+        netloc = re.sub(r'^www\.', '', parsed.netloc)
+        
+        # Reconstruct the URL with cleaned netloc
+        cleaned = urlunparse((
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment
+        ))
+        
+        return cleaned
+    except Exception as e:
+        logging.error(f"Error cleaning domain: {str(e)}")
+        return url
 
 def crawl(url, recursive=False, db: Session = None):
     """
@@ -54,12 +85,12 @@ def crawl(url, recursive=False, db: Session = None):
     domain_repo = CrawledDomainRepository(db)
     
     try:
+        # Clean the input URL
+        cleaned_url = clean_domain(url)
+        
         # Parse the URL to get domain
-        parsed_url = urlparse(url)
+        parsed_url = urlparse(cleaned_url)
         domain = parsed_url.netloc
-        # Remove 'www.' prefix if it exists
-        if domain.startswith('www.'):
-            domain = domain[4:]
         
         # Check if domain already exists in database
         domain_obj = domain_repo.get_by_domain(domain)
@@ -67,9 +98,9 @@ def crawl(url, recursive=False, db: Session = None):
             print(f"Domain {domain} already exists in the database")
         else:
             # Try to access the URL first
-            response = requests.get(url, timeout=10)
+            response = requests.get(cleaned_url, timeout=10)
             if response.status_code != 200:
-                print(f"Failed to access {url}: Status code {response.status_code}")
+                print(f"Failed to access {cleaned_url}: Status code {response.status_code}")
                 return
             
             # Create domain record
@@ -83,7 +114,8 @@ def crawl(url, recursive=False, db: Session = None):
         
         def process_url(current_url):
             """Process a single URL and store its content in the database"""
-            current_url = current_url.split('#')[0]
+            # Clean the current URL
+            current_url = clean_domain(current_url.split('#')[0])
             
             # Skip if already visited or is a media file
             if current_url in visited_urls:
@@ -116,6 +148,8 @@ def crawl(url, recursive=False, db: Session = None):
                 for a_tag in a_tags:
                     href = a_tag.get('href', '')
                     if href:  # Only add non-empty href values
+                        # Clean the href URL
+                        href = clean_domain(href)
                         links.append(href)
                 
                 # Clean HTML content
@@ -140,7 +174,6 @@ def crawl(url, recursive=False, db: Session = None):
                     'uri': parsed_url.path or '/',
                     'domain_id': domain_obj.id
                 }
-
                 
                 # Store in database
                 try:
@@ -186,7 +219,7 @@ def crawl(url, recursive=False, db: Session = None):
                 db.rollback()
         
         # Start crawling from the initial URL
-        process_url(url)
+        process_url(cleaned_url)
         
         # After crawling all URLs, remove duplicate content
         remove_duplicate_content(crawled_data, document_repo)

@@ -7,7 +7,7 @@ import logging
 from crawler.crawler import crawl
 from database.models import Document, CrawledDomain, get_db
 from sqlalchemy.orm import Session
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 from rq import Queue
 from redis import Redis
 import uuid
@@ -15,10 +15,43 @@ import asyncio
 from rq.job import Job
 import traceback
 import os
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def clean_domain(url: str) -> str:
+    """
+    Clean domain name by removing www. and ensuring proper URL structure
+    
+    Args:
+        url: The URL to clean
+        
+    Returns:
+        Cleaned URL with proper domain structure
+    """
+    try:
+        # Parse the URL
+        parsed = urlparse(url)
+        
+        # Remove www. from netloc using regex
+        netloc = re.sub(r'^www\.', '', parsed.netloc)
+        
+        # Reconstruct the URL with cleaned netloc
+        cleaned = urlunparse((
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment
+        ))
+        
+        return cleaned
+    except Exception as e:
+        logger.error(f"Error cleaning domain: {str(e)}")
+        return url
 
 router = APIRouter()
 
@@ -135,17 +168,17 @@ def crawl_task(url: str, recursive: bool = False):
             # Get document from database
             doc = db.query(Document).filter(Document.id == doc_id).first()
             if doc:
+                # Clean the URI
+                cleaned_uri = clean_domain(doc.uri)
+                doc.uri = cleaned_uri
 
-                # Extract domain from URI if no domain exists
+                # Extract domain from cleaned URI if no domain exists
                 if not doc.domain:
-                    parsed_uri = urlparse(doc.uri)
+                    parsed_uri = urlparse(cleaned_uri)
                     domain_name = parsed_uri.netloc
                     if not domain_name:  # If URI is relative
                         domain_name = urlparse(str(url)).netloc
-                    
-                    # Remove 'www.' prefix if it exists
-                    if domain_name.startswith('www.'):
-                        domain_name = domain_name[4:]
+                        domain_name = re.sub(r'^www\.', '', domain_name)
                     
                     # Create new domain if it doesn't exist
                     domain = db.query(CrawledDomain).filter(CrawledDomain.domain == domain_name).first()
@@ -163,7 +196,7 @@ def crawl_task(url: str, recursive: bool = False):
                 domain = doc.domain.domain if doc.domain else ''
                 doc_details.append(DocumentInfo(
                     id=str(doc.id),
-                    url=domain + doc.uri,
+                    url=cleaned_uri,
                     title=doc.title
                 ))
 

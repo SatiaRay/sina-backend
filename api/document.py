@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 import traceback
 from fastapi.responses import JSONResponse
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 import asyncio
 from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
@@ -17,6 +17,7 @@ from rq import Queue
 from rq.job import Job
 import uuid
 from util.event_bus import event_bus, VectorStoreEvent
+import re
 
 from database.models import get_db, SessionLocal
 from database.repository import DocumentRepository, CrawledDomainRepository
@@ -70,6 +71,38 @@ class DocumentResponse(DocumentBase):
 
     class Config:
         from_attributes = True
+
+def clean_domain(url: str) -> str:
+    """
+    Clean domain name by removing www. and ensuring proper URL structure
+    
+    Args:
+        url: The URL to clean
+        
+    Returns:
+        Cleaned URL with proper domain structure
+    """
+    try:
+        # Parse the URL
+        parsed = urlparse(url)
+        
+        # Remove www. from netloc using regex
+        netloc = re.sub(r'^www\.', '', parsed.netloc)
+        
+        # Reconstruct the URL with cleaned netloc
+        cleaned = urlunparse((
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment
+        ))
+        
+        return cleaned
+    except Exception as e:
+        print(f"Error cleaning domain: {str(e)}")
+        return url
 
 # Create a new document
 @router.post("/", response_model=DocumentResponse)
@@ -482,7 +515,6 @@ async def vectorize_document(
 
 async def vectorize_task(document_id, request: VectorizeDocumentRequest):
     try:
-
         from database.models import SessionLocal
         from rq import get_current_job
 
@@ -521,12 +553,15 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         job.meta['progress'] = {'type' : 'info', 'msg' : "Markdown generated. Storing data ..."}
         job.save_meta()
 
+        # Clean the URI if it exists
+        uri = clean_domain(document.uri) if document.uri else None
+
         # Prepare metadata
         metadata = request.metadata or {}
         metadata.update({
             "document_id": document_id,
             "title": document.title,
-            "uri": document.uri,
+            "uri": uri,
             "domain_id": document.domain_id,
             "created_at": datetime.now().isoformat()
         })
@@ -548,7 +583,8 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         update_data = {
             "vector_id": vector_id,
             "html" : request.html,
-            "markdown" : markdown
+            "markdown" : markdown,
+            "uri": uri  # Update with cleaned URI
         }
         document_repo.update(document_id, update_data)
 
