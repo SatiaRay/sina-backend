@@ -545,7 +545,9 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         
         # Update document with vector_id
         update_data = {
-            "vector_id": vector_id
+            "vector_id": vector_id,
+            "html" : request.html,
+            "markdown" : markdown
         }
         document_repo.update(document_id, update_data)
 
