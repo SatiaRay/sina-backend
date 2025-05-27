@@ -143,6 +143,10 @@ def crawl_task(url: str, recursive: bool = False):
                     if not domain_name:  # If URI is relative
                         domain_name = urlparse(str(url)).netloc
                     
+                    # Remove 'www.' prefix if it exists
+                    if domain_name.startswith('www.'):
+                        domain_name = domain_name[4:]
+                    
                     # Create new domain if it doesn't exist
                     domain = db.query(CrawledDomain).filter(CrawledDomain.domain == domain_name).first()
                     if not domain:

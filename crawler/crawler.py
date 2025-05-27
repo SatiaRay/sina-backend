@@ -57,6 +57,9 @@ def crawl(url, recursive=False, db: Session = None):
         # Parse the URL to get domain
         parsed_url = urlparse(url)
         domain = parsed_url.netloc
+        # Remove 'www.' prefix if it exists
+        if domain.startswith('www.'):
+            domain = domain[4:]
         
         # Check if domain already exists in database
         domain_obj = domain_repo.get_by_domain(domain)
