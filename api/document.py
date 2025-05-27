@@ -552,17 +552,26 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         }
         document_repo.update(document_id, update_data)
 
+        # Get the vector store data
+        vector_data = vector_store.get_document(vector_id)
+        if not vector_data:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to retrieve vector data after storage"
+            )
+
+        # Send webhook notification with vector store data
         import httpx
         async with httpx.AsyncClient() as client:
             await client.post(
-                f"{os.getenv("HOST")}/webhooks/update_vector",
+                f"{os.getenv('HOST')}/webhooks/on_vector_new_doc",
                 json={
-                    "document_id": doc.id,
-                    "vector_id": vector_id,
-                    "status": "success"
+                    "ids": [vector_id],
+                    "documents": [vector_data.get('text', markdown)],
+                    "metadatas": [vector_data.get('metadata', metadata)],
+                    "embeddings": [vector_data.get('embedding', [])]
                 }
             )
-        
 
         # Update progress metadata
         job.meta['progress'] = {'type' : 'info', 'msg' : "Finished"}
@@ -610,7 +619,6 @@ async def websocket_vectorize_status(websocket: WebSocket, job_id: str):
                 break
 
             await asyncio.sleep(1)  # Poll every second
-        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
     except WebSocketDisconnect:
         print("Client disconnected")
