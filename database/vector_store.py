@@ -72,7 +72,6 @@ class VectorStore:
         ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(documents))]
 
         
-        
         # تبدیل متن‌ها به بردار با استفاده از OpenAI
         client = OpenAI()
         
@@ -85,12 +84,7 @@ class VectorStore:
             embeddings.append(response.data[0].embedding)
 
         # اضافه کردن به کالکشن
-        self.collection.add(
-            embeddings=embeddings,
-            documents=texts,
-            metadatas=metadatas,
-            ids=ids
-        )
+        self.save_documents(ids, texts, metadatas, embeddings)
 
         # Publish event for document addition
         event_bus.publish(VectorStoreEvent.DOCUMENT_ADDED, {
@@ -100,6 +94,14 @@ class VectorStore:
         event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
         return ids
+
+    def save_documents(self, ids, documents, metadatas, embeddings):
+        self.collection.add(
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas,
+            ids=ids
+        )
 
     def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """جستجوی اسناد مرتبط"""

@@ -41,6 +41,7 @@ from .document import router as document_router, document_websocket_router
 from .domain import router as domain_router
 from .chat import router as chat_router
 from .crawl import router as crawl_router
+from .webhooks import router as webhook_router
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.repository import DocumentRepository
 from database.models import get_db
@@ -122,6 +123,7 @@ app.include_router(document_websocket_router)
 app.include_router(domain_router)
 app.include_router(crawl_router)
 app.include_router(chat_router)
+app.include_router(webhook_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
