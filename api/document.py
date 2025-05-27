@@ -17,51 +17,11 @@ from rq import Queue
 from rq.job import Job
 import uuid
 from util.event_bus import event_bus, VectorStoreEvent
-import logging
-from crawler.crawler import crawl
-from database.models import Document, CrawledDomain, get_db
-import threading
 
 from database.models import get_db, SessionLocal
 from database.repository import DocumentRepository, CrawledDomainRepository
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.vector_store import VectorStore
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Redis connection for pub/sub
-redis_pubsub = Redis(host=os.getenv('REDIS_HOST'))
-pubsub = redis_pubsub.pubsub()
-DB_REFRESH_CHANNEL = 'db_refresh_channel'
-
-# Subscribe to the channel
-pubsub.subscribe(DB_REFRESH_CHANNEL)
-
-# Function to refresh database in main process
-def refresh_database():
-    try:
-        from vector_store import get_vector_store
-        vector_store = get_vector_store()
-        vector_store.refresh()
-        logger.info("Vector database refreshed successfully")
-    except Exception as e:
-        logger.error(f"Error refreshing vector database: {str(e)}")
-
-# Start a background thread to listen for refresh messages
-def start_refresh_listener():
-    def listener():
-        for message in pubsub.listen():
-            if message['type'] == 'message' and message['channel'] == DB_REFRESH_CHANNEL:
-                refresh_database()
-    
-    thread = threading.Thread(target=listener, daemon=True)
-    thread.start()
-    return thread
-
-# Start the listener when the module loads
-refresh_listener_thread = start_refresh_listener()
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -520,57 +480,100 @@ async def vectorize_document(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-def vectorize_task(document_id: int, request: VectorizeDocumentRequest, job_id: str):
+async def vectorize_task(document_id, request: VectorizeDocumentRequest):
     try:
+
         from database.models import SessionLocal
         from rq import get_current_job
-        from vector_store import get_vector_store
 
         job = get_current_job()
+
         if job is None:
-            return
+            # fallback or error handling
+            pass
 
         # Update progress metadata
-        job.meta['progress'] = {'type': 'info', 'msg': 'Starting vectorization...'}
+        job.meta['progress'] = {'type' : 'info', 'msg' : "Start vectorizing ..."}
         job.save_meta()
 
         db = SessionLocal()
-        try:
-            # Get document from database
-            doc = db.query(Document).filter(Document.id == document_id).first()
-            if not doc:
-                raise Exception(f"Document {document_id} not found")
 
-            # Convert HTML to Markdown
-            agent = HTMLToMarkdownAgent()
-            markdown = agent.convert(request.html)
+        # Get document from database to verify it exists
+        document_repo = DocumentRepository(db)
+        document = document_repo.get(document_id)
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
 
-            # Update document with new content
-            doc.markdown = markdown
-            doc.html = request.html
-            if request.metadata:
-                doc.metadata = request.metadata
-            db.commit()
+        # Update progress metadata
+        job.meta['progress'] = {'type' : 'info', 'msg' : "Start html to markdown ..."}
+        job.save_meta()
+        
+        # Convert HTML to Markdown
+        markdown = await html_to_markdown_agent.convert(request.html)
+        if markdown is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to convert HTML to Markdown"
+            )
+        
+        # Update progress metadata
+        job.meta['progress'] = {'type' : 'info', 'msg' : "Markdown generated. Storing data ..."}
+        job.save_meta()
 
-            # Update vector store
-            vector_store = get_vector_store()
-            vector_store.add_document(doc)
+        # Prepare metadata
+        metadata = request.metadata or {}
+        metadata.update({
+            "document_id": document_id,
+            "title": document.title,
+            "uri": document.uri,
+            "domain_id": document.domain_id,
+            "created_at": datetime.now().isoformat()
+        })
+        
+        # Create document for vector store
+        vector_doc = {
+            "text": markdown,
+            "metadata": metadata
+        }
+        
+        # Add to vector store
+        vector_id = vector_store.add_documents([vector_doc])[0]
 
-            # Publish refresh message
-            redis_pubsub = Redis(host=os.getenv('REDIS_HOST'))
-            redis_pubsub.publish(DB_REFRESH_CHANNEL, 'refresh')
+        # Update progress metadata
+        job.meta['progress'] = {'type' : 'info', 'msg' : "Document added in vector database"}
+        job.save_meta()
+        
+        # Update document with vector_id
+        update_data = {
+            "vector_id": vector_id,
+            "html" : request.html,
+            "markdown" : markdown
+        }
+        document_repo.update(document_id, update_data)
 
-            job.meta['progress'] = {'type': 'success', 'msg': 'Vectorization completed successfully'}
-            job.save_meta()
+        import httpx
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{os.getenv("HOST")}/webhooks/update_vector",
+                json={
+                    "document_id": doc.id,
+                    "vector_id": vector_id,
+                    "status": "success"
+                }
+            )
+        
 
-        finally:
-            db.close()
-
+        # Update progress metadata
+        job.meta['progress'] = {'type' : 'info', 'msg' : "Finished"}
+        job.save_meta()
+        
     except Exception as e:
-        if job:
-            job.meta['progress'] = {'type': 'error', 'msg': str(e)}
-            job.save_meta()
-        raise e
+        # Update progress metadata
+        job.meta['progress'] = {'type' : 'error', 'msg' : f"Error in vectorize_document: {str(e)}"}
+        job.save_meta()
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 document_websocket_router = APIRouter()
 
