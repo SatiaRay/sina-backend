@@ -39,17 +39,17 @@ WizardResponse.model_rebuild()
 # Get root wizards - This must come BEFORE the {wizard_id} route
 @router.get("/hierarchy/roots", response_model=List[WizardResponse])
 async def get_root_wizards(
-    enabled_only: bool = True,
+    enable_only: bool = True,
     db: Session = Depends(get_db)
 ):
     """
     Get all root wizards (wizards without parents)
     
-    - **enabled_only**: If True, only return enabled wizards
+    - **enable_only**: If True, only return enabled wizards
     """
     try:
         repo = WizardRepository(db)
-        wizards = repo.get_root_wizards(enabled_only=enabled_only)
+        wizards = repo.get_root_wizards(enable_only=enable_only)
         return wizards
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -81,40 +81,45 @@ def create_wizard_no_slash(wizard: WizardCreate, db: Session = Depends(get_db)):
 # Add a route for the root path without trailing slash
 @router.get("", response_model=List[WizardResponse])
 def list_wizards_no_slash(
-    enabled_only: bool = Query(True, description="Only return enabled wizards"),
+    enable_only: bool = Query(True, description="Only return enabled wizards"),
     parent_id: Optional[int] = Query(None, description="Filter by parent ID"),
     db: Session = Depends(get_db)
 ):
-    return list_wizards(enabled_only, parent_id, db)
+    return list_wizards(enable_only, parent_id, db)
 
 # Original route with trailing slash
 @router.get("/", response_model=List[WizardResponse])
 def list_wizards(
-    enabled_only: bool = Query(True, description="Only return enabled wizards"),
+    enable_only: bool = Query(True, description="Only return enabled wizards"),
+    
     parent_id: Optional[int] = Query(None, description="Filter by parent ID"),
     db: Session = Depends(get_db)
 ):
     wizard_repo = WizardRepository(db)
     if parent_id is not None:
-        return wizard_repo.get_by_parent(parent_id, enabled_only)
+        return wizard_repo.get_by_parent(parent_id, enable_only)
     return wizard_repo.get_all()
 
 # Get a wizard by ID - This must come AFTER all specific paths
 @router.get("/{wizard_id}", response_model=WizardResponse)
 async def get_wizard(
     wizard_id: int,
+    enable_only: bool = Query(True, description="Only return enabled wizards"),
     db: Session = Depends(get_db)
 ):
     """
     Get a specific wizard by ID
     
     - **wizard_id**: The ID of the wizard to retrieve
+    - **enable_only**: If True, only return enabled wizards
     """
     try:
         repo = WizardRepository(db)
-        wizard = repo.get(wizard_id)
+        wizard = repo.get(wizard_id, enable_only=enable_only)
         if not wizard:
             raise HTTPException(status_code=404, detail="Wizard not found")
+        if enable_only and not wizard.enabled:
+            raise HTTPException(status_code=404, detail="Wizard is disabled")
         return wizard
     except HTTPException as e:
         raise e
@@ -142,11 +147,11 @@ def delete_wizard(wizard_id: int, db: Session = Depends(get_db)):
 @router.get("/{wizard_id}/hierarchy", response_model=List[WizardResponse])
 def get_wizard_hierarchy(
     wizard_id: int,
-    enabled_only: bool = Query(True, description="Only return enabled wizards"),
+    enable_only: bool = Query(True, description="Only return enabled wizards"),
     db: Session = Depends(get_db)
 ):
     wizard_repo = WizardRepository(db)
-    hierarchy = wizard_repo.get_wizard_hierarchy(wizard_id, enabled_only)
+    hierarchy = wizard_repo.get_wizard_hierarchy(wizard_id, enable_only)
     if not hierarchy:
         raise HTTPException(status_code=404, detail="Wizard not found")
     return hierarchy

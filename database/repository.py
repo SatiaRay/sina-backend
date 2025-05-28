@@ -44,43 +44,50 @@ class WizardRepository(Repository[Wizard]):
     def __init__(self, db: Session):
         super().__init__(db, Wizard)
 
-    def get(self, id: int) -> Optional[T]:
-        wizard = self.db.query(self.model_class).filter(self.model_class.id == id).first()
+    def get(self, id: int, enable_only: bool = False) -> Optional[T]:
+        query = self.db.query(self.model_class).filter(self.model_class.id == id)
+        
+        if enable_only:
+            query = query.filter(self.model_class.enabled == True)
+            
+        wizard = query.first()
 
-        if wizard :
-            childer = self.db.query(self.model_class).filter(self.model_class.parent_id == wizard.id).all()
-            wizard.children = childer
+        if wizard:
+            children_query = self.db.query(self.model_class).filter(self.model_class.parent_id == wizard.id)
+            if enable_only:
+                children_query = children_query.filter(self.model_class.enabled == True)
+            wizard.children = children_query.all()
         
         return wizard
 
-    def get_by_parent(self, parent_id: Optional[int], enabled_only: bool = True) -> List[Wizard]:
+    def get_by_parent(self, parent_id: Optional[int], enable_only: bool = True) -> List[Wizard]:
         query = self.db.query(Wizard).filter(Wizard.parent_id == parent_id)
-        if enabled_only:
+        if enable_only:
             query = query.filter(Wizard.enabled == True)
         return query.all()
 
-    def get_with_children(self, id: int, enabled_only: bool = True) -> Optional[Wizard]:
+    def get_with_children(self, id: int, enable_only: bool = True) -> Optional[Wizard]:
         query = self.db.query(Wizard).filter(Wizard.id == id)
-        if enabled_only:
+        if enable_only:
             query = query.filter(Wizard.enabled == True)
         return query.first()
 
-    def get_root_wizards(self, enabled_only: bool = True) -> List[Wizard]:
+    def get_root_wizards(self, enable_only: bool = True) -> List[Wizard]:
         query = self.db.query(Wizard).filter(Wizard.parent_id.is_(None))
-        if enabled_only:
+        if enable_only:
             query = query.filter(Wizard.enabled == True)
         return query.all()
 
-    def get_wizard_hierarchy(self, id: int, enabled_only: bool = True) -> List[Wizard]:
+    def get_wizard_hierarchy(self, id: int, enable_only: bool = True) -> List[Wizard]:
         """Get a wizard and all its descendants"""
-        wizard = self.get_with_children(id, enabled_only)
+        wizard = self.get_with_children(id, enable_only)
         if not wizard:
             return []
         
         result = [wizard]
-        children = self.get_by_parent(id, enabled_only)
+        children = self.get_by_parent(id, enable_only)
         for child in children:
-            result.extend(self.get_wizard_hierarchy(child.id, enabled_only))
+            result.extend(self.get_wizard_hierarchy(child.id, enable_only))
         return result
 
     def enable_wizard(self, id: int) -> Optional[Wizard]:
