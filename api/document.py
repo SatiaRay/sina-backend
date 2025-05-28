@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from redis import Redis
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, validator
 from datetime import datetime
 import json
@@ -18,6 +18,7 @@ from rq.job import Job
 import uuid
 from util.event_bus import event_bus, VectorStoreEvent
 import re
+import httpx
 
 from database.models import get_db, SessionLocal
 from database.repository import DocumentRepository, CrawledDomainRepository
@@ -215,8 +216,6 @@ async def update_document(
     # If HTML is being updated, convert it to markdown
     update_data = document.model_dump(exclude_unset=True)
   
-    print(f"Updated document")
-
     # Update document
     updated_doc = document_repo.update(document_id, update_data)
     if not updated_doc:
@@ -249,18 +248,12 @@ async def update_document(
                 "text": markdown,
                 "metadata": metadata
             }
-            
-            # Update in vector store
-            if updated_doc.vector_id:
-                # Delete old vector document
-                vector_store.delete_vector(updated_doc.vector_id)
-            
+
+            vector_store.delete_vector(updated_doc.vector_id)
+
             # Add new vector document
-            vector_id = vector_store.add_documents([vector_doc])[0]
-            
-            # Update document with new vector_id
-            document_repo.update(document_id, {"vector_id": vector_id})
-                
+            vector_id = vector_store.add_documents([vector_doc], updated_doc.vector_id)[0]
+
         except Exception as e:
             print(f"Error updating vector store: {str(e)}")
             traceback.print_exc()
@@ -573,7 +566,7 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         }
         
         # Add to vector store
-        vector_id = vector_store.add_documents([vector_doc])[0]
+        vector_id = await store_vector_document(vector_doc)
 
         # Update progress metadata
         job.meta['progress'] = {'type' : 'info', 'msg' : "Document added in vector database"}
@@ -589,24 +582,11 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         document_repo.update(document_id, update_data)
 
         # Get the vector store data
-        vector_data = vector_store.get_document(vector_id)
+        vector_data = await get_vector_document(vector_id)
         if not vector_data:
             raise HTTPException(
                 status_code=500,
                 detail="Failed to retrieve vector data after storage"
-            )
-
-        # Send webhook notification with vector store data
-        import httpx
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                f"{os.getenv('HOST')}/webhooks/on_vector_new_doc",
-                json={
-                    "ids": [vector_id],
-                    "documents": [vector_data.get('text', markdown)],
-                    "metadatas": [vector_data.get('metadata', metadata)],
-                    "embeddings": [vector_data.get('embedding', [])]
-                }
             )
 
         # Update progress metadata
@@ -618,6 +598,50 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         job.meta['progress'] = {'type' : 'error', 'msg' : f"Error in vectorize_document: {str(e)}"}
         job.save_meta()
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def store_vector_document(vector_doc: Dict[str, Any]) -> str:
+    """
+    Store a document in the vector store using the vector API endpoint
+    
+    Args:
+        vector_doc: Document to store with text and metadata
+        
+    Returns:
+        str: Vector ID of the stored document
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{os.getenv('HOST')}/vector/store",
+                json={"documents": [vector_doc]}
+            )
+            response.raise_for_status()
+            result = response.json()
+            return result["document_ids"][0]
+    except Exception as e:
+        log_error(error_logger, e, f"Failed to store vector document: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def get_vector_document(vector_id: str) -> Dict[str, Any]:
+    """
+    Get a document from the vector store using the vector API endpoint
+    
+    Args:
+        vector_id: ID of the vector document to retrieve
+        
+    Returns:
+        Dict containing the vector document data
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{os.getenv('HOST')}/vector/{vector_id}"
+            )
+            response.raise_for_status()
+            return response.json()
+    except Exception as e:
+        log_error(error_logger, e, f"Failed to get vector document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 document_websocket_router = APIRouter()
