@@ -216,8 +216,6 @@ async def update_document(
     # If HTML is being updated, convert it to markdown
     update_data = document.model_dump(exclude_unset=True)
   
-    print(f"Updated document")
-
     # Update document
     updated_doc = document_repo.update(document_id, update_data)
     if not updated_doc:
@@ -250,18 +248,12 @@ async def update_document(
                 "text": markdown,
                 "metadata": metadata
             }
-            
-            # Update in vector store
-            if updated_doc.vector_id:
-                # Delete old vector document
-                vector_store.delete_vector(updated_doc.vector_id)
-            
+
+            vector_store.delete_vector(updated_doc.vector_id)
+
             # Add new vector document
-            vector_id = vector_store.add_documents([vector_doc])[0]
-            
-            # Update document with new vector_id
-            document_repo.update(document_id, {"vector_id": vector_id})
-                
+            vector_id = vector_store.add_documents([vector_doc], updated_doc.vector_id)[0]
+
         except Exception as e:
             print(f"Error updating vector store: {str(e)}")
             traceback.print_exc()

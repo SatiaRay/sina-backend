@@ -59,7 +59,7 @@ class VectorStore:
         self.collection = None
         self.collection = self._get_or_create_collection()
 
-    def add_documents(self, documents: List[Dict[str, Any]]):
+    def add_documents(self, documents: List[Dict[str, Any]], vector_id: str = None):
         """اضافه کردن اسناد به پایگاه داده برداری"""
         if not documents:
             return
@@ -69,8 +69,7 @@ class VectorStore:
         metadatas = [doc['metadata'] for doc in documents]
         
         # تولید ID‌های یکتا با استفاده از UUID
-        ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(documents))]
-
+        ids = vector_id or [f"doc_{uuid.uuid4().hex}" for _ in range(len(documents))]
         
         # تبدیل متن‌ها به بردار با استفاده از OpenAI
         client = OpenAI()
