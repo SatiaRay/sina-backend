@@ -135,7 +135,12 @@ class ChatHistory(BaseModel):
     # Renamed 'metadata' to 'extra_metadata'
     extra_metadata = Column(JSON, nullable=True)
 
- 
+class Workflow(BaseModel):
+    __tablename__ = 'workflows'
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    name = Column(String(255), primary_key=True)
+    schema = Column(JSON)
+    status = Column(Boolean, default=True)
 
 # Database dependency for FastAPI
 def get_db():

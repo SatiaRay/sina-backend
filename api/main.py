@@ -42,6 +42,7 @@ from .domain import router as domain_router
 from .chat import router as chat_router
 from .crawl import router as crawl_router
 from .vector import router as vector_router
+from .workflow import router as workflow_router
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.repository import DocumentRepository
 from database.models import get_db
@@ -124,6 +125,7 @@ app.include_router(domain_router)
 app.include_router(crawl_router)
 app.include_router(chat_router)
 app.include_router(vector_router)
+app.include_router(workflow_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
