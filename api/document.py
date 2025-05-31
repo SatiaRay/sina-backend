@@ -38,6 +38,7 @@ class DocumentBase(BaseModel):
     markdown: str
     uri: Optional[str] = None
     domain_id: Optional[int] = None
+    vector_id: Optional[str] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -186,6 +187,7 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
         markdown=document.markdown,
         uri=document.uri,
         domain_id=document.domain_id,
+        vector_id = document.vector_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
         domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
