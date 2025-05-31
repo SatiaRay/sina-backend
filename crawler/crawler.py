@@ -212,7 +212,7 @@ def crawl(url, recursive=False, store_in_vector=False, db: Session = None):
                         
                     # Store in vector store if needed
                     if store_in_vector and vector_store and markdown_content:
-                        vector_store.add_documents([{
+                        vector_ids = vector_store.add_documents([{
                             'text': markdown_content,
                             'metadata': {
                                 'source': current_url,
@@ -222,6 +222,16 @@ def crawl(url, recursive=False, store_in_vector=False, db: Session = None):
                                 'date_added': datetime.now().isoformat()
                             }
                         }])
+                        
+                        # Update document with vector ID
+                        if vector_ids and len(vector_ids) > 0:
+                            document_data['vector_id'] = vector_ids[0]
+                            if existing_docs:
+                                document_repo.update(existing_docs[0].id, document_data)
+                            else:
+                                document_repo.update(new_doc.id, document_data)
+                            db.commit()
+                            print(f"Updated document with vector ID: {vector_ids[0]}")
                         
                 except Exception as e:
                     print(f"Database error for {current_url}: {str(e)}")
