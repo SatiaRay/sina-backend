@@ -74,6 +74,19 @@ class DocumentResponse(DocumentBase):
     class Config:
         from_attributes = True
 
+class DocumentListResponse(BaseModel):
+    id: int
+    title: str
+    uri: Optional[str] = None
+    domain_id: Optional[int] = None
+    domain: Optional[DomainInfo] = None
+    vector_id: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
 def clean_domain(url: str) -> str:
     """
     Clean domain name by removing www. and ensuring proper URL structure
@@ -286,45 +299,55 @@ def delete_document(document_id: int, db: Session = Depends(get_db)):
     return {"message": "Document deleted successfully"}
 
 # List all documents
-@router.get("", response_model=List[DocumentResponse])
+@router.get("", response_model=List[DocumentListResponse])
 def list_documents_no_slash(
     domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
     uri: Optional[str] = Query(None, description="Filter by URI"),
+    limit: int = Query(10, description="Number of documents per page", ge=1, le=100),
+    offset: int = Query(0, description="Page offset (starting from 0)", ge=0),
     db: Session = Depends(get_db)
 ):
-    return list_documents(domain_id, uri, db)
+    return list_documents(domain_id, uri, limit, offset, db)
 
-@router.get("/", response_model=List[DocumentResponse])
+@router.get("/", response_model=List[DocumentListResponse])
 def list_documents(
     domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
     uri: Optional[str] = Query(None, description="Filter by URI"),
+    limit: int = Query(10, description="Number of documents per page", ge=1, le=100),
+    offset: int = Query(0, description="Page offset (starting from 0)", ge=0),
     db: Session = Depends(get_db)
 ):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
     
-    # Get documents based on filters
+    # Get documents based on filters with pagination
     if domain_id:
-        documents = document_repo.get_by_domain(domain_id)
+        query = document_repo.db.query(document_repo.model_class).filter(
+            document_repo.model_class.domain_id == domain_id
+        )
     elif uri:
-        documents = document_repo.get_by_uri(uri)
+        query = document_repo.db.query(document_repo.model_class).filter(
+            document_repo.model_class.uri == uri
+        )
     else:
-        documents = document_repo.get_all()
+        query = document_repo.db.query(document_repo.model_class)
+    
+    # Apply pagination
+    documents = query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(limit).all()
     
     # Create response with domain info
     response = []
     for doc in documents:
         domain = domain_repo.get(doc.domain_id)
-        response.append(DocumentResponse(
+        response.append(DocumentListResponse(
             id=doc.id,
             title=doc.title,
-            html=doc.html,
-            markdown=doc.markdown,
             uri=doc.uri,
             domain_id=doc.domain_id,
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
+            vector_id =doc.vector_id,
             created_at=doc.created_at,
-            updated_at=doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+            updated_at=doc.updated_at,            
         ))
     return response
 
