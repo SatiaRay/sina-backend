@@ -472,6 +472,81 @@ def get_document_by_vector_id(vector_id: str, db: Session = Depends(get_db)):
         domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
     )
 
+@router.post("/{document_id}/toggle-vector", response_model=DocumentResponse,
+          summary="تغییر وضعیت برداری سند",
+          description="این اندپوینت وضعیت برداری سند را تغییر می‌دهد. اگر سند برداری شده باشد، آن را حذف می‌کند و اگر برداری نشده باشد، آن را برداری می‌کند.")
+async def toggle_document_vector_status(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Toggle vector status of a document
+    
+    - If document has vector_id: Delete vector and set vector_id to null
+    - If document has no vector_id: Create vector and set vector_id
+    """
+    document_repo = DocumentRepository(db)
+    domain_repo = CrawledDomainRepository(db)
+    
+    # Get document
+    document = document_repo.get(document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    try:
+        if document.vector_id:
+            # Document is vectorized, so devectorize it
+            vector_store.delete_vector(document.vector_id)
+            
+            # Update document to remove vector_id
+            update_data = {"vector_id": None}
+            updated_doc = document_repo.update(document_id, update_data)
+            
+        else:
+            # Document is not vectorized, so vectorize it
+            # Prepare metadata
+            metadata = {
+                "document_id": str(document_id),
+                "title": document.title,
+                "uri": document.uri or "",
+                "domain_id": str(document.domain_id) if document.domain_id else "0",
+                "created_at": datetime.now().isoformat()
+            }
+            
+            # Create document for vector store
+            vector_doc = {
+                "text": document.markdown,
+                "metadata": metadata
+            }
+            
+            # Add to vector store
+            vector_id = vector_store.add_documents([vector_doc])[0]
+            
+            # Update document with vector_id
+            update_data = {"vector_id": vector_id}
+            updated_doc = document_repo.update(document_id, update_data)
+        
+        # Get domain info for response
+        domain = domain_repo.get(updated_doc.domain_id)
+        
+        return DocumentResponse(
+            id=updated_doc.id,
+            title=updated_doc.title,
+            html=updated_doc.html,
+            markdown=updated_doc.markdown,
+            uri=updated_doc.uri,
+            domain_id=updated_doc.domain_id,
+            vector_id=updated_doc.vector_id,
+            created_at=updated_doc.created_at,
+            updated_at=updated_doc.updated_at,
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        )
+        
+    except Exception as e:
+        print(f"Error toggling vector status: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/{document_id}/vectorize", tags=["documents"],
           summary="تبدیل و ذخیره سند در پایگاه داده برداری",
           description="این اندپوینت HTML را به Markdown تبدیل کرده و در پایگاه داده برداری ذخیره می‌کند")
