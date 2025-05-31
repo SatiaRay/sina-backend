@@ -61,6 +61,7 @@ redis_con = Redis(host="192.168.171.6") # Ensure this is accessible
 class CrawlRequest(BaseModel):
     url: HttpUrl
     recursive: bool = False
+    store_in_vector: bool = False
 
 class DocumentInfo(BaseModel):
     id: str
@@ -81,12 +82,14 @@ async def crawl_url(request: CrawlRequest):
     
     - **url**: آدرس URL برای خزش
     - **recursive**: آیا خزش به صورت بازگشتی انجام شود (پیش‌فرض: False)
+    - **store_in_vector**: آیا محتوا در پایگاه داده برداری ذخیره شود (پیش‌فرض: False)
     
     **نمونه درخواست:**
     ```json
     {
       "url": "https://www.satia.co/about",
-      "recursive": true
+      "recursive": true,
+      "store_in_vector": true
     }
     ```
     
@@ -112,7 +115,7 @@ async def crawl_url(request: CrawlRequest):
         redis_con = Redis(host=os.getenv('REDIS_HOST'))
         q = Queue(connection=redis_con)
         job_id = str(uuid.uuid4())
-        q.enqueue(crawl_task, request.url, request.recursive, job_id = job_id)
+        q.enqueue(crawl_task, request.url, request.recursive, request.store_in_vector, job_id = job_id)
 
         # Prepare response
         response = CrawlResponse(
@@ -138,7 +141,7 @@ async def crawl_url(request: CrawlRequest):
             }
         )
 
-def crawl_task(url: str, recursive: bool = False):
+def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False):
     try:
         from database.models import SessionLocal
         from rq import get_current_job
@@ -156,7 +159,7 @@ def crawl_task(url: str, recursive: bool = False):
         db = SessionLocal()
 
         # Start crawling and get document IDs
-        doc_ids = crawl(str(url), recursive=recursive, db=db)
+        doc_ids = crawl(str(url), recursive=recursive, store_in_vector=store_in_vector, db=db)
 
         # Update progress metadata
         job.meta['progress'] = f"Crawl done. Saving data ..."

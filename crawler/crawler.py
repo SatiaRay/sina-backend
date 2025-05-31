@@ -8,11 +8,14 @@ from datetime import datetime
 import re
 from difflib import SequenceMatcher
 import hashlib
+import asyncio
 
 from sqlalchemy.orm import Session
 from database.models import Document, CrawledDomain
 from database.repository import DocumentRepository, CrawledDomainRepository
 from database.models import SessionLocal
+from models.html_to_markdown_agent import HTMLToMarkdownAgent
+from database.vector_store import VectorStore
 
 # Create logs directory if it doesn't exist
 log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
@@ -68,21 +71,30 @@ def clean_domain(url: str) -> str:
         logging.error(f"Error cleaning domain: {str(e)}")
         return url
 
-def crawl(url, recursive=False, db: Session = None):
+def crawl(url, recursive=False, store_in_vector=False, db: Session = None):
     """
     Crawl a URL and optionally its sub-URLs recursively.
     
     Args:
         url (str): The URL to crawl
         recursive (bool): Whether to crawl sub-URLs recursively
+        store_in_vector (bool): Whether to store content in vector store
+        db (Session): Database session
     
     Returns:
-        None
+        List of document IDs
     """
     # Initialize database session
     db = db or SessionLocal()
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
+    
+    # Initialize HTML to Markdown agent and vector store if needed
+    html_to_markdown_agent = None
+    vector_store = None
+    if store_in_vector:
+        html_to_markdown_agent = HTMLToMarkdownAgent()
+        vector_store = VectorStore()
     
     try:
         # Clean the input URL
@@ -159,6 +171,12 @@ def crawl(url, recursive=False, db: Session = None):
                 # Get title and content
                 title = str(soup.title.string) if soup.title else "Untitled"
                 html_content = str(soup)
+                
+                # Convert HTML to Markdown if needed
+                markdown_content = None
+                if store_in_vector and html_to_markdown_agent:
+                    markdown_content = asyncio.run(html_to_markdown_agent.convert(html_content))
+                
                 text_content = soup.get_text(separator=' ', strip=True)
                 
                 if not text_content:
@@ -170,7 +188,7 @@ def crawl(url, recursive=False, db: Session = None):
                 document_data = {
                     'title': title,
                     'html': html_content,
-                    'markdown': text_content,
+                    'markdown': markdown_content or text_content,
                     'uri': parsed_url.path or '/',
                     'domain_id': domain_obj.id
                 }
@@ -191,6 +209,20 @@ def crawl(url, recursive=False, db: Session = None):
                         docs.append(new_doc.id)
                         db.commit()
                         print(f"Created new document: {document_data['uri']}")
+                        
+                    # Store in vector store if needed
+                    if store_in_vector and vector_store and markdown_content:
+                        vector_store.add_documents([{
+                            'text': markdown_content,
+                            'metadata': {
+                                'source': current_url,
+                                'title': title,
+                                'domain': domain,
+                                'curation_status': 'pending',
+                                'date_added': datetime.now().isoformat()
+                            }
+                        }])
+                        
                 except Exception as e:
                     print(f"Database error for {current_url}: {str(e)}")
                     db.rollback()
