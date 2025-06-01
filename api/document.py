@@ -408,36 +408,6 @@ def get_document_by_uri(uri: str, db: Session = Depends(get_db)):
         domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
     )
 
-# Search documents by content
-@router.get("/search/content", response_model=List[DocumentResponse])
-def search_documents_by_content(
-    query: str = Query(..., description="Search query"),
-    domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
-    db: Session = Depends(get_db)
-):
-    document_repo = DocumentRepository(db)
-    domain_repo = CrawledDomainRepository(db)
-    
-    documents = document_repo.search_by_content(query)
-    if domain_id:
-        documents = [doc for doc in documents if doc.domain_id == domain_id]
-    
-    response = []
-    for doc in documents:
-        domain = domain_repo.get(doc.domain_id)
-        response.append(DocumentResponse(
-            id=doc.id,
-            title=doc.title,
-            html=doc.html,
-            markdown=doc.markdown,
-            uri=doc.uri,
-            domain_id=doc.domain_id,
-            created_at=doc.created_at,
-            updated_at=doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
-        ))
-    return response
-
 # Search documents by title
 @router.get("/search/title", response_model=List[DocumentResponse])
 def search_documents_by_title(
@@ -499,6 +469,7 @@ def get_document_by_vector_id(vector_id: str, db: Session = Depends(get_db)):
         html=document.html,
         markdown=document.markdown,
         uri=document.uri,
+        vector_id=vector_id,
         domain_id=document.domain_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
