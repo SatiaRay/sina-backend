@@ -44,6 +44,12 @@ class WizardRepository(Repository[Wizard]):
     def __init__(self, db: Session):
         super().__init__(db, Wizard)
 
+    def get_all(self, enable_only: bool = False) -> List[Wizard]:
+        query = self.db.query(Wizard)
+        if enable_only:
+            query = query.filter(Wizard.enabled == True)
+        return query.all()
+
     def get(self, id: int, enable_only: bool = False) -> Optional[T]:
         query = self.db.query(self.model_class).filter(self.model_class.id == id)
         
