@@ -226,6 +226,7 @@ async def websocket_job_status(websocket: WebSocket, job_id: str):
             doc_ids = job.meta.get('doc_ids', None)
             if doc_ids:
                 await websocket.send_json({'event': 'docs_created', 'doc_ids' : doc_ids})
+                break
 
             progress = job.meta.get('progress', 'Queued')            
             if progress is not last_progress:
