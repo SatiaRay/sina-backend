@@ -12,6 +12,8 @@ class WorkflowNode(BaseModel):
     id: str
     label: str
     type: str
+    position: Optional[dict] = None
+    conditions: Optional[list] = None
     next: Optional[str] = None
     description: Optional[str] = None
 
@@ -63,6 +65,7 @@ def get_workflow(workflow_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{workflow_id}", response_model=WorkflowResponse)
 def update_workflow(workflow_id: int, workflow: WorkflowUpdate, db: Session = Depends(get_db)):
+    print(workflow)
     repo = WorkflowRepository(db)
     updated_workflow = repo.update(workflow_id, workflow.model_dump())
     if updated_workflow is None:

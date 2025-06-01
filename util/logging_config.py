@@ -16,12 +16,18 @@ def setup_logger(name, log_file, level=logging.INFO):
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # File handler with rotation
+    # Create log directory if it doesn't exist
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+    
+    # File handler with rotation - using delay=True for Windows compatibility
     file_handler = RotatingFileHandler(
         log_file,
         maxBytes=10*1024*1024,  # 10MB
         backupCount=5,
-        encoding='utf-8'
+        encoding='utf-8',
+        delay=True  # Delay file creation until first write
     )
     file_handler.setFormatter(formatter)
     
@@ -32,6 +38,10 @@ def setup_logger(name, log_file, level=logging.INFO):
     # Setup logger
     logger = logging.getLogger(name)
     logger.setLevel(level)
+    
+    # Remove any existing handlers to avoid duplicates
+    logger.handlers = []
+    
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
     
