@@ -175,6 +175,7 @@ def get_manual_documents(
             markdown=doc.markdown,
             uri=doc.uri,
             domain_id=doc.domain_id,
+            vector_id=doc.vector_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
             domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
@@ -320,17 +321,18 @@ def list_documents(
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
     
+    # Base query with domain_id not null filter
+    base_query = document_repo.db.query(document_repo.model_class).filter(
+        document_repo.model_class.domain_id.isnot(None)
+    )
+    
     # Get documents based on filters with pagination
     if domain_id:
-        query = document_repo.db.query(document_repo.model_class).filter(
-            document_repo.model_class.domain_id == domain_id
-        )
+        query = base_query.filter(document_repo.model_class.domain_id == domain_id)
     elif uri:
-        query = document_repo.db.query(document_repo.model_class).filter(
-            document_repo.model_class.uri == uri
-        )
+        query = base_query.filter(document_repo.model_class.uri == uri)
     else:
-        query = document_repo.db.query(document_repo.model_class)
+        query = base_query
     
     # Apply pagination
     documents = query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(limit).all()
@@ -345,7 +347,7 @@ def list_documents(
             uri=doc.uri,
             domain_id=doc.domain_id,
             domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
-            vector_id =doc.vector_id,
+            vector_id=doc.vector_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,            
         ))
