@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database.models import Base, Document, CrawledDomain
-from api.document import router, DocumentCreate, DocumentUpdate, VectorizeDocumentRequest
+from api.document import router, DocumentCreate, DocumentUpdate, VectorizeDocumentRequest, vectorize_task
 from fastapi import FastAPI
 from database.models import get_db
 from unittest.mock import patch, MagicMock
@@ -14,6 +14,7 @@ from rq import Queue
 from redis import Redis
 import uuid
 from fastapi import WebSocketDisconnect
+from fastapi import HTTPException
 
 # Create test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -298,3 +299,126 @@ def test_search_documents_by_title(db_session, test_document):
     data = response.json()
     assert len(data) > 0
     assert data[0]["id"] == test_document.id 
+
+@pytest.mark.asyncio
+async def test_vectorize_task_success(db_session, test_document, mock_job):
+    # Setup test data
+    request = VectorizeDocumentRequest(
+        html="<html>Test Vector Content</html>",
+        metadata={"source": "test", "title": "Test Vector"}
+    )
+    
+    # Mock dependencies
+    with patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.document.html_to_markdown_agent.convert', return_value="# Test Vector Content"), \
+         patch('api.document.store_vector_document', return_value="vec_123"), \
+         patch('api.document.get_vector_document', return_value={"vector_id": "vec_123", "text": "# Test Vector Content"}), \
+         patch('api.document.DocumentRepository') as mock_repo:
+        
+        # Setup mock repository
+        mock_repo.return_value.get.return_value = test_document
+        
+        # Define update behavior to actually update the test document
+        def update_document(document_id, update_data):
+            for key, value in update_data.items():
+                setattr(test_document, key, value)
+            db_session.commit()
+            return test_document
+        
+        mock_repo.return_value.update.side_effect = update_document
+        
+        # Execute task
+        await vectorize_task(test_document.id, request)
+        
+        # Verify job progress updates
+        assert mock_job.meta['progress']['type'] == 'info'
+        assert mock_job.meta['progress']['msg'] == "Finished"
+        assert mock_job.save_meta.call_count >= 5  # At least 5 progress updates
+        
+        # Verify document update was called with correct data
+        mock_repo.return_value.update.assert_called_once_with(
+            test_document.id,
+            {
+                "vector_id": "vec_123",
+                "html": request.html,
+                "markdown": "# Test Vector Content",
+                "uri": test_document.uri
+            }
+        )
+        
+        # Verify document was updated in the database
+        db_session.refresh(test_document)
+        assert test_document.vector_id == "vec_123"
+        assert test_document.html == request.html
+        assert test_document.markdown == "# Test Vector Content"
+
+@pytest.mark.asyncio
+async def test_vectorize_task_document_not_found(db_session, mock_job):
+    # Setup test data
+    request = VectorizeDocumentRequest(
+        html="<html>Test Vector Content</html>",
+        metadata={"source": "test", "title": "Test Vector"}
+    )
+    
+    # Mock dependencies
+    with patch('rq.get_current_job', return_value=mock_job):
+        # Execute task with non-existent document ID
+        with pytest.raises(HTTPException) as exc_info:
+            await vectorize_task(999, request)
+        
+        # Verify error
+        assert exc_info.value.status_code == 500
+        assert "404: Document not found" in str(exc_info.value.detail)
+        
+        # Verify error was captured in job metadata
+        assert mock_job.meta['progress']['type'] == 'error'
+        assert "404: Document not found" in mock_job.meta['progress']['msg']
+
+@pytest.mark.asyncio
+async def test_vectorize_task_markdown_conversion_failed(db_session, test_document, mock_job):
+    # Setup test data
+    request = VectorizeDocumentRequest(
+        html="<html>Test Vector Content</html>",
+        metadata={"source": "test", "title": "Test Vector"}
+    )
+    
+    # Mock dependencies
+    with patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.document.html_to_markdown_agent.convert', return_value=None):
+        
+        # Execute task
+        with pytest.raises(HTTPException) as exc_info:
+            await vectorize_task(test_document.id, request)
+        
+        # Verify error
+        assert exc_info.value.status_code == 500
+        assert "Failed to convert HTML to Markdown" in str(exc_info.value.detail)
+        
+        # Verify error was captured in job metadata
+        assert mock_job.meta['progress']['type'] == 'error'
+        assert "Failed to convert HTML to Markdown" in mock_job.meta['progress']['msg']
+
+@pytest.mark.asyncio
+async def test_vectorize_task_vector_store_error(db_session, test_document, mock_job):
+    # Setup test data
+    request = VectorizeDocumentRequest(
+        html="<html>Test Vector Content</html>",
+        metadata={"source": "test", "title": "Test Vector"}
+    )
+    
+    # Mock dependencies
+    with patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.document.html_to_markdown_agent.convert', return_value="# Test Vector Content"), \
+         patch('api.document.store_vector_document', side_effect=Exception("Vector store error")):
+        
+        # Execute task
+        with pytest.raises(HTTPException) as exc_info:
+            await vectorize_task(test_document.id, request)
+        
+        # Verify error
+        assert exc_info.value.status_code == 500
+        assert "Vector store error" in str(exc_info.value.detail)
+        
+        # Verify error was captured in job metadata
+        assert mock_job.meta['progress']['type'] == 'error'
+        assert "Vector store error" in mock_job.meta['progress']['msg']

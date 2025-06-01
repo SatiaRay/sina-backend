@@ -724,7 +724,6 @@ async def store_vector_document(vector_doc: Dict[str, Any]) -> str:
             result = response.json()
             return result["document_ids"][0]
     except Exception as e:
-        log_error(error_logger, e, f"Failed to store vector document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 async def get_vector_document(vector_id: str) -> Dict[str, Any]:
@@ -745,7 +744,6 @@ async def get_vector_document(vector_id: str) -> Dict[str, Any]:
             response.raise_for_status()
             return response.json()
     except Exception as e:
-        log_error(error_logger, e, f"Failed to get vector document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 document_websocket_router = APIRouter()
