@@ -115,7 +115,7 @@ class Document(BaseModel):
 class Chat(BaseModel):
     __tablename__ = 'chats'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    session_id = Column(String(255), primary_key=True)
+    session_id = Column(String(255), unique=True, nullable=False)
     status = Column(String(20), default='active')
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

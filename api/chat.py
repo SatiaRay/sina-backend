@@ -50,13 +50,19 @@ async def get_chat_history(
     ]
     ```
     """
+    # First find the chat by session_id
+    chat = db.query(Chat).filter(Chat.session_id == session_id).first()
+    
+    if not chat:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "message": "تاریخچه چت یافت نشد",
+                "session_id": session_id
+            }
+        )
+    
     try:
-        # First find the chat by session_id
-        chat = db.query(Chat).filter(Chat.session_id == session_id).first()
-        
-        if not chat:
-            return []
-        
         # Then get the chat history for this chat with offset
         history = db.query(ChatHistory)\
             .filter(ChatHistory.chat_id == chat.id)\
@@ -88,6 +94,8 @@ async def get_chat_history(
             for msg in history
         ]
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
