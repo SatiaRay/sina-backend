@@ -151,7 +151,7 @@ class ChatAgentRag(ChatAgentRagInterface):
             log_error(error_logger, e, error_context)
             raise 
 
-    async def generate_response_socket(self, question: str, websocket: WebSocket, history: Optional[List[Dict[str, str]]] = None):
+    async def generate_response_socket(self, question: str, websocket: WebSocket, history: Optional[List[Dict[str, str]]] = None, workflows: Optional[str] = None):
         try:
             main_logger.info(f"Generating response for question: {question}")
             
@@ -186,6 +186,8 @@ class ChatAgentRag(ChatAgentRagInterface):
             # Instructions
 
             {SATIA_INSTRUCTIONS}
+            
+            {f'# Workflows\n\n{workflows}\n' if workflows else ''}
             
             Context Information:
             {context}

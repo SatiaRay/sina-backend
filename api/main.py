@@ -43,6 +43,7 @@ from .chat import router as chat_router
 from .crawl import router as crawl_router
 from .vector import router as vector_router
 from .workflow import router as workflow_router
+from .ai import router as ai_router
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.repository import DocumentRepository
 from database.models import get_db
@@ -126,6 +127,7 @@ app.include_router(crawl_router)
 app.include_router(chat_router)
 app.include_router(vector_router)
 app.include_router(workflow_router)
+app.include_router(ai_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
@@ -226,80 +228,8 @@ async def root():
         "status": "running"
     }
 
-@app.post("/ask", response_model=Dict[str, Any], tags=["Chat"],
-      summary="پرسش از چت‌بات (نسخه مبتنی بر GPT-4)",
-      description="این اندپوینت از GPT-4 برای پاسخگویی استفاده می‌کند")
-async def ask_question_agent(request: Request, question_request: QuestionRequest = Body(...)):
-    """
-    Process a question using the GPT-4 based agent system
-    """
-    try:
-        api_logger.info(f"Processing question with agent: {question_request.question}")
-        
-        response = await agent_rag.generate_response(question_request.question, sources=question_request.attach_resources)
-        
-        api_logger.info("Successfully generated response with agent")
-        return JSONResponse(content=response, media_type="application/json; charset=utf-8")
-        
-    except Exception as e:
-        error_context = f"Question: {question_request.question}"
-        log_error(error_logger, e, error_context)
-        
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Failed to generate response",
-                "error": str(e)
-            }
-        )
     
-@app.websocket("/ws/ask")
-async def ask_question_agent_socket(websocket: WebSocket, session_id: str = Query(..., description="Session ID is required")):
-    await websocket.accept()
 
-    try:
-        while True:
-            data = await websocket.receive_text()
-            question_data = json.loads(data)
-            question = question_data.get("question", "")
-
-            print(question)
-
-            if not question:
-                await websocket.send_text("Error: No question provided.")
-                continue
-
-            api_logger.info(f"Processing question with agent: {question}")
-
-            await agent_rag.generate_response_socket(question, websocket=websocket)
-
-    except WebSocketDisconnect:
-        api_logger.info("WebSocket disconnected")
-    except Exception as e:
-        log_error(error_logger, e, f"Failed while processing: {str(e)}")
-        await websocket.send_text(f"Error: {str(e)}")
-    finally:
-        await websocket.close()
-
-@app.post("/askme", response_model=QuestionResponse, tags=["Chat"],
-          summary="پرسش از چت‌بات (مترادف ask)",
-          description="این اندپوینت مشابه اندپوینت ask است")
-async def askme_question(
-    request: QuestionRequest = Body(
-        ...,
-        example={"question": "ساتیا چه قابلیت‌هایی دارد؟", 'resources' : 0}
-    )
-):
-    """
-    پرسش از چت‌بات و دریافت پاسخ (مترادف ask)
-    
-    - **question**: سوال کاربر
-    """
-    try:
-        response = rag_system.generate_response(request.question)
-        return JSONResponse(content=response, media_type="application/json; charset=utf-8")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/update_knowledge", tags=["Knowledge Management"],
             summary="به‌روزرسانی دانش",

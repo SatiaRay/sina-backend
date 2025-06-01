@@ -38,6 +38,7 @@ class DocumentBase(BaseModel):
     markdown: str
     uri: Optional[str] = None
     domain_id: Optional[int] = None
+    vector_id: Optional[str] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -69,6 +70,29 @@ class DocumentResponse(DocumentBase):
     created_at: datetime
     updated_at: datetime
     domain: Optional[DomainInfo] = None
+
+    class Config:
+        from_attributes = True
+
+class DocumentListResponse(BaseModel):
+    id: int
+    title: str
+    uri: Optional[str] = None
+    domain_id: Optional[int] = None
+    domain: Optional[DomainInfo] = None
+    vector_id: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class PaginatedDocumentListResponse(BaseModel):
+    items: List[DocumentListResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
 
     class Config:
         from_attributes = True
@@ -161,6 +185,7 @@ def get_manual_documents(
             markdown=doc.markdown,
             uri=doc.uri,
             domain_id=doc.domain_id,
+            vector_id=doc.vector_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
             domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
@@ -186,6 +211,7 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
         markdown=document.markdown,
         uri=document.uri,
         domain_id=document.domain_id,
+        vector_id = document.vector_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
         domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
@@ -284,47 +310,70 @@ def delete_document(document_id: int, db: Session = Depends(get_db)):
     return {"message": "Document deleted successfully"}
 
 # List all documents
-@router.get("", response_model=List[DocumentResponse])
+@router.get("", response_model=PaginatedDocumentListResponse)
 def list_documents_no_slash(
     domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
     uri: Optional[str] = Query(None, description="Filter by URI"),
+    page: int = Query(1, description="Page number (starting from 1)", ge=1),
+    size: int = Query(10, description="Number of documents per page", ge=1, le=100),
     db: Session = Depends(get_db)
 ):
-    return list_documents(domain_id, uri, db)
+    return list_documents(domain_id, uri, page, size, db)
 
-@router.get("/", response_model=List[DocumentResponse])
+@router.get("/", response_model=PaginatedDocumentListResponse)
 def list_documents(
     domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
     uri: Optional[str] = Query(None, description="Filter by URI"),
+    page: int = Query(1, description="Page number (starting from 1)", ge=1),
+    size: int = Query(10, description="Number of documents per page", ge=1, le=100),
     db: Session = Depends(get_db)
 ):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
     
-    # Get documents based on filters
+    # Base query with domain_id not null filter
+    base_query = document_repo.db.query(document_repo.model_class).filter(
+        document_repo.model_class.domain_id.isnot(None)
+    )
+    
+    # Get documents based on filters with pagination
     if domain_id:
-        documents = document_repo.get_by_domain(domain_id)
+        query = base_query.filter(document_repo.model_class.domain_id == domain_id)
     elif uri:
-        documents = document_repo.get_by_uri(uri)
+        query = base_query.filter(document_repo.model_class.uri == uri)
     else:
-        documents = document_repo.get_all()
+        query = base_query
+    
+    # Calculate total count and pages
+    total = query.count()
+    pages = (total + size - 1) // size  # Ceiling division
+    
+    # Apply pagination
+    offset = (page - 1) * size
+    documents = query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(size).all()
     
     # Create response with domain info
-    response = []
+    items = []
     for doc in documents:
         domain = domain_repo.get(doc.domain_id)
-        response.append(DocumentResponse(
+        items.append(DocumentListResponse(
             id=doc.id,
             title=doc.title,
-            html=doc.html,
-            markdown=doc.markdown,
             uri=doc.uri,
             domain_id=doc.domain_id,
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
+            vector_id=doc.vector_id,
             created_at=doc.created_at,
-            updated_at=doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+            updated_at=doc.updated_at,            
         ))
-    return response
+    
+    return PaginatedDocumentListResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=size,
+        pages=pages
+    )
 
 # Get document by URI
 @router.get("/uri/{uri}", response_model=DocumentResponse)
@@ -446,6 +495,81 @@ def get_document_by_vector_id(vector_id: str, db: Session = Depends(get_db)):
         updated_at=document.updated_at,
         domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
     )
+
+@router.post("/{document_id}/toggle-vector", response_model=DocumentResponse,
+          summary="تغییر وضعیت برداری سند",
+          description="این اندپوینت وضعیت برداری سند را تغییر می‌دهد. اگر سند برداری شده باشد، آن را حذف می‌کند و اگر برداری نشده باشد، آن را برداری می‌کند.")
+async def toggle_document_vector_status(
+    document_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Toggle vector status of a document
+    
+    - If document has vector_id: Delete vector and set vector_id to null
+    - If document has no vector_id: Create vector and set vector_id
+    """
+    document_repo = DocumentRepository(db)
+    domain_repo = CrawledDomainRepository(db)
+    
+    # Get document
+    document = document_repo.get(document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    try:
+        if document.vector_id:
+            # Document is vectorized, so devectorize it
+            vector_store.delete_vector(document.vector_id)
+            
+            # Update document to remove vector_id
+            update_data = {"vector_id": None}
+            updated_doc = document_repo.update(document_id, update_data)
+            
+        else:
+            # Document is not vectorized, so vectorize it
+            # Prepare metadata
+            metadata = {
+                "document_id": str(document_id),
+                "title": document.title,
+                "uri": document.uri or "",
+                "domain_id": str(document.domain_id) if document.domain_id else "0",
+                "created_at": datetime.now().isoformat()
+            }
+            
+            # Create document for vector store
+            vector_doc = {
+                "text": document.markdown,
+                "metadata": metadata
+            }
+            
+            # Add to vector store
+            vector_id = vector_store.add_documents([vector_doc])[0]
+            
+            # Update document with vector_id
+            update_data = {"vector_id": vector_id}
+            updated_doc = document_repo.update(document_id, update_data)
+        
+        # Get domain info for response
+        domain = domain_repo.get(updated_doc.domain_id)
+        
+        return DocumentResponse(
+            id=updated_doc.id,
+            title=updated_doc.title,
+            html=updated_doc.html,
+            markdown=updated_doc.markdown,
+            uri=updated_doc.uri,
+            domain_id=updated_doc.domain_id,
+            vector_id=updated_doc.vector_id,
+            created_at=updated_doc.created_at,
+            updated_at=updated_doc.updated_at,
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        )
+        
+    except Exception as e:
+        print(f"Error toggling vector status: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{document_id}/vectorize", tags=["documents"],
           summary="تبدیل و ذخیره سند در پایگاه داده برداری",
