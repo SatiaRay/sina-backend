@@ -181,22 +181,20 @@ class ChatAgentRag(ChatAgentRagInterface):
                     history_parts.append(f"{role.capitalize()}: {content}")
                 history_text = "\n\nPrevious Conversation:\n" + "\n".join(history_parts)
             
-            # Combine question, context, and history
-            full_input = f"""
-            # Instructions
+            workflows_text = f"# Workflows\n\n{workflows}\n" if workflows else ""
+
+            full_input = f"""# Instructions
 
             {SATIA_INSTRUCTIONS}
-            
-            {f'# Workflows\n\n{workflows}\n' if workflows else ''}
-            
+
+            {workflows_text}
+
             Context Information:
             {context}
-            
-            {history_text}
-            
-            User Question: {question}"""
 
-            print(full_input)
+            {history_text}
+
+            User Question: {question}"""
 
             # In your async function:
             stream = await to_thread.run_sync(self.stream_openai_response, full_input)

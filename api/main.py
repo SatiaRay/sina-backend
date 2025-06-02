@@ -27,6 +27,23 @@ from util.database import get_db_connection
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
 from util.event_bus import event_bus, VectorStoreEvent
+from .models import (DataSource, DataSourceListResponse, Chunk, EditChunkRequest, 
+PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest,CurationStatus, CurationStats, VectorSearchRequest,ChatRequest, AddKnowledgeRequest,StoreVectorRequest)
+from models.html_to_markdown_agent import HTMLToMarkdownAgent
+from database.repository import DocumentRepository
+from database.models import get_db
+import uuid
+
+# Routes
+from api.about import router as about_router
+from .wizard import router as wizard_router
+from .document import router as document_router, document_websocket_router
+from .domain import router as domain_router
+from .chat import router as chat_router
+from .crawl import router as crawl_router
+from .vector import router as vector_router
+from .workflow import router as workflow_router
+from .ai import router as ai_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -114,6 +131,7 @@ app.include_router(chat_router)
 app.include_router(vector_router)
 app.include_router(workflow_router)
 app.include_router(ai_router)
+app.include_router(about_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
