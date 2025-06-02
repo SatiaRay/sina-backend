@@ -16,6 +16,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         self.db = next(get_db())  # Get the actual session from generator
         self.chat_repository = ChatRepository(self.db)
         self.chat_history_repository = ChatHistoryRepository(self.db)
+        self.workflow_repository = WorkflowRepository(self.db)  # Initialize workflow repository
         self.agent = ChatAgentRag()
 
     async def generate_response(self, question: str, sources=False, request: Optional[Request] = None) -> Dict[str, Any]:
@@ -57,7 +58,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 for msg in chat_history
             ]
 
-            workflows = WorkflowRepository(self.db).get_active_workflows_schemas()
+            workflows = self.workflow_repository.get_active_workflows_schemas()
 
             # Generate response with history
             response = await self.agent.generate_response_socket(question, websocket, history=formatted_history, workflows=workflows)

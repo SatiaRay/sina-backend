@@ -79,6 +79,7 @@ async def test_generate_response_socket_success(
     # Mock the internal methods
     chat_agent._ChatAgentRagProxy__get_chat = Mock(return_value=mock_chat)
     chat_agent._ChatAgentRagProxy__update_chat_history = Mock()
+    mock_chat_history_repository.get_chat_history_by_chat_id.return_value = mock_chat_history
     
     # Act
     response = await chat_agent.generate_response_socket(question, mock_websocket)
@@ -92,15 +93,18 @@ async def test_generate_response_socket_success(
     # 2. Verify active workflows were fetched and passed to generate_response_socket
     mock_workflow_repository.get_active_workflows_schemas.assert_called_once()
     mock_agent.generate_response_socket.assert_called_once()
-    call_args = mock_agent.generate_response_socket.call_args[1]
-    assert call_args["question"] == question
-    assert call_args["websocket"] == mock_websocket
-    assert call_args["workflows"] == mock_workflows
-    assert len(call_args["history"]) == 2  # Verify history was passed
+    call_args = mock_agent.generate_response_socket.call_args
+    assert call_args.args[0] == question  # First positional argument
+    assert call_args.args[1] == mock_websocket  # Second positional argument
+    assert call_args.kwargs["history"] == [
+        {"role": msg.role, "body": msg.body}
+        for msg in mock_chat_history
+    ]
+    assert call_args.kwargs["workflows"] == mock_workflows
     
     # 3. Verify chat history was updated with AI response
     chat_agent._ChatAgentRagProxy__update_chat_history.assert_any_call(
-        expected_response, "assistant", websocket=mock_websocket
+        expected_response, role="assistant", websocket=mock_websocket
     )
     
     # 4. Verify the response was returned
@@ -127,7 +131,7 @@ async def test_generate_response_socket_error(
     # Assert
     # Verify error was handled and chat history was updated with error message
     chat_agent._ChatAgentRagProxy__update_chat_history.assert_any_call(
-        f"Error: {error_message}", "assistant", websocket=mock_websocket
+        f"Error: {error_message}", role="assistant", websocket=mock_websocket
     )
     
     # Verify error response was returned

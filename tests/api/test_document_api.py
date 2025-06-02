@@ -384,7 +384,11 @@ async def test_vectorize_task_markdown_conversion_failed(db_session, test_docume
     
     # Mock dependencies
     with patch('rq.get_current_job', return_value=mock_job), \
-         patch('api.document.html_to_markdown_agent.convert', return_value=None):
+         patch('api.document.html_to_markdown_agent.convert', return_value=None), \
+         patch('api.document.DocumentRepository') as mock_repo:
+        
+        # Setup mock repository
+        mock_repo.return_value.get.return_value = test_document
         
         # Execute task
         with pytest.raises(HTTPException) as exc_info:
@@ -409,7 +413,11 @@ async def test_vectorize_task_vector_store_error(db_session, test_document, mock
     # Mock dependencies
     with patch('rq.get_current_job', return_value=mock_job), \
          patch('api.document.html_to_markdown_agent.convert', return_value="# Test Vector Content"), \
-         patch('api.document.store_vector_document', side_effect=Exception("Vector store error")):
+         patch('api.document.store_vector_document', side_effect=Exception("Vector store error")), \
+         patch('api.document.DocumentRepository') as mock_repo:
+        
+        # Setup mock repository
+        mock_repo.return_value.get.return_value = test_document
         
         # Execute task
         with pytest.raises(HTTPException) as exc_info:
