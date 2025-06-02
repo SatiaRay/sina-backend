@@ -48,6 +48,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             chat_history = self.chat_history_repository.get_chat_history_by_chat_id(chat_id=chat.id, limit=50)
 
             # Format messages for the agent
+            
             formatted_history = [
                 {
                     "role": msg.role,
@@ -56,7 +57,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 for msg in chat_history
             ]
 
-            workflows = WorkflowRepository().get_active_workflows_schemas()
+            workflows = WorkflowRepository(self.db).get_active_workflows_schemas()
 
             # Generate response with history
             response = await self.agent.generate_response_socket(question, websocket, history=formatted_history, workflows=workflows)

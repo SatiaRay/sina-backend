@@ -19,34 +19,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv, find_dotenv
-# from models.rag import RAGSystem
-# from models.text_processor import TextProcessor
-from crawler.main import run_spider
-import uuid
-from .models import (DataSource, DataSourceListResponse, Chunk, EditChunkRequest, 
-                    PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest,
-                    CurationStatus, CurationStats, VectorSearchRequest,
-                    ChatRequest, 
-                    AddKnowledgeRequest,
-                    StoreVectorRequest)
+from provider.service_container import container, ServiceContainer
+from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from database.vector_store import VectorStore
+from database.repository import DocumentRepository
 from util.database import get_db_connection
-from api.models import (ChatRequest, 
-                      AddKnowledgeRequest)
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
-from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
-from .wizard import router as wizard_router
-from .document import router as document_router, document_websocket_router
-from .domain import router as domain_router
-from .chat import router as chat_router
-from .crawl import router as crawl_router
-from .vector import router as vector_router
-from .workflow import router as workflow_router
-from .ai import router as ai_router
-from models.html_to_markdown_agent import HTMLToMarkdownAgent
-from database.repository import DocumentRepository
-from database.models import get_db
 from util.event_bus import event_bus, VectorStoreEvent
 
 # Configure loggers
@@ -56,6 +35,30 @@ main_logger, error_logger, api_logger = configure_logging()
 print("Loading environment from:", find_dotenv())
 load_dotenv(override=True)
 
+# Set base path for service container
+ServiceContainer.set_base_path(str(root_dir))
+
+# Initialize service container bindings
+def init_service_container():
+    # Bind VectorStore as singleton
+    container.singleton('vector_store', VectorStore)
+    
+    # Bind ChatAgentRagProxy as singleton
+    container.singleton('chat_agent', ChatAgentRagProxy)
+    
+    # Bind DocumentRepository as singleton
+    container.singleton('document_repository', DocumentRepository)
+    
+    # Create and bind instances
+    vector_store = container.make('vector_store')
+    container.instance('vector_store', vector_store)
+    
+    chat_agent = container.make('chat_agent')
+    container.instance('chat_agent', chat_agent)
+
+# Initialize the service container
+init_service_container()
+
 # Debug: Print database configuration at startup
 print("Environment Variables at Startup:")
 print(f"Current Directory: {os.getcwd()}")
@@ -63,43 +66,26 @@ print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
 print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
 
 try:
-    # print("Initializing AgentRAGSystem...")
-    # agent_rag = ChatAgentRagProxy()
-    # print("AgentRAGSystem initialized successfully")
-
     # Global vector store instance
-    vector_store = None
+    vector_store = container.make('vector_store')
 
     def get_vector_store():
         """Get or create VectorStore instance"""
-        global vector_store
-        if vector_store is None:
-            vector_store = VectorStore()
-        return vector_store
+        return container.make('vector_store')
 
     def refresh_vector_store(data=None):
         """Callback to refresh VectorStore instance"""
-        global vector_store
         print("Refreshing VectorStore instance...")
         vector_store = VectorStore()
+        container.instance('vector_store', vector_store)
         print("VectorStore instance refreshed successfully")
-
-    # def refresh_chat_agent_proxy(data=None):
-    #     """Callback to refresh ChatAgentRagProxy instance"""
-    #     global agent_rag
-    #     print("Refreshing ChatAgentRagProxy instance...")
-    #     agent_rag = ChatAgentRagProxy()
-    #     print("ChatAgentRagProxy instance refreshed successfully")
 
     # Subscribe to collection modification events
     event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_vector_store)
-    # event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_chat_agent_proxy)
 
 except Exception as e:
     print(f"Error during initialization: {str(e)}")
     raise
-
-
 
 # Create FastAPI app
 app = FastAPI(
