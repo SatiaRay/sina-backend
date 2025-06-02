@@ -4,7 +4,6 @@ import os
 from dotenv import load_dotenv
 from database.vector_store import VectorStore
 from models.agents.title_analyzer_agent import TitleAnalyzerAgent
-from models.text_processor import TextProcessor
 import logging
 from util.logging_config import configure_logging, log_error
 import asyncio
