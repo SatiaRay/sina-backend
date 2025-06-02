@@ -148,7 +148,8 @@ def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False)
         from rq import get_current_job
 
         job = get_current_job()
-        db = get_db()
+        # Create a new session directly instead of using the generator
+        db = SessionLocal()
 
         try:
             # Start crawling and get document IDs
