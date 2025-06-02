@@ -2,6 +2,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional, Type, TypeVar, Generic
 from datetime import datetime
 from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain
+from sqlalchemy.types import String
+from sqlalchemy import text
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -43,6 +45,12 @@ class Repository(Generic[T]):
 class WizardRepository(Repository[Wizard]):
     def __init__(self, db: Session):
         super().__init__(db, Wizard)
+
+    def get_all(self, enable_only: bool = False) -> List[Wizard]:
+        query = self.db.query(Wizard)
+        if enable_only:
+            query = query.filter(Wizard.enabled == True)
+        return query.all()
 
     def get(self, id: int, enable_only: bool = False) -> Optional[T]:
         query = self.db.query(self.model_class).filter(self.model_class.id == id)
@@ -150,9 +158,6 @@ class DocumentRepository(Repository[Document]):
 
     def get_by_domain(self, domain_id: int) -> List[Document]:
         return self.db.query(Document).filter(Document.domain_id == domain_id).all()
-
-    def search_by_content(self, query: str) -> List[Document]:
-        return self.db.query(Document).filter(Document.content.ilike(f"%{query}%")).all()
 
     def search_by_title(self, query: str) -> List[Document]:
         return self.db.query(Document).filter(Document.title.ilike(f"%{query}%")).all() 

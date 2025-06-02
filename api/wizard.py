@@ -81,7 +81,7 @@ def create_wizard_no_slash(wizard: WizardCreate, db: Session = Depends(get_db)):
 # Add a route for the root path without trailing slash
 @router.get("", response_model=List[WizardResponse])
 def list_wizards_no_slash(
-    enable_only: bool = Query(True, description="Only return enabled wizards"),
+    enable_only: bool = Query(False, description="Only return enabled wizards"),
     parent_id: Optional[int] = Query(None, description="Filter by parent ID"),
     db: Session = Depends(get_db)
 ):
@@ -90,21 +90,20 @@ def list_wizards_no_slash(
 # Original route with trailing slash
 @router.get("/", response_model=List[WizardResponse])
 def list_wizards(
-    enable_only: bool = Query(True, description="Only return enabled wizards"),
-    
+    enable_only: bool = Query(False, description="Only return enabled wizards"),
     parent_id: Optional[int] = Query(None, description="Filter by parent ID"),
     db: Session = Depends(get_db)
 ):
     wizard_repo = WizardRepository(db)
     if parent_id is not None:
         return wizard_repo.get_by_parent(parent_id, enable_only)
-    return wizard_repo.get_all()
+    return wizard_repo.get_all(enable_only=enable_only)
 
 # Get a wizard by ID - This must come AFTER all specific paths
 @router.get("/{wizard_id}", response_model=WizardResponse)
 async def get_wizard(
     wizard_id: int,
-    enable_only: bool = Query(True, description="Only return enabled wizards"),
+    enable_only: bool = Query(False, description="Only return enabled wizards"),
     db: Session = Depends(get_db)
 ):
     """

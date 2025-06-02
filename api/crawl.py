@@ -51,7 +51,8 @@ def clean_domain(url: str) -> str:
         return cleaned
     except Exception as e:
         logger.error(f"Error cleaning domain: {str(e)}")
-        return url
+        # Return original URL if cleaning fails
+        return url if isinstance(url, str) else str(url)
 
 router = APIRouter()
 
@@ -61,6 +62,7 @@ redis_con = Redis(host="192.168.171.6") # Ensure this is accessible
 class CrawlRequest(BaseModel):
     url: HttpUrl
     recursive: bool = False
+    store_in_vector: bool = False
 
 class DocumentInfo(BaseModel):
     id: str
@@ -81,12 +83,14 @@ async def crawl_url(request: CrawlRequest):
     
     - **url**: آدرس URL برای خزش
     - **recursive**: آیا خزش به صورت بازگشتی انجام شود (پیش‌فرض: False)
+    - **store_in_vector**: آیا محتوا در پایگاه داده برداری ذخیره شود (پیش‌فرض: False)
     
     **نمونه درخواست:**
     ```json
     {
       "url": "https://www.satia.co/about",
-      "recursive": true
+      "recursive": true,
+      "store_in_vector": true
     }
     ```
     
@@ -112,7 +116,7 @@ async def crawl_url(request: CrawlRequest):
         redis_con = Redis(host=os.getenv('REDIS_HOST'))
         q = Queue(connection=redis_con)
         job_id = str(uuid.uuid4())
-        q.enqueue(crawl_task, request.url, request.recursive, job_id = job_id)
+        q.enqueue(crawl_task, request.url, request.recursive, request.store_in_vector, job_id = job_id)
 
         # Prepare response
         response = CrawlResponse(
@@ -138,75 +142,84 @@ async def crawl_url(request: CrawlRequest):
             }
         )
 
-def crawl_task(url: str, recursive: bool = False):
+def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False):
     try:
         from database.models import SessionLocal
         from rq import get_current_job
 
         job = get_current_job()
+        db = get_db()
 
-        if job is None:
-            # fallback or error handling
-            pass
+        try:
+            # Start crawling and get document IDs
+            doc_ids = crawl(str(url), recursive=recursive, store_in_vector=store_in_vector, db=db)
 
-        # Update progress metadata
-        job.meta['progress'] = f"Start crawling ..."
-        job.save_meta()
+            if job is not None:
+                # Update progress metadata
+                job.meta['progress'] = f"Crawl done. Saving data ..."
+                job.save_meta()
 
-        db = SessionLocal()
+                # Get document details
+                doc_details = []
+                for doc_id in doc_ids:
+                    # Get document from database
+                    doc = db.query(Document).filter(Document.id == doc_id).first()
+                    if doc:
+                        try:
+                            # Clean the URI
+                            cleaned_uri = clean_domain(doc.uri)
+                            if not cleaned_uri:
+                                cleaned_uri = str(doc.uri)  # Fallback to original URI
+                            doc.uri = cleaned_uri
 
-        # Start crawling and get document IDs
-        doc_ids = crawl(str(url), recursive=recursive, db=db)
+                            # Extract domain from cleaned URI if no domain exists
+                            if not doc.domain:
+                                parsed_uri = urlparse(cleaned_uri)
+                                domain_name = parsed_uri.netloc
+                                if not domain_name:  # If URI is relative
+                                    domain_name = urlparse(str(url)).netloc
+                                    domain_name = re.sub(r'^www\.', '', domain_name)
 
-        # Update progress metadata
-        job.meta['progress'] = f"Crawl done. Saving data ..."
-        job.save_meta()
+                                # Create new domain if it doesn't exist
+                                domain = db.query(CrawledDomain).filter(CrawledDomain.domain == domain_name).first()
+                                if not domain:
+                                    domain = CrawledDomain(domain=domain_name)
+                                    db.add(domain)
+                                    db.commit()
+                                    db.refresh(domain)
 
-        # Get document details
-        doc_details = []
-        for doc_id in doc_ids:
-            # Get document from database
-            doc = db.query(Document).filter(Document.id == doc_id).first()
-            if doc:
-                # Clean the URI
-                cleaned_uri = clean_domain(doc.uri)
-                doc.uri = cleaned_uri
+                                # Update document with new domain
+                                doc.domain_id = domain.id
+                                db.commit()
 
-                # Extract domain from cleaned URI if no domain exists
-                if not doc.domain:
-                    parsed_uri = urlparse(cleaned_uri)
-                    domain_name = parsed_uri.netloc
-                    if not domain_name:  # If URI is relative
-                        domain_name = urlparse(str(url)).netloc
-                        domain_name = re.sub(r'^www\.', '', domain_name)
-                    
-                    # Create new domain if it doesn't exist
-                    domain = db.query(CrawledDomain).filter(CrawledDomain.domain == domain_name).first()
-                    if not domain:
-                        domain = CrawledDomain(domain=domain_name)
-                        db.add(domain)
-                        db.commit()
-                        db.refresh(domain)
-                    
-                    # Update document with new domain
-                    doc.domain_id = domain.id
-                    db.commit()
-                
-                # Get domain for URL construction
-                domain = doc.domain.domain if doc.domain else ''
-                doc_details.append(DocumentInfo(
-                    id=str(doc.id),
-                    url=cleaned_uri,
-                    title=doc.title
-                ))
+                            # Get domain for URL construction
+                            domain = doc.domain.domain if doc.domain else ''
+                            doc_details.append(DocumentInfo(
+                                id=str(doc.id),
+                                url=cleaned_uri,
+                                title=doc.title or "Untitled"  # Provide default title if None
+                            ))
+                        except Exception as e:
+                            logger.error(f"Error processing document {doc.id}: {str(e)}")
+                            continue
 
-        job.meta['doc_ids'] = doc_ids
-        
-        job.meta['progress'] = f"Finished"
-        job.save_meta()
-    except Exception as e: # Added a general exception handler for debugging
-        job.meta['error'] = {'message' : e}
-        job.save_meta()
+                job.meta['doc_ids'] = doc_ids
+                job.meta['progress'] = f"Finished"
+                job.save_meta()
+
+        except Exception as e:
+            if job is not None:
+                job.meta['error'] = {'message': str(e)}
+                job.save_meta()
+            raise e
+        finally:
+            db.close()
+
+    except Exception as e:
+        if job is not None:
+            job.meta['error'] = {'message': str(e)}
+            job.save_meta()
+        raise e
 
 @router.websocket("/ws/jobs/{job_id}")
 async def websocket_job_status(websocket: WebSocket, job_id: str):
@@ -223,6 +236,7 @@ async def websocket_job_status(websocket: WebSocket, job_id: str):
             doc_ids = job.meta.get('doc_ids', None)
             if doc_ids:
                 await websocket.send_json({'event': 'docs_created', 'doc_ids' : doc_ids})
+                break
 
             progress = job.meta.get('progress', 'Queued')            
             if progress is not last_progress:

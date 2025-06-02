@@ -39,6 +39,7 @@ class DocumentBase(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     vector_id: Optional[str] = None
+    vector_id: Optional[str] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -155,43 +156,50 @@ def create_document(document: DocumentCreate, db: Session = Depends(get_db)):
     )
 
 # Get manual documents with pagination
-@router.get("/manual", response_model=List[DocumentResponse],
+@router.get("/manual", response_model=PaginatedDocumentListResponse,
           summary="دریافت اسناد دستی",
           description="این اندپوینت لیست اسناد با نوع دستی را با پشتیبانی از صفحه‌بندی برمی‌گرداند")
 def get_manual_documents(
-    limit: int = Query(10, description="تعداد اسناد در هر صفحه", ge=1, le=100),
-    offset: int = Query(0, description="شماره صفحه (شروع از 0)", ge=0),
+    page: int = Query(1, description="Page number (starting from 1)", ge=1),
+    size: int = Query(10, description="Number of documents per page", ge=1, le=100),
     db: Session = Depends(get_db)
 ):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
     
     # Query manual documents with pagination
-    query = document_repo.db.query(document_repo.model_class).filter(
+    base_query = document_repo.db.query(document_repo.model_class).filter(
         document_repo.model_class.type == 'manual'
-    ).order_by(document_repo.model_class.created_at.desc())
+    )
+    
+    # Calculate total count and pages
+    total = base_query.count()
+    pages = (total + size - 1) // size  # Ceiling division
     
     # Apply pagination
-    documents = query.offset(offset).limit(limit).all()
+    offset = (page - 1) * size
+    documents = base_query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(size).all()
     
     # Create response with domain info
-    response = []
+    items = []
     for doc in documents:
         domain = domain_repo.get(doc.domain_id) if doc.domain_id else None
-        response.append(DocumentResponse(
+        items.append(DocumentListResponse(
             id=doc.id,
             title=doc.title,
-            html=doc.html,
-            markdown=doc.markdown,
             uri=doc.uri,
             domain_id=doc.domain_id,
-            vector_id=doc.vector_id,
             created_at=doc.created_at,
-            updated_at=doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+            updated_at=doc.updated_at
         ))
     
-    return response
+    return PaginatedDocumentListResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=size,
+        pages=pages
+    )
 
 # Get a document by ID
 @router.get("/{document_id}", response_model=DocumentResponse)
@@ -399,36 +407,6 @@ def get_document_by_uri(uri: str, db: Session = Depends(get_db)):
         domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
     )
 
-# Search documents by content
-@router.get("/search/content", response_model=List[DocumentResponse])
-def search_documents_by_content(
-    query: str = Query(..., description="Search query"),
-    domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
-    db: Session = Depends(get_db)
-):
-    document_repo = DocumentRepository(db)
-    domain_repo = CrawledDomainRepository(db)
-    
-    documents = document_repo.search_by_content(query)
-    if domain_id:
-        documents = [doc for doc in documents if doc.domain_id == domain_id]
-    
-    response = []
-    for doc in documents:
-        domain = domain_repo.get(doc.domain_id)
-        response.append(DocumentResponse(
-            id=doc.id,
-            title=doc.title,
-            html=doc.html,
-            markdown=doc.markdown,
-            uri=doc.uri,
-            domain_id=doc.domain_id,
-            created_at=doc.created_at,
-            updated_at=doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
-        ))
-    return response
-
 # Search documents by title
 @router.get("/search/title", response_model=List[DocumentResponse])
 def search_documents_by_title(
@@ -490,6 +468,7 @@ def get_document_by_vector_id(vector_id: str, db: Session = Depends(get_db)):
         html=document.html,
         markdown=document.markdown,
         uri=document.uri,
+        vector_id=vector_id,
         domain_id=document.domain_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
@@ -744,7 +723,6 @@ async def store_vector_document(vector_doc: Dict[str, Any]) -> str:
             result = response.json()
             return result["document_ids"][0]
     except Exception as e:
-        log_error(error_logger, e, f"Failed to store vector document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 async def get_vector_document(vector_id: str) -> Dict[str, Any]:
@@ -765,7 +743,6 @@ async def get_vector_document(vector_id: str) -> Dict[str, Any]:
             response.raise_for_status()
             return response.json()
     except Exception as e:
-        log_error(error_logger, e, f"Failed to get vector document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 document_websocket_router = APIRouter()
