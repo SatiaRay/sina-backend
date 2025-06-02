@@ -154,7 +154,7 @@ class ChatAgentRag(ChatAgentRagInterface):
     async def generate_response_socket(self, question: str, websocket: WebSocket, history: Optional[List[Dict[str, str]]] = None, workflows: Optional[str] = None):
         try:
             main_logger.info(f"Generating response for question: {question}")
-            
+
             # Search for relevant documents
             relevant_docs = await self.get_relevant_docs(question)
             print(f"Found {len(relevant_docs)} relevant documents", flush=True)
@@ -195,6 +195,8 @@ class ChatAgentRag(ChatAgentRagInterface):
             {history_text}
             
             User Question: {question}"""
+
+            print(full_input)
 
             # In your async function:
             stream = await to_thread.run_sync(self.stream_openai_response, full_input)

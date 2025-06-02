@@ -1,6 +1,7 @@
 from fastapi import Request, Depends,WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from database.models import get_db
+from database.models import get_db, Workflow
+from database.repositories.workflow_repository import WorkflowRepository
 from .chat_agent_rag_interface import ChatAgentRagInterface
 from .chat_agent_rag import ChatAgentRag
 from database.repository import ChatRepository, ChatHistoryRepository
@@ -55,8 +56,10 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 for msg in chat_history
             ]
 
+            workflows = WorkflowRepository().get_active_workflows_schemas()
+
             # Generate response with history
-            response = await self.agent.generate_response_socket(question, websocket, history=formatted_history)
+            response = await self.agent.generate_response_socket(question, websocket, history=formatted_history, workflows=workflows)
             
             # Store AI response in chat history
             self.__update_chat_history(response, role="assistant", websocket=websocket)
@@ -119,4 +122,8 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         except Exception as e:
             self.db.rollback()
             raise e
+
+
+
+    
 
