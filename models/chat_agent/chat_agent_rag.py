@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 from database.vector_store import VectorStore
+from models.agents.title_analyzer_agent import TitleAnalyzerAgent
 from models.text_processor import TextProcessor
 import logging
 from util.logging_config import configure_logging, log_error
@@ -77,94 +78,11 @@ SATIA_INSTRUCTIONS = """
 class ChatAgentRag(ChatAgentRagInterface):
     def __init__(self):
         self.vector_store = VectorStore()
-        self.text_processor = TextProcessor()
-        
-        # Create the main Satia support agent
-        self.persian_agent = Agent(
-            name="Satia Persian Support",
-            instructions=SATIA_INSTRUCTIONS,
-            model=os.getenv("GPT_MODEL"),  # Using model from environment variable
-        )
-        
-        # Create an English support agent
-        self.english_agent = Agent(
-            name="Satia English Support",
-            instructions=SATIA_INSTRUCTIONS.replace("به زبان فارسی", "in English"),
-            model=os.getenv("GPT_MODEL"),
-        )
-        
-        # Create a triage agent to handle language selection
-        self.triage_agent = Agent(
-            name="Language Triage",
-            instructions="""
-            Determine the language of the user's question and hand off to the appropriate agent:
-            - For Persian/Farsi questions -> Persian Support Agent
-            - For English questions -> English Support Agent
-            Always prioritize Persian if the question contains both languages.
-            """,
-            handoffs=[self.persian_agent, self.english_agent],
-            model=os.getenv("GPT_MODEL"),
-        )
+
+        self.client = OpenAI()
         
         main_logger.info("Initialized Agent RAG System with GPT-4")
 
-    
-
-    async def generate_response(self, question: str, sources = False) -> Dict[str, Any]:
-        try:
-            main_logger.info(f"Generating response for question: {question}")
-            
-            # Search for relevant documents
-            relevant_docs = await self.get_relevant_docs(question)
-            main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
-            print(f"Found {len(relevant_docs)} relevant documents")
-            
-            # Sort documents by score
-            relevant_docs = sorted(relevant_docs, key=lambda x: x.get('score', 1.0))
-            
-            # Format context with scores
-            context_parts = []
-            for doc in relevant_docs:
-                score = doc.get('score', 1.0)
-                text = doc['text']
-                context_parts.append(f"[Score: {score:.3f}]\n{text}")
-            
-            context = "\n\n---\n\n".join(context_parts)
-            
-            # Combine question and context
-            full_input = f"""Context Information:
-            {context}
-            
-            User Question: {question}"""
-            
-            # Run through the agent system
-            result = await Runner.run(self.triage_agent, input=full_input)
-
-            res = {
-                'answer': result.final_output,
-            }
-
-            if(sources):
-                res['sources'] = [
-                    {
-                        'text': doc['text'],
-                        'metadata': doc['metadata'],
-                        'score': doc.get('score', 1.0)
-                    }
-                    for doc in relevant_docs
-                ]
-            
-            return res
-            
-        except Exception as e:
-            error_context = f"Question: {question}"
-            log_error(error_logger, e, error_context)
-            raise
-
-    async def update_knowledge_base(self, url_or_documents):
-        """Keeps the same knowledge base update functionality"""
-        # Reuse the existing update_knowledge_base logic
-        pass  # We'll implement this later if needed 
 
     async def get_relevant_docs(self, question: str) -> List[Dict]:
         """
@@ -192,15 +110,7 @@ class ChatAgentRag(ChatAgentRagInterface):
             main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
             
             # Create a document title analyzer agent
-            title_analyzer = Agent(
-                name="Document Title Analyzer",
-                instructions="""
-                Analyze the given question and document titles to determine which documents are most relevant.
-                Return only the IDs of the documents that are most relevant to answering the question.
-                Format your response as a comma-separated list of document IDs.
-                """,
-                model=os.getenv("GPT_TITLE_ANALYZER_MODEL")
-            )
+            title_analyzer = TitleAnalyzerAgent()
             
             # Prepare the input for the agent
             titles_info = "\n".join([
@@ -241,10 +151,10 @@ class ChatAgentRag(ChatAgentRagInterface):
             log_error(error_logger, e, error_context)
             raise 
 
-    async def generate_response_socket(self, question: str, websocket: WebSocket, history: Optional[List[Dict[str, str]]] = None):
+    async def generate_response_socket(self, question: str, websocket: WebSocket, history: Optional[List[Dict[str, str]]] = None, workflows: Optional[str] = None):
         try:
             main_logger.info(f"Generating response for question: {question}")
-            
+
             # Search for relevant documents
             relevant_docs = await self.get_relevant_docs(question)
             print(f"Found {len(relevant_docs)} relevant documents", flush=True)
@@ -277,12 +187,16 @@ class ChatAgentRag(ChatAgentRagInterface):
 
             {SATIA_INSTRUCTIONS}
             
+            {f'# Workflows\n\n{workflows}\n' if workflows else ''}
+            
             Context Information:
             {context}
             
             {history_text}
             
             User Question: {question}"""
+
+            print(full_input)
 
             # In your async function:
             stream = await to_thread.run_sync(self.stream_openai_response, full_input)
@@ -309,9 +223,7 @@ class ChatAgentRag(ChatAgentRagInterface):
 
 
     def stream_openai_response(self, full_input):
-        client = OpenAI()
-
-        return client.responses.create(
+        return self.client.responses.create(
            model=os.getenv("GPT_MODEL"),
            input=[
                {"role": "developer", "content": full_input},

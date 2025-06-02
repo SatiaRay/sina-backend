@@ -39,6 +39,7 @@ class DocumentBase(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     vector_id: Optional[str] = None
+    vector_id: Optional[str] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -188,8 +189,6 @@ def get_manual_documents(
             title=doc.title,
             uri=doc.uri,
             domain_id=doc.domain_id,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
-            vector_id=doc.vector_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at
         ))

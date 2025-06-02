@@ -1,6 +1,7 @@
 from fastapi import Request, Depends,WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from database.models import get_db
+from database.models import get_db, Workflow
+from database.repositories.workflow_repository import WorkflowRepository
 from .chat_agent_rag_interface import ChatAgentRagInterface
 from .chat_agent_rag import ChatAgentRag
 from database.repository import ChatRepository, ChatHistoryRepository
@@ -15,6 +16,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         self.db = next(get_db())  # Get the actual session from generator
         self.chat_repository = ChatRepository(self.db)
         self.chat_history_repository = ChatHistoryRepository(self.db)
+        self.workflow_repository = WorkflowRepository(self.db)  # Initialize workflow repository
         self.agent = ChatAgentRag()
 
     async def generate_response(self, question: str, sources=False, request: Optional[Request] = None) -> Dict[str, Any]:
@@ -47,6 +49,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             chat_history = self.chat_history_repository.get_chat_history_by_chat_id(chat_id=chat.id, limit=50)
 
             # Format messages for the agent
+            
             formatted_history = [
                 {
                     "role": msg.role,
@@ -55,8 +58,10 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 for msg in chat_history
             ]
 
+            workflows = self.workflow_repository.get_active_workflows_schemas()
+
             # Generate response with history
-            response = await self.agent.generate_response_socket(question, websocket, history=formatted_history)
+            response = await self.agent.generate_response_socket(question, websocket, history=formatted_history, workflows=workflows)
             
             # Store AI response in chat history
             self.__update_chat_history(response, role="assistant", websocket=websocket)
@@ -119,4 +124,8 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         except Exception as e:
             self.db.rollback()
             raise e
+
+
+
+    
 

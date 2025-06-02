@@ -19,32 +19,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv, find_dotenv
-# from models.rag import RAGSystem
-# from models.text_processor import TextProcessor
-from crawler.main import run_spider
-import uuid
-from .models import (DataSource, DataSourceListResponse, Chunk, EditChunkRequest, 
-                    PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest,
-                    CurationStatus, CurationStats, VectorSearchRequest,
-                    ChatRequest, 
-                    AddKnowledgeRequest,
-                    StoreVectorRequest)
+from provider.service_container import container, ServiceContainer
+from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from database.vector_store import VectorStore
+from database.repository import DocumentRepository
 from util.database import get_db_connection
-from api.models import (ChatRequest, 
-                      AddKnowledgeRequest)
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
-from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
-from .wizard import router as wizard_router
-from .document import router as document_router, document_websocket_router
-from .domain import router as domain_router
-from .chat import router as chat_router
-from .crawl import router as crawl_router
-from .vector import router as vector_router
-from models.html_to_markdown_agent import HTMLToMarkdownAgent
-from database.repository import DocumentRepository
-from database.models import get_db
 from util.event_bus import event_bus, VectorStoreEvent
 
 # Configure loggers
@@ -54,6 +35,30 @@ main_logger, error_logger, api_logger = configure_logging()
 print("Loading environment from:", find_dotenv())
 load_dotenv(override=True)
 
+# Set base path for service container
+ServiceContainer.set_base_path(str(root_dir))
+
+# Initialize service container bindings
+def init_service_container():
+    # Bind VectorStore as singleton
+    container.singleton('vector_store', VectorStore)
+    
+    # Bind ChatAgentRagProxy as singleton
+    container.singleton('chat_agent', ChatAgentRagProxy)
+    
+    # Bind DocumentRepository as singleton
+    container.singleton('document_repository', DocumentRepository)
+    
+    # Create and bind instances
+    vector_store = container.make('vector_store')
+    container.instance('vector_store', vector_store)
+    
+    chat_agent = container.make('chat_agent')
+    container.instance('chat_agent', chat_agent)
+
+# Initialize the service container
+init_service_container()
+
 # Debug: Print database configuration at startup
 print("Environment Variables at Startup:")
 print(f"Current Directory: {os.getcwd()}")
@@ -61,43 +66,26 @@ print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
 print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
 
 try:
-    # print("Initializing AgentRAGSystem...")
-    # agent_rag = ChatAgentRagProxy()
-    # print("AgentRAGSystem initialized successfully")
-
     # Global vector store instance
-    vector_store = None
+    vector_store = container.make('vector_store')
 
     def get_vector_store():
         """Get or create VectorStore instance"""
-        global vector_store
-        if vector_store is None:
-            vector_store = VectorStore()
-        return vector_store
+        return container.make('vector_store')
 
     def refresh_vector_store(data=None):
         """Callback to refresh VectorStore instance"""
-        global vector_store
         print("Refreshing VectorStore instance...")
         vector_store = VectorStore()
+        container.instance('vector_store', vector_store)
         print("VectorStore instance refreshed successfully")
-
-    # def refresh_chat_agent_proxy(data=None):
-    #     """Callback to refresh ChatAgentRagProxy instance"""
-    #     global agent_rag
-    #     print("Refreshing ChatAgentRagProxy instance...")
-    #     agent_rag = ChatAgentRagProxy()
-    #     print("ChatAgentRagProxy instance refreshed successfully")
 
     # Subscribe to collection modification events
     event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_vector_store)
-    # event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_chat_agent_proxy)
 
 except Exception as e:
     print(f"Error during initialization: {str(e)}")
     raise
-
-
 
 # Create FastAPI app
 app = FastAPI(
@@ -124,6 +112,8 @@ app.include_router(domain_router)
 app.include_router(crawl_router)
 app.include_router(chat_router)
 app.include_router(vector_router)
+app.include_router(workflow_router)
+app.include_router(ai_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
@@ -224,80 +214,8 @@ async def root():
         "status": "running"
     }
 
-@app.post("/ask", response_model=Dict[str, Any], tags=["Chat"],
-      summary="پرسش از چت‌بات (نسخه مبتنی بر GPT-4)",
-      description="این اندپوینت از GPT-4 برای پاسخگویی استفاده می‌کند")
-async def ask_question_agent(request: Request, question_request: QuestionRequest = Body(...)):
-    """
-    Process a question using the GPT-4 based agent system
-    """
-    try:
-        api_logger.info(f"Processing question with agent: {question_request.question}")
-        
-        response = await agent_rag.generate_response(question_request.question, sources=question_request.attach_resources)
-        
-        api_logger.info("Successfully generated response with agent")
-        return JSONResponse(content=response, media_type="application/json; charset=utf-8")
-        
-    except Exception as e:
-        error_context = f"Question: {question_request.question}"
-        log_error(error_logger, e, error_context)
-        
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Failed to generate response",
-                "error": str(e)
-            }
-        )
     
-@app.websocket("/ws/ask")
-async def ask_question_agent_socket(websocket: WebSocket, session_id: str = Query(..., description="Session ID is required")):
-    await websocket.accept()
 
-    try:
-        while True:
-            data = await websocket.receive_text()
-            question_data = json.loads(data)
-            question = question_data.get("question", "")
-
-            print(question)
-
-            if not question:
-                await websocket.send_text("Error: No question provided.")
-                continue
-
-            api_logger.info(f"Processing question with agent: {question}")
-
-            await agent_rag.generate_response_socket(question, websocket=websocket)
-
-    except WebSocketDisconnect:
-        api_logger.info("WebSocket disconnected")
-    except Exception as e:
-        log_error(error_logger, e, f"Failed while processing: {str(e)}")
-        await websocket.send_text(f"Error: {str(e)}")
-    finally:
-        await websocket.close()
-
-@app.post("/askme", response_model=QuestionResponse, tags=["Chat"],
-          summary="پرسش از چت‌بات (مترادف ask)",
-          description="این اندپوینت مشابه اندپوینت ask است")
-async def askme_question(
-    request: QuestionRequest = Body(
-        ...,
-        example={"question": "ساتیا چه قابلیت‌هایی دارد؟", 'resources' : 0}
-    )
-):
-    """
-    پرسش از چت‌بات و دریافت پاسخ (مترادف ask)
-    
-    - **question**: سوال کاربر
-    """
-    try:
-        response = rag_system.generate_response(request.question)
-        return JSONResponse(content=response, media_type="application/json; charset=utf-8")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/update_knowledge", tags=["Knowledge Management"],
             summary="به‌روزرسانی دانش",
