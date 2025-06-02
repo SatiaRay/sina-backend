@@ -27,6 +27,7 @@ from util.database import get_db_connection
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
 from util.event_bus import event_bus, VectorStoreEvent
+from api.about import router as about_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -114,6 +115,7 @@ app.include_router(chat_router)
 app.include_router(vector_router)
 app.include_router(workflow_router)
 app.include_router(ai_router)
+app.include_router(about_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
