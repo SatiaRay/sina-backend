@@ -81,6 +81,7 @@ class DocumentListResponse(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     domain: Optional[DomainInfo] = None
+    vector_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -189,6 +190,7 @@ def get_manual_documents(
             uri=doc.uri,
             domain_id=doc.domain_id,
             domain=domain,
+            vector_id=doc.vector_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at
         ))
