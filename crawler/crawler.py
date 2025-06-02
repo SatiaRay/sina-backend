@@ -71,7 +71,7 @@ def clean_domain(url: str) -> str:
         logging.error(f"Error cleaning domain: {str(e)}")
         return url
 
-def crawl(url, recursive=False, store_in_vector=False, db: Session = None):
+def crawl(url, recursive=False, db: Session = None):
     """
     Crawl a URL and optionally its sub-URLs recursively.
     
@@ -88,13 +88,6 @@ def crawl(url, recursive=False, store_in_vector=False, db: Session = None):
     db = db or SessionLocal()
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
-    # Initialize HTML to Markdown agent and vector store if needed
-    html_to_markdown_agent = None
-    vector_store = None
-    if store_in_vector:
-        html_to_markdown_agent = HTMLToMarkdownAgent()
-        vector_store = VectorStore()
     
     try:
         # Clean the input URL
@@ -209,29 +202,6 @@ def crawl(url, recursive=False, store_in_vector=False, db: Session = None):
                         docs.append(new_doc.id)
                         db.commit()
                         print(f"Created new document: {document_data['uri']}")
-                        
-                    # Store in vector store if needed
-                    if store_in_vector and vector_store and markdown_content:
-                        vector_ids = vector_store.add_documents([{
-                            'text': markdown_content,
-                            'metadata': {
-                                'source': current_url,
-                                'title': title,
-                                'domain': domain,
-                                'curation_status': 'pending',
-                                'date_added': datetime.now().isoformat()
-                            }
-                        }])
-                        
-                        # Update document with vector ID
-                        if vector_ids and len(vector_ids) > 0:
-                            document_data['vector_id'] = vector_ids[0]
-                            if existing_docs:
-                                document_repo.update(existing_docs[0].id, document_data)
-                            else:
-                                document_repo.update(new_doc.id, document_data)
-                            db.commit()
-                            print(f"Updated document with vector ID: {vector_ids[0]}")
                         
                 except Exception as e:
                     print(f"Database error for {current_url}: {str(e)}")
