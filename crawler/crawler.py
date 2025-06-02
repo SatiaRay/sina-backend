@@ -71,7 +71,7 @@ def clean_domain(url: str) -> str:
         logging.error(f"Error cleaning domain: {str(e)}")
         return url
 
-def crawl(url, recursive=False, db: Session = None):
+def crawl(url, recursive=False, db: Session = None, job=None):
     """
     Crawl a URL and optionally its sub-URLs recursively.
     
@@ -80,6 +80,7 @@ def crawl(url, recursive=False, db: Session = None):
         recursive (bool): Whether to crawl sub-URLs recursively
         store_in_vector (bool): Whether to store content in vector store
         db (Session): Database session
+        job (Job): RQ job object for progress tracking
     
     Returns:
         List of document IDs
@@ -88,6 +89,11 @@ def crawl(url, recursive=False, db: Session = None):
     db = db or SessionLocal()
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
+    
+    # Initialize progress tracking
+    total_urls = 0
+    crawled_urls = 0
+    exception_urls = 0
     
     try:
         # Clean the input URL
@@ -117,8 +123,22 @@ def crawl(url, recursive=False, db: Session = None):
         crawled_data = []
         docs = []
         
+        def update_progress():
+            """Update job progress metadata"""
+            if job:
+                progress = (crawled_urls / total_urls * 100) if total_urls > 0 else 0
+                job.meta['progress'] = {
+                    'total_urls': total_urls,
+                    'crawled_urls': crawled_urls,
+                    'exception_urls': exception_urls,
+                    'progress_percent': round(progress, 2)
+                }
+                job.save_meta()
+        
         def process_url(current_url):
             """Process a single URL and store its content in the database"""
+            nonlocal total_urls, crawled_urls, exception_urls
+            
             # Clean the current URL
             current_url = clean_domain(current_url.split('#')[0])
             
@@ -138,11 +158,15 @@ def crawl(url, recursive=False, db: Session = None):
                 response = requests.get(current_url, timeout=10)
                 if response.status_code != 200:
                     print(f"Failed to fetch {current_url}: Status {response.status_code}")
+                    exception_urls += 1
+                    update_progress()
                     return
                 
                 soup = BeautifulSoup(response.text, 'html.parser')
                 if not soup:
                     print(f"Failed to parse HTML for {current_url}")
+                    exception_urls += 1
+                    update_progress()
                     return
                 
                 # Find all <a> tags with href attribute
@@ -156,6 +180,10 @@ def crawl(url, recursive=False, db: Session = None):
                         # Clean the href URL
                         href = clean_domain(href)
                         links.append(href)
+                
+                # Update total URLs count for recursive crawling
+                if recursive:
+                    total_urls += len(links)
                 
                 # Clean HTML content
                 for tag in soup.find_all(['script', 'style', 'link', 'img', 'nav', 'header', 'footer', 'aside']):
@@ -174,6 +202,8 @@ def crawl(url, recursive=False, db: Session = None):
                 
                 if not text_content:
                     print(f"No content found in {current_url}")
+                    exception_urls += 1
+                    update_progress()
                     return
                 
                 # Prepare document data
@@ -206,6 +236,12 @@ def crawl(url, recursive=False, db: Session = None):
                 except Exception as e:
                     print(f"Database error for {current_url}: {str(e)}")
                     db.rollback()
+                    exception_urls += 1
+                    update_progress()
+                    return
+                
+                crawled_urls += 1
+                update_progress()
                 
                 # If recursive mode, find all links and process them
                 if recursive:
@@ -222,19 +258,38 @@ def crawl(url, recursive=False, db: Session = None):
                                 process_url(absolute_url)
                         except Exception as e:
                             print(f"Error processing link {link} from {current_url}: {str(e)}")
+                            exception_urls += 1
+                            update_progress()
                             continue
             
             except requests.exceptions.RequestException as e:
                 print(f"Network error for {current_url}: {str(e)}")
+                exception_urls += 1
+                update_progress()
             except Exception as e:
                 print(f"Error processing {current_url}: {str(e)}")
+                exception_urls += 1
+                update_progress()
                 db.rollback()
+        
+        # Initialize total URLs count
+        total_urls = 1  # Start with 1 for the initial URL
         
         # Start crawling from the initial URL
         process_url(cleaned_url)
         
         # After crawling all URLs, remove duplicate content
         remove_duplicate_content(crawled_data, document_repo)
+
+        # Final progress update
+        if job:
+            job.meta['progress'] = {
+                'total_urls': total_urls,
+                'crawled_urls': crawled_urls,
+                'exception_urls': exception_urls,
+                'progress_percent': 100
+            }
+            job.save_meta()
 
         return docs
         

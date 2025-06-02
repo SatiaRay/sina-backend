@@ -16,10 +16,58 @@ from rq.job import Job
 import traceback
 import os
 import re
+import time
+import json
+import requests
+from bs4 import BeautifulSoup
+from difflib import SequenceMatcher
+import hashlib
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+class CrawlError(Exception):
+    """Base exception class for crawl-related errors"""
+    def __init__(self, message: str, error_type: str, details: Optional[Dict[str, Any]] = None):
+        self.message = message
+        self.error_type = error_type
+        self.details = details or {}
+        super().__init__(self.message)
+
+class CrawlInitializationError(CrawlError):
+    """Error during crawl initialization"""
+    pass
+
+class CrawlExecutionError(CrawlError):
+    """Error during crawl execution"""
+    pass
+
+class VectorizationError(CrawlError):
+    """Error during vectorization process"""
+    pass
+
+def handle_crawl_error(job: Job, error: Exception, error_type: str = "unknown"):
+    """Handle crawl errors and update job metadata with error information"""
+    error_details = {
+        'error_type': error_type,
+        'message': str(error),
+        'traceback': traceback.format_exc(),
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    # Update job metadata with error information
+    job.meta['error'] = error_details
+    job.meta['status'] = {
+        'msg': f'Error: {error_type}',
+        'progress': job.meta.get('progress', {}),
+        'error': error_details
+    }
+    job.save_meta()
+    
+    # Log the error
+    logger.error(f"Crawl error ({error_type}): {str(error)}")
+    logger.error(traceback.format_exc())
 
 def clean_domain(url: str) -> str:
     """
@@ -116,7 +164,23 @@ async def crawl_url(request: CrawlRequest):
         redis_con = Redis(host=os.getenv('REDIS_HOST'))
         q = Queue(connection=redis_con)
         job_id = str(uuid.uuid4())
-        q.enqueue(crawl_task, request.url, request.recursive, request.store_in_vector, job_id = job_id)
+        
+        # Create job with initial metadata
+        job = q.enqueue(crawl_task, request.url, request.recursive, request.store_in_vector, job_id=job_id)
+        job.meta = {
+            'type': 'crawl',
+            'url': str(request.url),
+            'status': {
+                'msg': 'Queued',
+                'progress': {
+                    'total_urls': 0,
+                    'crawled_urls': 0,
+                    'exception_urls': 0,
+                    'progress_percent': 0
+                }
+            }
+        }
+        job.save_meta()
 
         # Prepare response
         response = CrawlResponse(
@@ -142,84 +206,189 @@ async def crawl_url(request: CrawlRequest):
             }
         )
 
+def initialize_job_metadata(job):
+    """Initialize the job metadata with initial progress information"""
+    try:
+        job.meta['status'] = {
+            'msg': 'running crawl',
+            'progress': {
+                'total_urls': 0,
+                'crawled_urls': 0,
+                'exception_urls': 0,
+                'progress_percent': 0
+            }
+        }
+        job.save_meta()
+    except Exception as e:
+        raise CrawlInitializationError(
+            f"Failed to initialize job metadata: {str(e)}",
+            "initialization_error",
+            {'original_error': str(e)}
+        )
+
+def create_vectorization_batch(doc_ids, redis_con):
+    """Create a batch of vectorization jobs for the given document IDs"""
+    try:
+        q = Queue(connection=redis_con)
+        batch_id = str(uuid.uuid4())
+        
+        # Initialize batch progress
+        batch_progress = {
+            'total_docs': len(doc_ids),
+            'done': 0,
+            'remaining': len(doc_ids),
+            'exceptions': 0,
+            'progress_percent': 0
+        }
+        
+        # Create vectorization jobs for each document
+        vector_jobs = []
+        for doc_id in doc_ids:
+            vector_job = q.enqueue(
+                'api.document.vectorize_task',
+                doc_id,
+                job_id=str(uuid.uuid4())
+            )
+            vector_jobs.append(vector_job.id)
+        
+        return {
+            'batch_id': batch_id,
+            'job_ids': vector_jobs,
+            'progress': batch_progress
+        }
+    except Exception as e:
+        raise VectorizationError(
+            f"Failed to create vectorization batch: {str(e)}",
+            "batch_creation_error",
+            {'doc_ids': doc_ids, 'original_error': str(e)}
+        )
+
+def update_batch_progress(vector_jobs, redis_con):
+    """Calculate and return the current progress of the vectorization batch"""
+    try:
+        done = 0
+        exceptions = 0
+        
+        for job_id in vector_jobs:
+            vector_job = Job.fetch(job_id, connection=redis_con)
+            if vector_job.is_finished:
+                done += 1
+            elif vector_job.is_failed:
+                exceptions += 1
+        
+        remaining = len(vector_jobs) - done - exceptions
+        progress_percent = (done / len(vector_jobs) * 100) if vector_jobs else 0
+        
+        return {
+            'total_docs': len(vector_jobs),
+            'done': done,
+            'remaining': remaining,
+            'exceptions': exceptions,
+            'progress_percent': round(progress_percent, 2)
+        }
+    except Exception as e:
+        raise VectorizationError(
+            f"Failed to update batch progress: {str(e)}",
+            "progress_update_error",
+            {'vector_jobs': vector_jobs, 'original_error': str(e)}
+        )
+
+def monitor_vectorization_batch(job, vector_jobs, redis_con):
+    """Monitor the progress of vectorization jobs and update job metadata"""
+    try:
+        while True:
+            # Update batch progress
+            batch_progress = update_batch_progress(vector_jobs, redis_con)
+            
+            # Update parent job metadata
+            job.meta['vectorization_batch']['progress'] = batch_progress
+            job.save_meta()
+            
+            # Check if all jobs are complete
+            if batch_progress['done'] + batch_progress['exceptions'] == len(vector_jobs):
+                break
+                
+            time.sleep(1)  # Wait before next check
+    except Exception as e:
+        raise VectorizationError(
+            f"Failed to monitor vectorization batch: {str(e)}",
+            "batch_monitoring_error",
+            {'vector_jobs': vector_jobs, 'original_error': str(e)}
+        )
+
+def update_job_status(job, status_msg, include_batch=False):
+    """Update the job status with the given message and optional batch information"""
+    try:
+        status = {
+            'msg': status_msg,
+            'progress': job.meta.get('progress', {})
+        }
+        
+        if include_batch:
+            status['vectorization_batch'] = job.meta.get('vectorization_batch', {})
+        
+        job.meta['status'] = status
+        job.save_meta()
+    except Exception as e:
+        raise CrawlError(
+            f"Failed to update job status: {str(e)}",
+            "status_update_error",
+            {'status_msg': status_msg, 'include_batch': include_batch, 'original_error': str(e)}
+        )
+
 def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False):
+    """Main crawl task that orchestrates the crawling and vectorization process"""
+    job = None
+    db = None
+    
     try:
         from database.models import SessionLocal
         from rq import get_current_job
 
         job = get_current_job()
         db = get_db()
-
+        
         try:
+            # Initialize job metadata
+            initialize_job_metadata(job)
+            
             # Start crawling and get document IDs
-            doc_ids = crawl(str(url), recursive=recursive, store_in_vector=store_in_vector, db=db)
-
-            if job is not None:
-                # Update progress metadata
-                job.meta['progress'] = f"Crawl done. Saving data ..."
+            doc_ids = crawl(str(url), recursive=recursive, db=db, job=job)
+            
+            if store_in_vector and doc_ids:
+                # Update status to saving data
+                update_job_status(job, 'saving data')
+                
+                # Create batch of vectorization jobs
+                redis_con = Redis(host=os.getenv('REDIS_HOST'))
+                batch_info = create_vectorization_batch(doc_ids, redis_con)
+                
+                # Update parent job with batch information
+                job.meta['vectorization_batch'] = batch_info
                 job.save_meta()
+                
+                # Monitor batch progress
+                monitor_vectorization_batch(job, batch_info['job_ids'], redis_con)
+                
+                # Update final status
+                update_job_status(job, 'Finished', include_batch=True)
+            else:
+                update_job_status(job, 'Finished', include_batch=False)
 
-                # Get document details
-                doc_details = []
-                for doc_id in doc_ids:
-                    # Get document from database
-                    doc = db.query(Document).filter(Document.id == doc_id).first()
-                    if doc:
-                        try:
-                            # Clean the URI
-                            cleaned_uri = clean_domain(doc.uri)
-                            if not cleaned_uri:
-                                cleaned_uri = str(doc.uri)  # Fallback to original URI
-                            doc.uri = cleaned_uri
-
-                            # Extract domain from cleaned URI if no domain exists
-                            if not doc.domain:
-                                parsed_uri = urlparse(cleaned_uri)
-                                domain_name = parsed_uri.netloc
-                                if not domain_name:  # If URI is relative
-                                    domain_name = urlparse(str(url)).netloc
-                                    domain_name = re.sub(r'^www\.', '', domain_name)
-
-                                # Create new domain if it doesn't exist
-                                domain = db.query(CrawledDomain).filter(CrawledDomain.domain == domain_name).first()
-                                if not domain:
-                                    domain = CrawledDomain(domain=domain_name)
-                                    db.add(domain)
-                                    db.commit()
-                                    db.refresh(domain)
-
-                                # Update document with new domain
-                                doc.domain_id = domain.id
-                                db.commit()
-
-                            # Get domain for URL construction
-                            domain = doc.domain.domain if doc.domain else ''
-                            doc_details.append(DocumentInfo(
-                                id=str(doc.id),
-                                url=cleaned_uri,
-                                title=doc.title or "Untitled"  # Provide default title if None
-                            ))
-                        except Exception as e:
-                            logger.error(f"Error processing document {doc.id}: {str(e)}")
-                            continue
-
-                job.meta['doc_ids'] = doc_ids
-                job.meta['progress'] = f"Finished"
-                job.save_meta()
-
+        except CrawlError as e:
+            handle_crawl_error(job, e, e.error_type)
+            raise
         except Exception as e:
-            if job is not None:
-                job.meta['error'] = {'message': str(e)}
-                job.save_meta()
-            raise e
-        finally:
-            db.close()
+            handle_crawl_error(job, e, "unexpected_error")
+            raise
 
     except Exception as e:
-        if job is not None:
-            job.meta['error'] = {'message': str(e)}
-            job.save_meta()
-        raise e
+        if job:
+            handle_crawl_error(job, e, "fatal_error")
+        raise
+    finally:
+        if db:
+            db.close()
 
 @router.websocket("/ws/jobs/{job_id}")
 async def websocket_job_status(websocket: WebSocket, job_id: str):
