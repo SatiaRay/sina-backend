@@ -1,18 +1,24 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from redis import Redis
 from rq.job import Job
+from rq import Queue
 import asyncio
 import logging
 import os
 import traceback
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
+from pydantic import BaseModel
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+class QueueJobsResponse(BaseModel):
+    queue_name: str
+    jobs: List[Dict[str, Any]]
 
 class JobStatusTracker:
     """Class to handle job status tracking and WebSocket communication"""
@@ -156,3 +162,40 @@ async def websocket_job_status(websocket: WebSocket, job_id: str):
         traceback.print_exc()
     finally:
         await tracker.disconnect()
+
+@router.get("/queues", response_model=List[QueueJobsResponse])
+async def get_queue_jobs():
+    """Get all in-process jobs separated by queue names"""
+    try:
+        redis_conn = Redis(host=os.getenv('REDIS_HOST'))
+        queues = Queue.all(connection=redis_conn)
+        result = []
+        
+        for queue in queues:
+            jobs = []
+            # Get started jobs (in-process)
+            started_jobs = queue.started_job_registry.get_job_ids()
+            
+            for job_id in started_jobs:
+                job = Job.fetch(job_id, connection=redis_conn)
+                if job:
+                    job_data = {
+                        'id': job.id,
+                        'status': job.get_status(),
+                        'created_at': job.created_at.isoformat() if job.created_at else None,
+                        'started_at': job.started_at.isoformat() if job.started_at else None,
+                        'meta': job.meta
+                    }
+                    jobs.append(job_data)
+            
+            if jobs:  # Only include queues that have jobs
+                result.append(QueueJobsResponse(
+                    queue_name=queue.name,
+                    jobs=jobs
+                ))
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error getting queue jobs: {str(e)}")
+        traceback.print_exc()
+        raise

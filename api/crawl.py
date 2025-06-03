@@ -22,6 +22,8 @@ import requests
 from bs4 import BeautifulSoup
 from difflib import SequenceMatcher
 import hashlib
+from database.repository import DocumentRepository
+from database.models import SessionLocal
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -162,7 +164,7 @@ async def crawl_url(request: CrawlRequest):
     try:
         # Add crawl task to queue
         redis_con = Redis(host=os.getenv('REDIS_HOST'))
-        q = Queue(connection=redis_con)
+        q = Queue(connection=redis_con, default_timeout=600)  # 10 minutes timeout
         job_id = str(uuid.uuid4())
         
         # Create job with initial metadata
@@ -229,33 +231,56 @@ def initialize_job_metadata(job):
 def create_vectorization_batch(doc_ids, redis_con):
     """Create a batch of vectorization jobs for the given document IDs"""
     try:
-        q = Queue(connection=redis_con)
-        batch_id = str(uuid.uuid4())
-        
-        # Initialize batch progress
-        batch_progress = {
-            'total_docs': len(doc_ids),
-            'done': 0,
-            'remaining': len(doc_ids),
-            'exceptions': 0,
-            'progress_percent': 0
-        }
-        
-        # Create vectorization jobs for each document
-        vector_jobs = []
-        for doc_id in doc_ids:
-            vector_job = q.enqueue(
-                'api.document.vectorize_task',
-                doc_id,
-                job_id=str(uuid.uuid4())
-            )
-            vector_jobs.append(vector_job.id)
-        
-        return {
-            'batch_id': batch_id,
-            'job_ids': vector_jobs,
-            'progress': batch_progress
-        }
+        # Create database session and repository
+        db = SessionLocal()
+        document_repo = DocumentRepository(db)
+
+        try:
+            q = Queue('vectorize', connection=redis_con)
+            batch_id = str(uuid.uuid4())
+            
+            # Initialize batch progress
+            batch_progress = {
+                'total_docs': len(doc_ids),
+                'done': 0,
+                'remaining': len(doc_ids),
+                'exceptions': 0,
+                'progress_percent': 0
+            }
+            
+            # Create vectorization jobs for each document
+            vector_jobs = []
+            for doc_id in doc_ids:
+                # Get document from database
+                document = document_repo.get(doc_id)
+                if not document:
+                    continue
+
+                # Prepare metadata
+                metadata = {
+                    "document_id": str(doc_id),
+                    "title": document.title,
+                    "uri": document.uri or "",
+                    "domain_id": str(document.domain_id) if document.domain_id else "0",
+                    "created_at": datetime.now().isoformat()
+                }
+
+                vector_job = q.enqueue(
+                    'api.document.vectorize_task',
+                    doc_id,
+                    document.html,
+                    metadata,
+                    job_id=str(uuid.uuid4()),
+                )
+                vector_jobs.append(vector_job.id)
+            
+            return {
+                'batch_id': batch_id,
+                'job_ids': vector_jobs,
+                'progress': batch_progress
+            }
+        finally:
+            db.close()
     except Exception as e:
         raise VectorizationError(
             f"Failed to create vectorization batch: {str(e)}",
@@ -296,7 +321,10 @@ def update_batch_progress(vector_jobs, redis_con):
 def monitor_vectorization_batch(job, vector_jobs, redis_con):
     """Monitor the progress of vectorization jobs and update job metadata"""
     try:
-        while True:
+        max_iterations = 10  # Maximum number of iterations to prevent infinite loops
+        iteration = 0
+        
+        while iteration < max_iterations:
             # Update batch progress
             batch_progress = update_batch_progress(vector_jobs, redis_con)
             
@@ -309,6 +337,11 @@ def monitor_vectorization_batch(job, vector_jobs, redis_con):
                 break
                 
             time.sleep(1)  # Wait before next check
+            iteration += 1
+            
+        if iteration >= max_iterations:
+            logger.warning(f"Vectorization batch monitoring reached maximum iterations ({max_iterations})")
+            
     except Exception as e:
         raise VectorizationError(
             f"Failed to monitor vectorization batch: {str(e)}",

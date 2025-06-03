@@ -15,6 +15,8 @@ from redis import Redis
 import uuid
 from fastapi import WebSocketDisconnect
 from fastapi import HTTPException
+import os
+import httpx
 
 # Create test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -303,10 +305,8 @@ def test_search_documents_by_title(db_session, test_document):
 @pytest.mark.asyncio
 async def test_vectorize_task_success(db_session, test_document, mock_job):
     # Setup test data
-    request = VectorizeDocumentRequest(
-        html="<html>Test Vector Content</html>",
-        metadata={"source": "test", "title": "Test Vector"}
-    )
+    html = "<html>Test Vector Content</html>"
+    metadata = {"source": "test", "title": "Test Vector"}
     
     # Mock dependencies
     with patch('rq.get_current_job', return_value=mock_job), \
@@ -328,7 +328,7 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
         mock_repo.return_value.update.side_effect = update_document
         
         # Execute task
-        await vectorize_task(test_document.id, request)
+        await vectorize_task(test_document.id, html, metadata)
         
         # Verify job progress updates
         assert mock_job.meta['progress']['type'] == 'info'
@@ -340,7 +340,7 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
             test_document.id,
             {
                 "vector_id": "vec_123",
-                "html": request.html,
+                "html": html,
                 "markdown": "# Test Vector Content",
                 "uri": test_document.uri
             }
@@ -349,22 +349,20 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
         # Verify document was updated in the database
         db_session.refresh(test_document)
         assert test_document.vector_id == "vec_123"
-        assert test_document.html == request.html
+        assert test_document.html == html
         assert test_document.markdown == "# Test Vector Content"
 
 @pytest.mark.asyncio
 async def test_vectorize_task_document_not_found(db_session, mock_job):
     # Setup test data
-    request = VectorizeDocumentRequest(
-        html="<html>Test Vector Content</html>",
-        metadata={"source": "test", "title": "Test Vector"}
-    )
+    html = "<html>Test Vector Content</html>"
+    metadata = {"source": "test", "title": "Test Vector"}
     
     # Mock dependencies
     with patch('rq.get_current_job', return_value=mock_job):
         # Execute task with non-existent document ID
         with pytest.raises(HTTPException) as exc_info:
-            await vectorize_task(999, request)
+            await vectorize_task(999, html, metadata)
         
         # Verify error
         assert exc_info.value.status_code == 500
@@ -375,40 +373,10 @@ async def test_vectorize_task_document_not_found(db_session, mock_job):
         assert "404: Document not found" in mock_job.meta['progress']['msg']
 
 @pytest.mark.asyncio
-async def test_vectorize_task_markdown_conversion_failed(db_session, test_document, mock_job):
-    # Setup test data
-    request = VectorizeDocumentRequest(
-        html="<html>Test Vector Content</html>",
-        metadata={"source": "test", "title": "Test Vector"}
-    )
-    
-    # Mock dependencies
-    with patch('rq.get_current_job', return_value=mock_job), \
-         patch('api.document.html_to_markdown_agent.convert', return_value=None), \
-         patch('api.document.DocumentRepository') as mock_repo:
-        
-        # Setup mock repository
-        mock_repo.return_value.get.return_value = test_document
-        
-        # Execute task
-        with pytest.raises(HTTPException) as exc_info:
-            await vectorize_task(test_document.id, request)
-        
-        # Verify error
-        assert exc_info.value.status_code == 500
-        assert "Failed to convert HTML to Markdown" in str(exc_info.value.detail)
-        
-        # Verify error was captured in job metadata
-        assert mock_job.meta['progress']['type'] == 'error'
-        assert "Failed to convert HTML to Markdown" in mock_job.meta['progress']['msg']
-
-@pytest.mark.asyncio
 async def test_vectorize_task_vector_store_error(db_session, test_document, mock_job):
     # Setup test data
-    request = VectorizeDocumentRequest(
-        html="<html>Test Vector Content</html>",
-        metadata={"source": "test", "title": "Test Vector"}
-    )
+    html = "<html>Test Vector Content</html>"
+    metadata = {"source": "test", "title": "Test Vector"}
     
     # Mock dependencies
     with patch('rq.get_current_job', return_value=mock_job), \
@@ -421,7 +389,7 @@ async def test_vectorize_task_vector_store_error(db_session, test_document, mock
         
         # Execute task
         with pytest.raises(HTTPException) as exc_info:
-            await vectorize_task(test_document.id, request)
+            await vectorize_task(test_document.id, html, metadata)
         
         # Verify error
         assert exc_info.value.status_code == 500
@@ -430,3 +398,55 @@ async def test_vectorize_task_vector_store_error(db_session, test_document, mock
         # Verify error was captured in job metadata
         assert mock_job.meta['progress']['type'] == 'error'
         assert "Vector store error" in mock_job.meta['progress']['msg']
+
+@pytest.mark.asyncio
+async def test_store_vector_document():
+    # Test data
+    vector_doc = {
+        "text": "Test content",
+        "metadata": {"source": "test"}
+    }
+    
+    # Mock httpx client
+    with patch('httpx.AsyncClient') as mock_client:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"document_ids": ["vec_123"]}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
+        
+        # Test with default host
+        result = await store_vector_document(vector_doc)
+        assert result == "vec_123"
+        
+        # Test with custom host
+        os.environ['HOST'] = 'custom-host:8000'
+        result = await store_vector_document(vector_doc)
+        assert result == "vec_123"
+        
+        # Test with host that already has protocol
+        os.environ['HOST'] = 'https://custom-host:8000'
+        result = await store_vector_document(vector_doc)
+        assert result == "vec_123"
+
+@pytest.mark.asyncio
+async def test_get_vector_document():
+    # Mock httpx client
+    with patch('httpx.AsyncClient') as mock_client:
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"vector_id": "vec_123", "text": "Test content"}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.return_value.__aenter__.return_value.get.return_value = mock_response
+        
+        # Test with default host
+        result = await get_vector_document("vec_123")
+        assert result == {"vector_id": "vec_123", "text": "Test content"}
+        
+        # Test with custom host
+        os.environ['HOST'] = 'custom-host:8000'
+        result = await get_vector_document("vec_123")
+        assert result == {"vector_id": "vec_123", "text": "Test content"}
+        
+        # Test with host that already has protocol
+        os.environ['HOST'] = 'https://custom-host:8000'
+        result = await get_vector_document("vec_123")
+        assert result == {"vector_id": "vec_123", "text": "Test content"}

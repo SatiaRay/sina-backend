@@ -9,6 +9,8 @@ import re
 from difflib import SequenceMatcher
 import hashlib
 import asyncio
+import time
+from dotenv import load_dotenv
 
 from sqlalchemy.orm import Session
 from database.models import Document, CrawledDomain
@@ -16,6 +18,14 @@ from database.repository import DocumentRepository, CrawledDomainRepository
 from database.models import SessionLocal
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.vector_store import VectorStore
+
+# Load environment variables
+load_dotenv()
+
+# Rate limit configuration
+RATE_LIMIT_MAX_RETRIES = int(os.getenv('RATE_LIMIT_MAX_RETRIES', '3'))
+RATE_LIMIT_WAIT_MINUTES = int(os.getenv('RATE_LIMIT_WAIT_MINUTES', '5'))
+RATE_LIMIT_STATUS_CODES = [429, 503]  # Common rate limit status codes
 
 # Create logs directory if it doesn't exist
 log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
@@ -120,6 +130,7 @@ def crawl(url, recursive=False, db: Session = None, job=None):
         
         # Keep track of visited URLs to avoid duplicates
         visited_urls = set()
+        crawled_urls_set = set()  # New set to track crawled URLs
         crawled_data = []
         docs = []
         
@@ -135,142 +146,187 @@ def crawl(url, recursive=False, db: Session = None, job=None):
                 }
                 job.save_meta()
         
+        def is_valid_url(url):
+            """Check if URL is valid and not a media file"""
+            if url in visited_urls:
+                return False
+            visited_urls.add(url)
+            
+            if str(url).endswith(tuple(['.jpg', '.png', '.gif', '.jpeg', '.webp', '.pdf', '.doc', '.docx', '.xls', '.xlsx'])):
+                print(f"Skipping media file: {url}")
+                return False
+            return True
+
+        def update_job_status(job, status, message=None):
+            """Update job status and metadata"""
+            if job:
+                job.meta['status'] = status
+                if message:
+                    job.meta['message'] = message
+                job.save_meta()
+
+        def handle_rate_limit(job, retry_count):
+            """Handle rate limit by waiting and updating job status"""
+            wait_minutes = RATE_LIMIT_WAIT_MINUTES
+            update_job_status(job, "rate_limit", f"Rate limit hit. Waiting {wait_minutes} minutes before retry {retry_count}/{RATE_LIMIT_MAX_RETRIES}")
+            time.sleep(wait_minutes * 60)  # Convert minutes to seconds
+
+        def fetch_and_parse_page(url, job=None):
+            """Fetch and parse the webpage content with rate limit handling"""
+            retry_count = 0
+            
+            while retry_count < RATE_LIMIT_MAX_RETRIES:
+                try:
+                    response = requests.get(url, timeout=10)
+                    
+                    # Check for rate limit status codes
+                    if response.status_code in RATE_LIMIT_STATUS_CODES:
+                        retry_count += 1
+                        if retry_count >= RATE_LIMIT_MAX_RETRIES:
+                            print(f"Max retries reached for {url} due to rate limiting")
+                            return None, None
+                        
+                        handle_rate_limit(job, retry_count)
+                        continue
+                    
+                    if response.status_code != 200:
+                        print(f"Failed to fetch {url}: Status {response.status_code}")
+                        return None, None
+                    
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    if not soup:
+                        print(f"Failed to parse HTML for {url}")
+                        return None, None
+                    
+                    return response, soup
+                    
+                except requests.exceptions.RequestException as e:
+                    print(f"Network error for {url}: {str(e)}")
+                    return None, None
+                except Exception as e:
+                    print(f"Unexpected error for {url}: {str(e)}")
+                    return None, None
+            
+            return None, None
+
+        def extract_links(soup, current_url):
+            """Extract and clean links from the page"""
+            links = []
+            a_tags = soup.find_all('a', href=True)
+            
+            for a_tag in a_tags:
+                href = a_tag.get('href', '')
+                if href:
+                    href = clean_domain(href)
+                    if href not in crawled_urls_set:
+                        links.append(href)
+            
+            return links
+
+        def clean_page_content(soup):
+            """Clean the HTML content by removing unnecessary elements"""
+            for tag in soup.find_all(['script', 'style', 'link', 'img', 'nav', 'header', 'footer', 'aside']):
+                tag.decompose()
+            
+            title = str(soup.title.string) if soup.title else "Untitled"
+            html_content = str(soup)
+            text_content = soup.get_text(separator=' ', strip=True)
+            
+            return title, html_content, text_content
+
+        def store_document(document_data, current_url):
+            """Store or update document in the database"""
+            try:
+                existing_docs = document_repo.db.query(document_repo.model_class).filter(
+                    document_repo.model_class.uri == document_data['uri'],
+                    document_repo.model_class.domain_id == domain_obj.id
+                ).all()
+                
+                if existing_docs:
+                    document_repo.update(existing_docs[0].id, document_data)
+                    docs.append(existing_docs[0].id)
+                    crawled_urls_set.add(current_url)
+                    print(f"Updated document: {document_data['uri']}")
+                else:
+                    new_doc = document_repo.create(document_data)
+                    docs.append(new_doc.id)
+                    crawled_urls_set.add(current_url)
+                    db.commit()
+                    print(f"Created new document: {document_data['uri']}")
+                return True
+            except Exception as e:
+                print(f"Database error for {current_url}: {str(e)}")
+                db.rollback()
+                return False
+
         def process_url(current_url):
             """Process a single URL and store its content in the database"""
             nonlocal total_urls, crawled_urls, exception_urls
             
-            # Clean the current URL
+            # Clean and validate URL
             current_url = clean_domain(current_url.split('#')[0])
-            
-            # Skip if already visited or is a media file
-            if current_url in visited_urls:
-                return
-            visited_urls.add(current_url)
-            
-            if str(current_url).endswith(tuple(['.jpg', '.png', '.gif', '.jpeg', '.webp', '.pdf', '.doc', '.docx', '.xls', '.xlsx'])):
-                print(f"Skipping media file: {current_url}")
+            if not is_valid_url(current_url):
                 return
             
             print(f"Processing URL: {current_url}")
             
-            try:
-                # Fetch and parse the page
-                response = requests.get(current_url, timeout=10)
-                if response.status_code != 200:
-                    print(f"Failed to fetch {current_url}: Status {response.status_code}")
-                    exception_urls += 1
-                    update_progress()
-                    return
-                
-                soup = BeautifulSoup(response.text, 'html.parser')
-                if not soup:
-                    print(f"Failed to parse HTML for {current_url}")
-                    exception_urls += 1
-                    update_progress()
-                    return
-                
-                # Find all <a> tags with href attribute
-                a_tags = soup.find_all('a', href=True)
-                
-                # Extract href values into a list
-                links = []
-                for a_tag in a_tags:
-                    href = a_tag.get('href', '')
-                    if href:  # Only add non-empty href values
-                        # Clean the href URL
-                        href = clean_domain(href)
-                        links.append(href)
-                
-                # Update total URLs count for recursive crawling
-                if recursive:
-                    total_urls += len(links)
-                
-                # Clean HTML content
-                for tag in soup.find_all(['script', 'style', 'link', 'img', 'nav', 'header', 'footer', 'aside']):
-                    tag.decompose()
-                
-                # Get title and content
-                title = str(soup.title.string) if soup.title else "Untitled"
-                html_content = str(soup)
-                
-                # Convert HTML to Markdown if needed
-                markdown_content = None
-                if store_in_vector and html_to_markdown_agent:
-                    markdown_content = asyncio.run(html_to_markdown_agent.convert(html_content))
-                
-                text_content = soup.get_text(separator=' ', strip=True)
-                
-                if not text_content:
-                    print(f"No content found in {current_url}")
-                    exception_urls += 1
-                    update_progress()
-                    return
-                
-                # Prepare document data
-                parsed_url = urlparse(current_url)
-                document_data = {
-                    'title': title,
-                    'html': html_content,
-                    'markdown': markdown_content or text_content,
-                    'uri': parsed_url.path or '/',
-                    'domain_id': domain_obj.id
-                }
-                
-                # Store in database
-                try:
-                    # Check if document already exists for this domain
-                    existing_docs = document_repo.db.query(document_repo.model_class).filter(
-                        document_repo.model_class.uri == document_data['uri'],
-                        document_repo.model_class.domain_id == domain_obj.id
-                    ).all()
-                    if existing_docs:
-                        document_repo.update(existing_docs[0].id, document_data)
-                        docs.append(existing_docs[0].id)
-                        print(f"Updated document: {document_data['uri']}")
-                    else:
-                        new_doc = document_repo.create(document_data)
-                        docs.append(new_doc.id)
-                        db.commit()
-                        print(f"Created new document: {document_data['uri']}")
-                        
-                except Exception as e:
-                    print(f"Database error for {current_url}: {str(e)}")
-                    db.rollback()
-                    exception_urls += 1
-                    update_progress()
-                    return
-                
-                crawled_urls += 1
+            # Fetch and parse page with rate limit handling
+            response, soup = fetch_and_parse_page(current_url, job)
+            if not response or not soup:
+                exception_urls += 1
                 update_progress()
-                
-                # If recursive mode, find all links and process them
-                if recursive:
-                    for link in links:
-                        try:
-                            # Convert relative URLs to absolute
-                            absolute_url = urljoin(current_url, link)
-                            if not absolute_url:  # Skip if URL is invalid
-                                continue
-                                
-                            # Only process URLs from the same domain
-                            parsed_absolute_url = urlparse(absolute_url)
-                            if parsed_absolute_url.netloc == domain:
-                                process_url(absolute_url)
-                        except Exception as e:
-                            print(f"Error processing link {link} from {current_url}: {str(e)}")
-                            exception_urls += 1
-                            update_progress()
-                            continue
+                return
             
-            except requests.exceptions.RequestException as e:
-                print(f"Network error for {current_url}: {str(e)}")
+            # Extract links
+            links = extract_links(soup, current_url)
+            
+            # Update total URLs count for recursive crawling
+            if recursive:
+                total_urls += len(links)
+            
+            # Clean page content
+            title, html_content, text_content = clean_page_content(soup)
+            
+            if not text_content:
+                print(f"No content found in {current_url}")
                 exception_urls += 1
                 update_progress()
-            except Exception as e:
-                print(f"Error processing {current_url}: {str(e)}")
+                return
+            
+            # Prepare and store document
+            parsed_url = urlparse(current_url)
+            document_data = {
+                'title': title,
+                'html': html_content,
+                'markdown': text_content,
+                'uri': parsed_url.path or '/',
+                'domain_id': domain_obj.id
+            }
+            
+            if not store_document(document_data, current_url):
                 exception_urls += 1
                 update_progress()
-                db.rollback()
+                return
+            
+            crawled_urls += 1
+            update_progress()
+            
+            # Process links recursively if enabled
+            if recursive:
+                for link in links:
+                    try:
+                        absolute_url = urljoin(current_url, link)
+                        if not absolute_url:
+                            continue
+                            
+                        parsed_absolute_url = urlparse(absolute_url)
+                        if parsed_absolute_url.netloc == domain:
+                            process_url(absolute_url)
+                    except Exception as e:
+                        print(f"Error processing link {link} from {current_url}: {str(e)}")
+                        exception_urls += 1
+                        update_progress()
+                        continue
         
         # Initialize total URLs count
         total_urls = 1  # Start with 1 for the initial URL
