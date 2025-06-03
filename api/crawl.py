@@ -575,6 +575,8 @@ async def get_crawl_jobs(
         if domain:
             query = query.filter(CrawlJobs.init_url.like(f"%{domain}%"))
         if active:
+            query = query.filter(CrawlJobs.end_at.is_(None))
+        else:
             query = query.filter(CrawlJobs.end_at.is_not(None))
         if recursive is not None:
             query = query.filter(CrawlJobs.recursive == recursive)
