@@ -544,7 +544,7 @@ async def get_crawl_jobs(
     page_size: int = Query(10, ge=1, le=100, description="تعداد آیتم در هر صفحه"),
     status: Optional[str] = Query(None, description="فیلتر بر اساس وضعیت"),
     domain: Optional[str] = Query(None, description="فیلتر بر اساس دامنه"),
-    unfinished: bool = Query(False, description="فقط کارهای ناتمام"),
+    active: bool = Query(False, description="فقط کارهای ناتمام"),
     recursive: Optional[bool] = Query(None, description="فیلتر بر اساس خزش بازگشتی"),
     save_in_vector: Optional[bool] = Query(None, description="فیلتر بر اساس ذخیره برداری"),
     db: Session = Depends(get_db)
@@ -556,7 +556,7 @@ async def get_crawl_jobs(
     - **page_size**: تعداد آیتم در هر صفحه (بین 1 تا 100)
     - **status**: فیلتر بر اساس وضعیت (اختیاری)
     - **domain**: فیلتر بر اساس دامنه (اختیاری)
-    - **unfinished**: فقط کارهای ناتمام را نمایش دهد
+    - **active**: فقط کارهای ناتمام را نمایش دهد
     - **recursive**: فیلتر بر اساس خزش بازگشتی (اختیاری)
     - **save_in_vector**: فیلتر بر اساس ذخیره برداری (اختیاری)
     """
@@ -574,7 +574,7 @@ async def get_crawl_jobs(
             query = query.filter(CrawlJobs.status == status)
         if domain:
             query = query.filter(CrawlJobs.init_url.like(f"%{domain}%"))
-        if unfinished:
+        if active:
             query = query.filter(CrawlJobs.end_at.is_(None))
         if recursive is not None:
             query = query.filter(CrawlJobs.recursive == recursive)
