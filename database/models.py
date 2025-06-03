@@ -70,6 +70,8 @@ class CrawlJobs(BaseModel):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     job_id = Column(String(255), unique=True, nullable=False)
     init_url = Column(String(255), nullable=False)
+    recursive = Column(Boolean, default=False, nullable=False)
+    save_in_vector = Column(Boolean, default=False, nullable=False)
     logs = Column(Text, nullable=True)
     status = Column(JSON, nullable=True)
     started_at = Column(DateTime, default=datetime.utcnow)

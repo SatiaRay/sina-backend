@@ -128,6 +128,8 @@ class CrawlJobResponse(BaseModel):
     id: int
     job_id: str
     init_url: str
+    recursive: bool
+    save_in_vector: bool
     status: str
     started_at: datetime
     end_at: Optional[datetime] = None
@@ -199,6 +201,8 @@ async def crawl_url(request: CrawlRequest):
         crawl_job = crawl_job_repo.create({
             'job_id': job_id,
             'init_url': str(request.url),
+            'recursive': request.recursive,
+            'save_in_vector': request.store_in_vector,
             'status': initial_status['msg'],  # Store only the status message
             'logs': json.dumps([initial_status]),  # Store full status history
             'started_at': datetime.utcnow()
@@ -541,6 +545,8 @@ async def get_crawl_jobs(
     status: Optional[str] = Query(None, description="فیلتر بر اساس وضعیت"),
     domain: Optional[str] = Query(None, description="فیلتر بر اساس دامنه"),
     unfinished: bool = Query(False, description="فقط کارهای ناتمام"),
+    recursive: Optional[bool] = Query(None, description="فیلتر بر اساس خزش بازگشتی"),
+    save_in_vector: Optional[bool] = Query(None, description="فیلتر بر اساس ذخیره برداری"),
     db: Session = Depends(get_db)
 ):
     """
@@ -551,6 +557,8 @@ async def get_crawl_jobs(
     - **status**: فیلتر بر اساس وضعیت (اختیاری)
     - **domain**: فیلتر بر اساس دامنه (اختیاری)
     - **unfinished**: فقط کارهای ناتمام را نمایش دهد
+    - **recursive**: فیلتر بر اساس خزش بازگشتی (اختیاری)
+    - **save_in_vector**: فیلتر بر اساس ذخیره برداری (اختیاری)
     """
     try:
         crawl_job_repo = CrawlJobsRepository(db)
@@ -568,6 +576,10 @@ async def get_crawl_jobs(
             query = query.filter(CrawlJobs.init_url.like(f"%{domain}%"))
         if unfinished:
             query = query.filter(CrawlJobs.end_at.is_(None))
+        if recursive is not None:
+            query = query.filter(CrawlJobs.recursive == recursive)
+        if save_in_vector is not None:
+            query = query.filter(CrawlJobs.save_in_vector == save_in_vector)
         
         # Get total count
         total = query.count()
@@ -588,6 +600,8 @@ async def get_crawl_jobs(
                     id=job.id,
                     job_id=job.job_id,
                     init_url=job.init_url,
+                    recursive=job.recursive,
+                    save_in_vector=job.save_in_vector,
                     status=job.status,
                     started_at=job.started_at,
                     end_at=job.end_at
