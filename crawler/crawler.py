@@ -259,6 +259,33 @@ def crawl(url, recursive=False, db: Session = None, job=None):
                 db.rollback()
                 return False
 
+        def is_url_crawled(url: str, document_repo: DocumentRepository, domain_id: int) -> bool:
+            """
+            Check if a URL has already been crawled and stored in the database.
+            
+            Args:
+                url (str): The URL to check
+                document_repo (DocumentRepository): Repository for database operations
+                domain_id (int): The domain ID to check against
+                
+            Returns:
+                bool: True if URL has been crawled, False otherwise
+            """
+            try:
+                parsed_url = urlparse(url)
+                uri = parsed_url.path or '/'
+                
+                # Check if document exists with this URI and domain
+                existing_docs = document_repo.db.query(document_repo.model_class).filter(
+                    document_repo.model_class.uri == uri,
+                    document_repo.model_class.domain_id == domain_id
+                ).first()
+                
+                return existing_docs is not None
+            except Exception as e:
+                logging.error(f"Error checking if URL is crawled: {str(e)}")
+                return False
+
         def process_url(current_url):
             """Process a single URL and store its content in the database"""
             nonlocal total_urls, crawled_urls, exception_urls
@@ -266,6 +293,11 @@ def crawl(url, recursive=False, db: Session = None, job=None):
             # Clean and validate URL
             current_url = clean_domain(current_url.split('#')[0])
             if not is_valid_url(current_url):
+                return
+            
+            # Check if URL has already been crawled
+            if is_url_crawled(current_url, document_repo, domain_obj.id):
+                print(f"URL already crawled: {current_url}")
                 return
             
             print(f"Processing URL: {current_url}")
