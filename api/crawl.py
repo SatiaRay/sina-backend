@@ -134,6 +134,10 @@ class CrawlJobResponse(BaseModel):
     started_at: datetime
     end_at: Optional[datetime] = None
 
+class CrawlJobDetailResponse(CrawlJobResponse):
+    logs: List[Dict[str, Any]]
+    vectorization_batch: Optional[Dict[str, Any]] = None
+
 class PaginatedCrawlJobsResponse(BaseModel):
     items: List[CrawlJobResponse]
     total: int
@@ -624,5 +628,111 @@ async def get_crawl_jobs(
             detail={
                 "status": "error",
                 "message": f"خطا در دریافت لیست کارهای خزش: {str(e)}"
+            }
+        )
+
+@router.get("/crawl/jobs/{job_id}", response_model=CrawlJobDetailResponse, tags=["Crawler"],
+          summary="اطلاعات کامل یک کار خزش",
+          description="دریافت اطلاعات کامل یک کار خزش شامل لاگ‌ها و وضعیت برداری‌سازی")
+async def get_crawl_job_detail(
+    job_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    دریافت اطلاعات کامل یک کار خزش
+    
+    - **job_id**: شناسه یکتای کار خزش
+    
+    **نمونه خروجی:**
+    ```json
+    {
+      "id": 1,
+      "job_id": "550e8400-e29b-41d4-a716-446655440000",
+      "init_url": "https://example.com",
+      "recursive": true,
+      "save_in_vector": true,
+      "status": "Finished",
+      "started_at": "2024-03-20T10:00:00",
+      "end_at": "2024-03-20T10:05:00",
+      "logs": [
+        {
+          "msg": "Queued",
+          "progress": {
+            "total_urls": 0,
+            "crawled_urls": 0,
+            "exception_urls": 0,
+            "progress_percent": 0
+          },
+          "timestamp": "2024-03-20T10:00:00"
+        }
+      ],
+      "vectorization_batch": {
+        "batch_id": "batch_123",
+        "job_ids": ["job_1", "job_2"],
+        "progress": {
+          "total_docs": 2,
+          "done": 1,
+          "remaining": 1,
+          "exceptions": 0,
+          "progress_percent": 50
+        }
+      }
+    }
+    ```
+    """
+    try:
+        crawl_job_repo = CrawlJobsRepository(db)
+        crawl_job = crawl_job_repo.get_by_job_id(job_id)
+        
+        if not crawl_job:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "status": "error",
+                    "message": f"کار خزش با شناسه {job_id} یافت نشد"
+                }
+            )
+        
+        # Parse logs from JSON string
+        logs = []
+        if crawl_job.logs:
+            try:
+                logs = json.loads(crawl_job.logs)
+            except json.JSONDecodeError:
+                logs = []
+        
+        # Get vectorization batch info if available
+        vectorization_batch = None
+        if crawl_job.save_in_vector:
+            try:
+                redis_conn = Redis(host=os.getenv('REDIS_HOST'))
+                job = Job.fetch(job_id, connection=redis_conn)
+                if job and job.meta:
+                    vectorization_batch = job.meta.get('vectorization_batch')
+            except Exception as e:
+                logger.error(f"Error fetching vectorization batch: {str(e)}")
+        
+        return CrawlJobDetailResponse(
+            id=crawl_job.id,
+            job_id=crawl_job.job_id,
+            init_url=crawl_job.init_url,
+            recursive=crawl_job.recursive,
+            save_in_vector=crawl_job.save_in_vector,
+            status=crawl_job.status,
+            started_at=crawl_job.started_at,
+            end_at=crawl_job.end_at,
+            logs=logs,
+            vectorization_batch=vectorization_batch
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching crawl job detail: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "message": f"خطا در دریافت اطلاعات کار خزش: {str(e)}"
             }
         )
