@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Type, TypeVar, Generic
 from datetime import datetime
-from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain
+from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain, CrawlJobs
 from sqlalchemy.types import String
 from sqlalchemy import text
 
@@ -160,4 +160,60 @@ class DocumentRepository(Repository[Document]):
         return self.db.query(Document).filter(Document.domain_id == domain_id).all()
 
     def search_by_title(self, query: str) -> List[Document]:
-        return self.db.query(Document).filter(Document.title.ilike(f"%{query}%")).all() 
+        return self.db.query(Document).filter(Document.title.ilike(f"%{query}%")).all()
+
+class CrawlJobsRepository(Repository[CrawlJobs]):
+    def __init__(self, db: Session):
+        super().__init__(db, CrawlJobs)
+
+    def get_by_job_id(self, job_id: str) -> Optional[CrawlJobs]:
+        """Get a crawl job by its job_id"""
+        return self.db.query(CrawlJobs).filter(CrawlJobs.job_id == job_id).first()
+
+    def get_active_jobs(self) -> List[CrawlJobs]:
+        """Get all active crawl jobs (jobs without end_at set)"""
+        return self.db.query(CrawlJobs).filter(CrawlJobs.end_at.is_(None)).all()
+
+    def get_completed_jobs(self) -> List[CrawlJobs]:
+        """Get all completed crawl jobs"""
+        return self.db.query(CrawlJobs).filter(CrawlJobs.end_at.isnot(None)).all()
+
+    def update_job_status(self, job_id: str, status: dict) -> Optional[CrawlJobs]:
+        """Update the status of a crawl job"""
+        job = self.get_by_job_id(job_id)
+        if job:
+            current_status = job.status or {}
+            current_status.update(status)
+            return self.update(job.id, {"status": current_status})
+        return None
+
+    def complete_job(self, job_id: str, status: dict = None) -> Optional[CrawlJobs]:
+        """Mark a job as completed and update its status"""
+        job = self.get_by_job_id(job_id)
+        if job:
+            update_data = {"end_at": datetime.utcnow()}
+            if status:
+                current_status = job.status or {}
+                current_status.update(status)
+                update_data["status"] = current_status
+            return self.update(job.id, update_data)
+        return None
+
+    def add_log(self, job_id: str, log_message: str) -> Optional[CrawlJobs]:
+        """Add a log message to the job's logs"""
+        job = self.get_by_job_id(job_id)
+        if job:
+            current_logs = job.logs or ""
+            timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            new_log = f"[{timestamp}] {log_message}\n"
+            updated_logs = current_logs + new_log
+            return self.update(job.id, {"logs": updated_logs})
+        return None
+
+    def get_jobs_by_domain(self, domain: str) -> List[CrawlJobs]:
+        """Get all crawl jobs for a specific domain"""
+        return self.db.query(CrawlJobs).filter(CrawlJobs.init_url.like(f"%{domain}%")).all()
+
+    def get_recent_jobs(self, limit: int = 10) -> List[CrawlJobs]:
+        """Get the most recent crawl jobs"""
+        return self.db.query(CrawlJobs).order_by(CrawlJobs.started_at.desc()).limit(limit).all() 

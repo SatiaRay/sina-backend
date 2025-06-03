@@ -1,10 +1,12 @@
 from ast import List
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean, JSON, Enum, TEXT
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean, JSON, Enum, TEXT, false
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import os
 from dotenv import load_dotenv, find_dotenv
+import pymysql
+pymysql.install_as_MySQLdb()
 
 # Force reload of environment variables
 print("Loading environment from:", find_dotenv())
@@ -22,7 +24,7 @@ print(f"Database: {os.getenv('MYSQL_DATABASE')}")
 print(f"Port: {os.getenv('MYSQL_PORT')}")
 
 # Create SQLAlchemy engine
-DATABASE_URL = f"mysql+mysqlconnector://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{os.getenv('MYSQL_HOST')}:{os.getenv('MYSQL_PORT')}/{os.getenv('MYSQL_DATABASE')}"
+DATABASE_URL = f"mysql+pymysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{os.getenv('MYSQL_HOST')}:{os.getenv('MYSQL_PORT')}/{os.getenv('MYSQL_DATABASE')}"
 print(f"Database URL: {DATABASE_URL}")
 engine = create_engine(DATABASE_URL)
 
@@ -62,6 +64,16 @@ class CrawledDomain(BaseModel):
     
     domain = Column(String(255), unique=True, nullable=False)
     documents = relationship("Document", back_populates="domain")
+    
+class CrawlJobs(BaseModel):
+    __tablename__ = "crawl_jobs"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    job_id = Column(String(255), unique=True, nullable=False)
+    init_url = Column(String(255), nullable=False)
+    logs = Column(Text, nullable=True)
+    status = Column(JSON, nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow)
+    end_at = Column(DateTime, default=datetime.utcnow, nullable=True)
 
 # Document model
 class Document(BaseModel):
