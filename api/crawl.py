@@ -394,6 +394,16 @@ def update_job_status(job, status_msg, include_batch=False):
         
         job.meta['status'] = status_obj
         job.save_meta()
+
+        # Update status in CrawlJobs table
+        crawl_job_id = job.meta.get('crawl_job_id')
+        if crawl_job_id:
+            db = SessionLocal()
+            try:
+                update_crawl_job_status(crawl_job_id, status_obj, db)
+            finally:
+                db.close()
+
         time.sleep(1)
     except Exception as e:
         raise CrawlError(
