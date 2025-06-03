@@ -800,4 +800,56 @@ async def websocket_vectorize_status(websocket: WebSocket, job_id: str):
         traceback.print_exc()
         await websocket.close(code=1011)  # Close with an error code
 
+@router.get("/domain/{domain_id}", response_model=PaginatedDocumentListResponse,
+          summary="دریافت اسناد یک دامنه",
+          description="این اندپوینت لیست اسناد یک دامنه خاص را با پشتیبانی از صفحه‌بندی برمی‌گرداند")
+def get_documents_by_domain(
+    domain_id: int,
+    page: int = Query(1, description="Page number (starting from 1)", ge=1),
+    size: int = Query(10, description="Number of documents per page", ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    document_repo = DocumentRepository(db)
+    domain_repo = CrawledDomainRepository(db)
+    
+    # Verify domain exists
+    domain = domain_repo.get(domain_id)
+    if not domain:
+        raise HTTPException(status_code=404, detail="Domain not found")
+    
+    # Query documents for the domain with pagination
+    base_query = document_repo.db.query(document_repo.model_class).filter(
+        document_repo.model_class.domain_id == domain_id
+    )
+    
+    # Calculate total count and pages
+    total = base_query.count()
+    pages = (total + size - 1) // size  # Ceiling division
+    
+    # Apply pagination
+    offset = (page - 1) * size
+    documents = base_query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(size).all()
+    
+    # Create response with domain info
+    items = []
+    for doc in documents:
+        items.append(DocumentListResponse(
+            id=doc.id,
+            title=doc.title,
+            uri=doc.uri,
+            domain_id=doc.domain_id,
+            domain=DomainInfo(id=domain.id, domain=domain.domain),
+            vector_id=doc.vector_id,
+            created_at=doc.created_at,
+            updated_at=doc.updated_at
+        ))
+    
+    return PaginatedDocumentListResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=size,
+        pages=pages
+    )
+
 
