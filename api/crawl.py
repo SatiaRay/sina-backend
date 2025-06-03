@@ -321,10 +321,7 @@ def update_batch_progress(vector_jobs, redis_con):
 def monitor_vectorization_batch(job, vector_jobs, redis_con):
     """Monitor the progress of vectorization jobs and update job metadata"""
     try:
-        max_iterations = 10  # Maximum number of iterations to prevent infinite loops
-        iteration = 0
-        
-        while iteration < max_iterations:
+        while True:
             # Update batch progress
             batch_progress = update_batch_progress(vector_jobs, redis_con)
             
@@ -332,22 +329,16 @@ def monitor_vectorization_batch(job, vector_jobs, redis_con):
             job.meta['vectorization_batch']['progress'] = batch_progress
             job.save_meta()
             
-            # Check if all jobs are complete
+            # Check if all jobs are complete (either done or failed)
             if batch_progress['done'] + batch_progress['exceptions'] == len(vector_jobs):
+                logger.info(f"All vectorization jobs completed. Done: {batch_progress['done']}, Exceptions: {batch_progress['exceptions']}")
                 break
                 
             time.sleep(1)  # Wait before next check
-            iteration += 1
-            
-        if iteration >= max_iterations:
-            logger.warning(f"Vectorization batch monitoring reached maximum iterations ({max_iterations})")
             
     except Exception as e:
-        raise VectorizationError(
-            f"Failed to monitor vectorization batch: {str(e)}",
-            "batch_monitoring_error",
-            {'vector_jobs': vector_jobs, 'original_error': str(e)}
-        )
+        logger.error(f"Error monitoring vectorization batch: {str(e)}")
+        raise
 
 def update_job_status(job, status_msg, include_batch=False):
     """Update the job status with the given message and optional batch information"""
@@ -362,6 +353,7 @@ def update_job_status(job, status_msg, include_batch=False):
         
         job.meta['status'] = status
         job.save_meta()
+        time.sleep(1)
     except Exception as e:
         raise CrawlError(
             f"Failed to update job status: {str(e)}",
