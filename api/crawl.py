@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends, Query,WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, HttpUrl
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from fastapi.responses import JSONResponse
 from datetime import datetime
 import logging
 from crawler.crawler import crawl
-from database.models import Document, CrawledDomain, get_db
+from database.models import Document, CrawledDomain, CrawlJobs, get_db
 from sqlalchemy.orm import Session
 from urllib.parse import urlparse, urlunparse
 from rq import Queue
@@ -22,7 +22,7 @@ import requests
 from bs4 import BeautifulSoup
 from difflib import SequenceMatcher
 import hashlib
-from database.repository import DocumentRepository
+from database.repository import DocumentRepository, CrawlJobsRepository
 from database.models import SessionLocal
 
 # Configure logging
@@ -124,6 +124,21 @@ class CrawlResponse(BaseModel):
     url: str
     job_id: str
 
+class CrawlJobResponse(BaseModel):
+    id: int
+    job_id: str
+    init_url: str
+    status: str
+    started_at: datetime
+    end_at: Optional[datetime] = None
+
+class PaginatedCrawlJobsResponse(BaseModel):
+    items: List[CrawlJobResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
 @router.post("/crawl", response_model=CrawlResponse, tags=["Crawler"],
           summary="خزش یک URL",
           description="این اندپوینت یک URL را خزش کرده و محتوای آن را استخراج می‌کند")
@@ -160,6 +175,8 @@ async def crawl_url(request: CrawlRequest):
     ```
     """
     start_time = datetime.now()
+    db = SessionLocal()
+    crawl_job_repo = CrawlJobsRepository(db)
 
     try:
         # Add crawl task to queue
@@ -167,27 +184,39 @@ async def crawl_url(request: CrawlRequest):
         q = Queue(connection=redis_con, default_timeout=600)  # 10 minutes timeout
         job_id = str(uuid.uuid4())
         
-        # Create job with initial metadata
+        # Initial status object
+        initial_status = {
+            'msg': 'Queued',
+            'progress': {
+                'total_urls': 0,
+                'crawled_urls': 0,
+                'exception_urls': 0,
+                'progress_percent': 0
+            }
+        }
+        
+        # Create CrawlJob record
+        crawl_job = crawl_job_repo.create({
+            'job_id': job_id,
+            'init_url': str(request.url),
+            'status': initial_status['msg'],  # Store only the status message
+            'logs': json.dumps([initial_status])  # Store full status object in logs
+        })
+        
+        # Create RQ job with initial metadata
         job = q.enqueue(crawl_task, request.url, request.recursive, request.store_in_vector, job_id=job_id)
         job.meta = {
             'type': 'crawl',
             'url': str(request.url),
-            'status': {
-                'msg': 'Queued',
-                'progress': {
-                    'total_urls': 0,
-                    'crawled_urls': 0,
-                    'exception_urls': 0,
-                    'progress_percent': 0
-                }
-            }
+            'crawl_job_id': crawl_job.id,
+            'status': initial_status
         }
         job.save_meta()
 
         # Prepare response
         response = CrawlResponse(
             message="لینک وارد شده برای خزش در صف قرار داده شد.",
-            url= str(request.url),
+            url=str(request.url),
             job_id=job_id
         )
         
@@ -207,11 +236,13 @@ async def crawl_url(request: CrawlRequest):
                 "end_time": datetime.now().isoformat()
             }
         )
+    finally:
+        db.close()
 
 def initialize_job_metadata(job):
     """Initialize the job metadata with initial progress information"""
     try:
-        job.meta['status'] = {
+        status_obj = {
             'msg': 'running crawl',
             'progress': {
                 'total_urls': 0,
@@ -220,6 +251,7 @@ def initialize_job_metadata(job):
                 'progress_percent': 0
             }
         }
+        job.meta['status'] = status_obj
         job.save_meta()
     except Exception as e:
         raise CrawlInitializationError(
@@ -343,15 +375,15 @@ def monitor_vectorization_batch(job, vector_jobs, redis_con):
 def update_job_status(job, status_msg, include_batch=False):
     """Update the job status with the given message and optional batch information"""
     try:
-        status = {
+        status_obj = {
             'msg': status_msg,
             'progress': job.meta.get('progress', {})
         }
         
         if include_batch:
-            status['vectorization_batch'] = job.meta.get('vectorization_batch', {})
+            status_obj['vectorization_batch'] = job.meta.get('vectorization_batch', {})
         
-        job.meta['status'] = status
+        job.meta['status'] = status_obj
         job.save_meta()
         time.sleep(1)
     except Exception as e:
@@ -360,6 +392,34 @@ def update_job_status(job, status_msg, include_batch=False):
             "status_update_error",
             {'status_msg': status_msg, 'include_batch': include_batch, 'original_error': str(e)}
         )
+
+def update_crawl_job_status(crawl_job_id: int, status_obj: dict, db: Session):
+    """Update the CrawlJob record with new status and append to logs"""
+    try:
+        crawl_job_repo = CrawlJobsRepository(db)
+        crawl_job = crawl_job_repo.get(crawl_job_id)
+        if crawl_job:
+            # Get current logs or initialize empty list
+            current_logs = crawl_job.logs or []
+            if isinstance(current_logs, str):
+                try:
+                    current_logs = json.loads(current_logs)
+                except:
+                    current_logs = []
+            
+            # Add timestamp to status object
+            status_obj['timestamp'] = datetime.utcnow().isoformat()
+            
+            # Append new status to logs
+            current_logs.append(status_obj)
+            
+            # Update both status and logs
+            crawl_job_repo.update(crawl_job.id, {
+                'status': status_obj['msg'],  # Store only the status message
+                'logs': json.dumps(current_logs)  # Store full status history
+            })
+    except Exception as e:
+        logger.error(f"Error updating CrawlJob status: {str(e)}")
 
 def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False):
     """Main crawl task that orchestrates the crawling and vectorization process"""
@@ -371,12 +431,14 @@ def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False)
         from rq import get_current_job
 
         job = get_current_job()
-        # Create a new session directly instead of using the generator
         db = SessionLocal()
+        crawl_job_id = job.meta.get('crawl_job_id')
 
         try:
             # Initialize job metadata
             initialize_job_metadata(job)
+            if crawl_job_id:
+                update_crawl_job_status(crawl_job_id, job.meta['status'], db)
             
             # Start crawling and get document IDs
             doc_ids = crawl(str(url), recursive=recursive, db=db, job=job)
@@ -384,6 +446,8 @@ def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False)
             if store_in_vector and doc_ids:
                 # Update status to saving data
                 update_job_status(job, 'saving data')
+                if crawl_job_id:
+                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
                 
                 # Create batch of vectorization jobs
                 redis_con = Redis(host=os.getenv('REDIS_HOST'))
@@ -392,25 +456,37 @@ def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False)
                 # Update parent job with batch information
                 job.meta['vectorization_batch'] = batch_info
                 job.save_meta()
+                if crawl_job_id:
+                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
                 
                 # Monitor batch progress
                 monitor_vectorization_batch(job, batch_info['job_ids'], redis_con)
                 
                 # Update final status
                 update_job_status(job, 'Finished', include_batch=True)
+                if crawl_job_id:
+                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
             else:
                 update_job_status(job, 'Finished', include_batch=False)
+                if crawl_job_id:
+                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
 
         except CrawlError as e:
             handle_crawl_error(job, e, e.error_type)
+            if crawl_job_id:
+                update_crawl_job_status(crawl_job_id, job.meta['status'], db)
             raise
         except Exception as e:
             handle_crawl_error(job, e, "unexpected_error")
+            if crawl_job_id:
+                update_crawl_job_status(crawl_job_id, job.meta['status'], db)
             raise
 
     except Exception as e:
         if job:
             handle_crawl_error(job, e, "fatal_error")
+            if crawl_job_id:
+                update_crawl_job_status(crawl_job_id, job.meta['status'], db)
         raise
     finally:
         if db:
@@ -447,3 +523,82 @@ async def websocket_job_status(websocket: WebSocket, job_id: str):
         logger.error(f"Error in websocket for job {job_id}: {e}")
         traceback.print_exc()
         await websocket.close(code=1011) # Close with an error code
+
+@router.get("/crawl/jobs", response_model=PaginatedCrawlJobsResponse, tags=["Crawler"],
+          summary="لیست کارهای خزش",
+          description="دریافت لیست کارهای خزش با امکان صفحه‌بندی و فیلتر")
+async def get_crawl_jobs(
+    page: int = Query(1, ge=1, description="شماره صفحه"),
+    page_size: int = Query(10, ge=1, le=100, description="تعداد آیتم در هر صفحه"),
+    status: Optional[str] = Query(None, description="فیلتر بر اساس وضعیت"),
+    domain: Optional[str] = Query(None, description="فیلتر بر اساس دامنه"),
+    unfinished: bool = Query(False, description="فقط کارهای ناتمام"),
+    db: Session = Depends(get_db)
+):
+    """
+    دریافت لیست کارهای خزش با امکان صفحه‌بندی و فیلتر
+    
+    - **page**: شماره صفحه (شروع از 1)
+    - **page_size**: تعداد آیتم در هر صفحه (بین 1 تا 100)
+    - **status**: فیلتر بر اساس وضعیت (اختیاری)
+    - **domain**: فیلتر بر اساس دامنه (اختیاری)
+    - **unfinished**: فقط کارهای ناتمام را نمایش دهد
+    """
+    try:
+        crawl_job_repo = CrawlJobsRepository(db)
+        
+        # Calculate offset
+        offset = (page - 1) * page_size
+        
+        # Build query
+        query = db.query(CrawlJobs)
+        
+        # Apply filters
+        if status:
+            query = query.filter(CrawlJobs.status == status)
+        if domain:
+            query = query.filter(CrawlJobs.init_url.like(f"%{domain}%"))
+        if unfinished:
+            query = query.filter(CrawlJobs.end_at.is_(None))
+        
+        # Get total count
+        total = query.count()
+        
+        # Get paginated results
+        jobs = query.order_by(CrawlJobs.started_at.desc())\
+                   .offset(offset)\
+                   .limit(page_size)\
+                   .all()
+        
+        # Calculate total pages
+        total_pages = (total + page_size - 1) // page_size
+        
+        # Prepare response
+        response = PaginatedCrawlJobsResponse(
+            items=[
+                CrawlJobResponse(
+                    id=job.id,
+                    job_id=job.job_id,
+                    init_url=job.init_url,
+                    status=job.status,
+                    started_at=job.started_at,
+                    end_at=job.end_at
+                ) for job in jobs
+            ],
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error fetching crawl jobs: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "message": f"خطا در دریافت لیست کارهای خزش: {str(e)}"
+            }
+        )
