@@ -195,12 +195,13 @@ async def crawl_url(request: CrawlRequest):
             }
         }
         
-        # Create CrawlJob record
+        # Create CrawlJob record without end_at
         crawl_job = crawl_job_repo.create({
             'job_id': job_id,
             'init_url': str(request.url),
             'status': initial_status['msg'],  # Store only the status message
-            'logs': json.dumps([initial_status])  # Store full status object in logs
+            'logs': json.dumps([initial_status]),  # Store full status history
+            'started_at': datetime.utcnow()
         })
         
         # Create RQ job with initial metadata
@@ -413,11 +414,18 @@ def update_crawl_job_status(crawl_job_id: int, status_obj: dict, db: Session):
             # Append new status to logs
             current_logs.append(status_obj)
             
-            # Update both status and logs
-            crawl_job_repo.update(crawl_job.id, {
+            # Prepare update data
+            update_data = {
                 'status': status_obj['msg'],  # Store only the status message
                 'logs': json.dumps(current_logs)  # Store full status history
-            })
+            }
+            
+            # Set end_at only if status is 'Finished'
+            if status_obj['msg'] == 'Finished':
+                update_data['end_at'] = datetime.utcnow()
+            
+            # Update the record
+            crawl_job_repo.update(crawl_job.id, update_data)
     except Exception as e:
         logger.error(f"Error updating CrawlJob status: {str(e)}")
 

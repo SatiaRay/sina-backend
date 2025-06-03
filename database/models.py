@@ -73,7 +73,7 @@ class CrawlJobs(BaseModel):
     logs = Column(Text, nullable=True)
     status = Column(JSON, nullable=True)
     started_at = Column(DateTime, default=datetime.utcnow)
-    end_at = Column(DateTime, default=datetime.utcnow, nullable=True)
+    end_at = Column(DateTime, nullable=True)
 
 # Document model
 class Document(BaseModel):
