@@ -39,7 +39,6 @@ class DocumentBase(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     vector_id: Optional[str] = None
-    vector_id: Optional[str] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -81,7 +80,7 @@ class DocumentListResponse(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     domain: Optional[DomainInfo] = None
-    vector_id: Optional[str]
+    vector_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -189,6 +188,8 @@ def get_manual_documents(
             title=doc.title,
             uri=doc.uri,
             domain_id=doc.domain_id,
+            domain=domain,
+            vector_id=doc.vector_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at
         ))
@@ -590,7 +591,7 @@ async def vectorize_document(
         redis_con = Redis(host=os.getenv('REDIS_HOST'))
         q = Queue(connection=redis_con)
         job_id = str(uuid.uuid4())
-        q.enqueue(vectorize_task, document_id, request, job_id = job_id)
+        q.enqueue(vectorize_task, document_id, request.html, request.metadata, job_id = job_id)
 
          # Prepare response
         response = VectorizeDocumentResponse(
@@ -609,7 +610,7 @@ async def vectorize_document(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-async def vectorize_task(document_id, request: VectorizeDocumentRequest):
+async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] = None):
     try:
         from database.models import SessionLocal
         from rq import get_current_job
@@ -638,7 +639,7 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         job.save_meta()
         
         # Convert HTML to Markdown
-        markdown = await html_to_markdown_agent.convert(request.html)
+        markdown = await html_to_markdown_agent.convert(html)
         if markdown is None:
             raise HTTPException(
                 status_code=500,
@@ -653,7 +654,7 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         uri = clean_domain(document.uri) if document.uri else None
 
         # Prepare metadata
-        metadata = request.metadata or {}
+        metadata = metadata or {}
         metadata.update({
             "document_id": document_id,
             "title": document.title,
@@ -678,7 +679,7 @@ async def vectorize_task(document_id, request: VectorizeDocumentRequest):
         # Update document with vector_id
         update_data = {
             "vector_id": vector_id,
-            "html" : request.html,
+            "html" : html,
             "markdown" : markdown,
             "uri": uri  # Update with cleaned URI
         }
@@ -714,9 +715,13 @@ async def store_vector_document(vector_doc: Dict[str, Any]) -> str:
         str: Vector ID of the stored document
     """
     try:
+        host = os.getenv('HOST', 'http://localhost:8000')
+        if not host.startswith(('http://', 'https://')):
+            host = f'http://{host}'
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{os.getenv('HOST')}/vector/store",
+                f"{host}/vector/store",
                 json={"documents": [vector_doc]}
             )
             response.raise_for_status()
@@ -736,9 +741,13 @@ async def get_vector_document(vector_id: str) -> Dict[str, Any]:
         Dict containing the vector document data
     """
     try:
+        host = os.getenv('HOST', 'http://localhost:8000')
+        if not host.startswith(('http://', 'https://')):
+            host = f'http://{host}'
+
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{os.getenv('HOST')}/vector/{vector_id}"
+                f"{host}/vector/{vector_id}"
             )
             response.raise_for_status()
             return response.json()

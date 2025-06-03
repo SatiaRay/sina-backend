@@ -2,7 +2,7 @@
 
 [project]
 name = "Satia AI"
-version = "0.4.0"
+version = "0.4.0-beta"
 description = "Backend API for Satia AI"
 authors = [
     { name="Mahdi Mahmoudi", email="mahmodimahdi26@gmail.com" },

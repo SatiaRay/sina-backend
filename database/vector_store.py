@@ -1,6 +1,5 @@
 import chromadb
 from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
 import os
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
