@@ -187,7 +187,7 @@ async def crawl_url(request: CrawlRequest):
     try:
         # Add crawl task to queue
         redis_con = Redis(host=os.getenv('REDIS_HOST'))
-        q = Queue(connection=redis_con, default_timeout=15000)  # 10 minutes timeout
+        q = Queue('crawl', connection=redis_con, default_timeout=15000)  # 10 minutes timeout
         job_id = str(uuid.uuid4())
         
         # Initial status object
