@@ -22,6 +22,7 @@ class Chunk(BaseModel):
         }
 
 class DataSource(BaseModel):
+    source_id: str
     url: str
     imported_by: str
     import_date: datetime
@@ -147,4 +148,32 @@ class CrawledDocument(BaseModel):
     status: str = "pending"
     review_info: Optional[CurationStatus] = None
     created_at: datetime
-    updated_at: Optional[datetime] = None 
+    updated_at: Optional[datetime] = None
+
+class VectorSearchRequest(BaseModel):
+    question: str
+    limit: Optional[int] = 5 
+    max_score: Optional[float] = 1.0
+
+class StoreVectorRequest(BaseModel):
+    """
+    مدل درخواست برای ذخیره متن و متادیتا در پایگاه داده برداری
+    
+    - text: متن اصلی برای ذخیره (می‌تواند شامل تگ‌های HTML باشد)
+    - metadata: متادیتای مربوط به متن
+    """
+    text: str
+    metadata: Dict[str, Any]
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "text": "<p class='content'>ساتیا یک پلتفرم مدیریت منابع سازمانی است که...</p>",
+                "metadata": {
+                    "source": "دستی",
+                    "title": "درباره ساتیا",
+                    "author": "تیم ساتیا",
+                    "date": "2024-04-26"
+                }
+            }
+        }

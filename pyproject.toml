@@ -1,0 +1,11 @@
+# pyproject.toml
+
+[project]
+name = "Satia AI"
+version = "0.4.1-alpha"
+description = "Backend API for Satia AI"
+authors = [
+    { name="Mahdi Mahmoudi", email="mahmodimahdi26@gmail.com" },
+    { name="Vahid Ghaemaghami", email="v.ghaem@gmail.com" }
+]
+license = { text = "All rights reserved" }

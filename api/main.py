@@ -5,72 +5,135 @@ from urllib.parse import urlparse
 import json
 from datetime import datetime
 import logging
+from bs4 import BeautifulSoup
+import hashlib
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from fastapi import FastAPI, HTTPException, Depends, Body, Request
+from fastapi import FastAPI, HTTPException, Depends, Body, Request, WebSocket, WebSocketDisconnect, Query
+from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
-from typing import List, Dict, Any
-from dotenv import load_dotenv
-from models.rag import RAGSystem
-from models.text_processor import TextProcessor
-from crawler.main import run_spider
-import uuid
-from .models import (DataSource, DataSourceListResponse, Chunk, EditChunkRequest, 
-                    PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest,
-                    CurationStatus, CurationStats)
+from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv, find_dotenv
+from provider.service_container import container, ServiceContainer
+from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from database.vector_store import VectorStore
+from database.repository import DocumentRepository
 from util.database import get_db_connection
-from api.models import (ChatRequest, 
-                      AddKnowledgeRequest)
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
+from util.event_bus import event_bus, VectorStoreEvent
+from .models import (DataSource, DataSourceListResponse, Chunk, EditChunkRequest, 
+PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest,CurationStatus, CurationStats, VectorSearchRequest,ChatRequest, AddKnowledgeRequest,StoreVectorRequest)
+from models.html_to_markdown_agent import HTMLToMarkdownAgent
+from database.repository import DocumentRepository
+from database.models import get_db
+import uuid
+
+# Routes
+from api.about import router as about_router
+from .wizard import router as wizard_router
+from .document import router as document_router, document_websocket_router
+from .domain import router as domain_router
+from .chat import router as chat_router
+from .crawl import router as crawl_router
+from .vector import router as vector_router
+from .workflow import router as workflow_router
+from .ai import router as ai_router
+from .job import router as job_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
 
-load_dotenv()
+# Force reload environment variables
+print("Loading environment from:", find_dotenv())
+load_dotenv(override=True)
 
+# Set base path for service container
+ServiceContainer.set_base_path(str(root_dir))
+
+# Initialize service container bindings
+def init_service_container():
+    # Bind VectorStore as singleton
+    container.singleton('vector_store', VectorStore)
+    
+    # Bind ChatAgentRagProxy as singleton
+    container.singleton('chat_agent', ChatAgentRagProxy)
+    
+    # Bind DocumentRepository as singleton
+    container.singleton('document_repository', DocumentRepository)
+    
+    # Create and bind instances
+    vector_store = container.make('vector_store')
+    container.instance('vector_store', vector_store)
+    
+    chat_agent = container.make('chat_agent')
+    container.instance('chat_agent', chat_agent)
+
+# Initialize the service container
+init_service_container()
+
+# Debug: Print database configuration at startup
+print("Environment Variables at Startup:")
+print(f"Current Directory: {os.getcwd()}")
+print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
+print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
+
+try:
+    # Global vector store instance
+    vector_store = container.make('vector_store')
+
+    def get_vector_store():
+        """Get or create VectorStore instance"""
+        return container.make('vector_store')
+
+    def refresh_vector_store(data=None):
+        """Callback to refresh VectorStore instance"""
+        print("Refreshing VectorStore instance...")
+        vector_store = VectorStore()
+        container.instance('vector_store', vector_store)
+        print("VectorStore instance refreshed successfully")
+
+    # Subscribe to collection modification events
+    event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_vector_store)
+
+except Exception as e:
+    print(f"Error during initialization: {str(e)}")
+    raise
+
+# Create FastAPI app
 app = FastAPI(
-    title="Satya Support Chatbot API",
-    description="""
-    ## API چت‌بات پشتیبانی ساتیا
-    
-    این API امکانات زیر را فراهم می‌کند:
-    
-    * **پرسش و پاسخ**: پرسش از چت‌بات و دریافت پاسخ براساس پایگاه دانش
-    * **مدیریت دانش**: افزودن، به‌روزرسانی و حذف دانش از منابع مختلف (URL یا متن ساده)
-    * **مدیریت منابع داده**: مشاهده و ویرایش منابع داده موجود
-    
-    برای استفاده از API، می‌توانید از اندپوینت‌های زیر استفاده کنید:
-    
-    * `/ask` یا `/askme`: برای پرسش از چت‌بات
-    * `/add_knowledge`: برای افزودن دانش از یک URL
-    * `/update_knowledge`: برای به‌روزرسانی دانش موجود از یک URL
-    * `/api/add_plaintext`: برای افزودن متن ساده به پایگاه دانش
-    """,
+    title=APP_NAME,
     version=APP_VERSION,
-    contact={
-        "name": "تیم پشتیبانی ساتیا",
-        "url": "https://www.satia.co/support",
-        "email": "support@satia.co",
-    },
-    docs_url="/docs",
-    redoc_url="/redoc",
+    description="API for managing documents and knowledge base",
+    redirect_slashes=False
 )
 
-# تنظیم CORS
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # در محیط تولید محدود کنید
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(wizard_router)
+app.include_router(document_router)
+app.include_router(document_websocket_router)
+app.include_router(domain_router)
+app.include_router(crawl_router)
+app.include_router(chat_router)
+app.include_router(vector_router)
+app.include_router(workflow_router)
+app.include_router(ai_router)
+app.include_router(about_router)
+app.include_router(job_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
@@ -141,6 +204,7 @@ async def log_requests(request: Request, call_next):
 # مدل‌های درخواست و پاسخ
 class QuestionRequest(BaseModel):
     question: str
+    attach_resources: bool = False
 
 class QuestionResponse(BaseModel):
     answer: str
@@ -152,61 +216,24 @@ class DocumentRequest(BaseModel):
 class UrlRequest(BaseModel):
     url: HttpUrl
 
+class DocumentUpdateRequest(BaseModel):
+    text: str
+    metadata: Optional[dict] = None
+
 # نمونه‌های کلاس‌ها
-rag_system = RAGSystem()
-text_processor = TextProcessor()
 vector_store = VectorStore()
+agent_rag = ChatAgentRagProxy()
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Satya Support Chatbot API"}
+    return {
+        "app": APP_NAME,
+        "version": "1.0.0",
+        "status": "running"
+    }
 
-@app.post("/ask", response_model=Dict[str, Any], tags=["Chat"],
-          summary="پرسش از چت‌بات",
-          description="این اندپوینت یک سوال را دریافت کرده و پاسخ مرتبط را از پایگاه دانش برمی‌گرداند")
-async def ask_question(request: Request, question_request: QuestionRequest = Body(...)):
-    """
-    Process a question and return the answer with relevant sources
-    """
-    try:
-        api_logger.info(f"Processing question: {question_request.question}")
-        
-        response = rag_system.generate_response(question_request.question)
-        
-        api_logger.info("Successfully generated response")
-        return JSONResponse(content=response, media_type="application/json; charset=utf-8")
-        
-    except Exception as e:
-        error_context = f"Question: {question_request.question}"
-        log_error(error_logger, e, error_context)
-        
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "Failed to generate response",
-                "error": str(e)
-            }
-        )
-
-@app.post("/askme", response_model=QuestionResponse, tags=["Chat"],
-          summary="پرسش از چت‌بات (مترادف ask)",
-          description="این اندپوینت مشابه اندپوینت ask است")
-async def askme_question(
-    request: QuestionRequest = Body(
-        ...,
-        example={"question": "ساتیا چه قابلیت‌هایی دارد؟"}
-    )
-):
-    """
-    پرسش از چت‌بات و دریافت پاسخ (مترادف ask)
     
-    - **question**: سوال کاربر
-    """
-    try:
-        response = rag_system.generate_response(request.question)
-        return JSONResponse(content=response, media_type="application/json; charset=utf-8")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/update_knowledge", tags=["Knowledge Management"],
             summary="به‌روزرسانی دانش",
@@ -340,232 +367,6 @@ async def delete_url_data_from_chroma(url: str) -> int:
         traceback.print_exc()
         return 0
 
-@app.delete("/delete_all_knowledge", tags=["Knowledge Management"])
-async def delete_all_knowledge():
-    """
-    حذف تمام داده‌های موجود در پایگاه دانش
-    """
-    try:
-        vector_store.delete_all()
-        return {"message": "تمام داده‌ها با موفقیت حذف شدند"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/crawl_url", tags=["Knowledge Management"],
-         summary="استخراج متن از یک URL",
-         description="این اندپوینت یک URL را دریافت کرده و متن استخراج شده را برمی‌گرداند")
-async def crawl_url(
-    request: UrlRequest = Body(
-        ...,
-        example={"url": "https://www.satia.co/blog"}
-    )
-):
-    """
-    استخراج متن از یک URL
-    
-    - **url**: آدرس URL که باید خزش شود
-    """
-    try:
-        url = str(request.url)
-        print(f"درحال استخراج اطلاعات از URL: {url}")
-        
-        # خزش URL
-        print(f"شروع خزش URL: {url}")
-        knowledge_items = run_spider(url)
-        print(f"تعداد {len(knowledge_items) if knowledge_items else 0} سند استخراج شد")
-        
-        if not knowledge_items:
-            return JSONResponse(
-                content={
-                    "status": "error", 
-                    "message": "هیچ اطلاعاتی از URL استخراج نشد",
-                    "text": ""
-                },
-                media_type="application/json; charset=utf-8"
-            )
-
-        # ترکیب تمام متن‌های استخراج شده و حذف خط جدید
-        full_text = ""
-        for item in knowledge_items:
-            text = item.get('text', '').strip()
-            if text:
-                # حذف تمام کاراکترهای خط جدید و جایگزینی با فاصله
-                text = ' '.join(text.replace('\r', ' ').replace('\n', ' ').split())
-                full_text += text + " "
-        
-        return JSONResponse(
-            content={
-                "status": "success",
-                "text": full_text.strip()
-            },
-            media_type="application/json; charset=utf-8"
-        )
-    except Exception as e:
-        print(f"خطا در استخراج متن: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/store_knowledge", tags=["Knowledge Management"],
-         summary="ذخیره متن در پایگاه دانش",
-         description="این اندپوینت متن را به چانک تقسیم کرده و در پایگاه دانش ذخیره می‌کند")
-async def store_knowledge(
-    source_url: str = Body(..., embed=True),
-    text: str = Body(
-        ...,
-        example="متن کامل برای ذخیره سازی..."
-    )
-):
-    """
-    ذخیره متن در پایگاه دانش
-    
-    - **source_url**: آدرس منبع داده‌ها
-    - **text**: متن کامل برای ذخیره‌سازی
-    """
-    # ایجاد مسیر لاگ
-    log_dir = Path("logs/errors")
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "store_knowledge.log"
-    
-    try:
-        if not text:
-            error_msg = "هیچ متنی برای ذخیره‌سازی ارسال نشده است"
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"{datetime.now()}: {error_msg}\n")
-            return JSONResponse(
-                content={
-                    "status": "error",
-                    "message": error_msg
-                },
-                media_type="application/json; charset=utf-8"
-            )
-
-        # تقسیم متن به چانک‌ها با جداکننده خط جدید
-        chunks = [chunk.strip() for chunk in text.split('\n') if chunk.strip()]
-        
-        # تبدیل به فرمت مناسب برای پردازش
-        knowledge_items = []
-        for chunk in chunks:
-            metadata = {
-                'source': source_url,
-                'date_added': datetime.now().isoformat()
-            }
-            knowledge_items.append({
-                'text': chunk,
-                'metadata': metadata
-            })
-        
-        try:
-            # پردازش و ذخیره‌سازی اسناد
-            processed_docs = text_processor.process_batch(knowledge_items)
-        except Exception as e:
-            error_msg = f"خطا در پردازش اسناد: {str(e)}"
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"{datetime.now()}: {error_msg}\n{traceback.format_exc()}\n")
-            return JSONResponse(
-                content={
-                    "status": "error",
-                    "message": error_msg
-                },
-                media_type="application/json; charset=utf-8"
-            )
-        
-        try:
-            # اضافه کردن به vector store
-            vector_store.add_documents(processed_docs)
-        except Exception as e:
-            error_msg = f"خطا در ذخیره‌سازی در vector store: {str(e)}"
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"{datetime.now()}: {error_msg}\n{traceback.format_exc()}\n")
-            return JSONResponse(
-                content={
-                    "status": "error",
-                    "message": error_msg
-                },
-                media_type="application/json; charset=utf-8"
-            )
-        
-        # ذخیره در فایل JSON
-        try:
-            url_parsed = urlparse(source_url)
-            file_name = url_parsed.netloc + url_parsed.path.replace('/', '_').replace('.', '_')
-            file_name = ''.join(c for c in file_name if c.isalnum() or c == '_')
-            file_name = file_name[:100]
-            
-            data_dir = Path("data/crawled_data")
-            data_dir.mkdir(parents=True, exist_ok=True)
-            file_path = data_dir / f"{file_name}.json"
-            
-            output_data = {
-                "url": source_url,
-                "date_added": datetime.now().isoformat(),
-                "document_count": len(processed_docs),
-                "text": text
-            }
-            
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(output_data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            error_msg = f"خطا در ذخیره‌سازی فایل JSON: {str(e)}"
-            with open(log_file, 'a', encoding='utf-8') as f:
-                f.write(f"{datetime.now()}: {error_msg}\n{traceback.format_exc()}\n")
-            # ادامه می‌دهیم چون داده‌ها در vector store ذخیره شده‌اند
-        
-        return JSONResponse(
-            content={
-                "status": "success",
-                "message": f"تعداد {len(processed_docs)} چانک در پایگاه دانش ذخیره شد",
-                "document_count": len(processed_docs),
-                "file_path": str(file_path)
-            },
-            media_type="application/json; charset=utf-8"
-        )
-    except Exception as e:
-        error_msg = f"خطای کلی در ذخیره‌سازی متن: {str(e)}"
-        with open(log_file, 'a', encoding='utf-8') as f:
-            f.write(f"{datetime.now()}: {error_msg}\n{traceback.format_exc()}\n")
-        raise HTTPException(status_code=500, detail=error_msg)
-
-@app.post("/add_text_knowledge")
-async def add_text_knowledge(request: PlainTextRequest):
-    """
-    اضافه کردن متن دلخواه به پایگاه دانش
-    
-    پارامترها:
-        request: درخواست حاوی متن، عنوان و منبع
-    
-    برمی‌گرداند:
-        اطلاعات مربوط به اضافه شدن متن
-    """
-    try:
-        # استفاده از عنوان یا یک عنوان پیش‌فرض
-        title = request.title if request.title else "متن دستی"
-        # استفاده از منبع یا یک منبع پیش‌فرض
-        source = request.source if request.source else "ورودی کاربر"
-        
-        # پردازش متن
-        processed_text = text_processor.process_text(request.text)
-        
-        # ایجاد متادیتا
-        metadata = {
-            "title": title,
-            "source": source,
-            "date_added": datetime.now().isoformat()
-        }
-        
-        # افزودن به پایگاه دانش
-        rag_system.vector_store.add_documents([{
-            "text": processed_text,
-            "metadata": metadata
-        }])
-        
-        return {
-            "status": "success",
-            "message": "متن با موفقیت به پایگاه دانش اضافه شد",
-            "metadata": metadata
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/all_knowledge")
 async def get_all_knowledge(url: str):
@@ -587,6 +388,12 @@ async def get_all_knowledge(url: str):
 @app.get("/data_sources", response_model=DataSourceListResponse, tags=["Data Sources"],
           summary="دریافت لیست منابع داده",
           description="این اندپوینت لیست تمام منابع داده موجود در پایگاه دانش را برمی‌گرداند")
+async def list_data_sources_no_slash():
+    return await list_data_sources()
+
+@app.get("/data_sources/", response_model=DataSourceListResponse, tags=["Data Sources"],
+          summary="دریافت لیست منابع داده",
+          description="این اندپوینت لیست تمام منابع داده موجود در پایگاه دانش را برمی‌گرداند")
 async def list_data_sources():
     """
     لیست تمام منابع داده و محتوای استخراج شده از آنها
@@ -596,6 +403,7 @@ async def list_data_sources():
     {
       "sources": [
         {
+          "source_id": "abc123",
           "url": "https://www.satia.co/about",
           "imported_by": "You",
           "import_date": "2023-06-15T12:30:45",
@@ -609,23 +417,25 @@ async def list_data_sources():
     ```
     """
     try:
-        docs = vector_store.get_all_documents()
-        
-        # گروه‌بندی اسناد بر اساس URL
-        url_groups = {}
+        docs = get_vector_store().get_all_documents()
+
+        # گروه‌بندی اسناد بر اساس source_id
+        source_groups = {}
         for doc in docs:
-            url = doc['metadata'].get('source', '')
-            if not url:
+            source_id = doc['id']
+            if not source_id:
                 continue
                 
-            if url not in url_groups:
+            if source_id not in source_groups:
                 created_at = doc['metadata'].get('created_at')
                 if isinstance(created_at, str):
                     import_date = datetime.fromisoformat(created_at)
                 else:
                     import_date = datetime.now()
                     
-                url_groups[url] = {
+                source_groups[source_id] = {
+                    'source_id': source_id,
+                    'url': doc['metadata'].get('source', ''),
                     'chunks': [],
                     'import_date': import_date,
                     'status': '✓'
@@ -633,17 +443,18 @@ async def list_data_sources():
             
             # فقط اضافه کردن chunks با متن معنی‌دار
             if doc['text'].strip():
-                url_groups[url]['chunks'].append(Chunk(
+                source_groups[source_id]['chunks'].append(Chunk(
                     text=doc['text'],
                     metadata=doc['metadata']
                 ))
         
         # تبدیل به فرمت مورد نظر
         sources = []
-        for url, data in url_groups.items():
+        for source_id, data in source_groups.items():
             if data['chunks']:
                 source = DataSource(
-                    url=url,
+                    source_id=data['source_id'],
+                    url=data['url'],
                     imported_by="You",
                     import_date=data['import_date'],
                     status=data['status'],
@@ -668,7 +479,7 @@ async def get_source_chunks(url: str):
     - **url**: آدرس منبع داده
     """
     try:
-        docs = vector_store.get_all_documents()
+        docs = get_vector_store().get_all_documents()
         chunks = []
         
         for doc in docs:
@@ -688,128 +499,6 @@ async def get_source_chunks(url: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/edit_chunk", tags=["Data Sources"],
-          summary="ویرایش یک قطعه متنی",
-          description="این اندپوینت امکان ویرایش یک قطعه متنی (chunk) خاص در پایگاه دانش را فراهم می‌کند")
-async def edit_chunk(
-    request: EditChunkRequest = Body(
-        ...,
-        example={
-            "url": "https://www.satia.co/about",
-            "chunk_index": 0,
-            "new_text": "ساتیا یک پلتفرم جامع مدیریت منابع سازمانی است."
-        }
-    )
-):
-    """
-    ویرایش متن یک چانک خاص در پایگاه دانش
-    
-    - **url**: آدرس منبع داده
-    - **chunk_index**: شماره قطعه متنی
-    - **new_text**: متن جدید
-    """
-    try:
-        import chromadb
-        from chromadb.config import Settings
-        from sentence_transformers import SentenceTransformer
-        
-        # تنظیمات ChromaDB
-        chroma_dir = os.getenv('CHROMA_PERSIST_DIRECTORY', './data/chroma')
-        collection_name = os.getenv('CHROMA_COLLECTION_NAME', 'satya_docs')
-        
-        print(f"DEBUG: دایرکتوری ChromaDB: {chroma_dir}")
-        print(f"DEBUG: نام کالکشن: {collection_name}")
-        
-        # ایجاد کلاینت ChromaDB
-        client = chromadb.PersistentClient(
-            path=chroma_dir,
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
-            )
-        )
-        
-        # دریافت کالکشن موجود
-        collection = client.get_collection(name=collection_name)
-        
-        # دریافت تمام داده‌ها
-        all_data = collection.get()
-        print(f"DEBUG: تعداد کل اسناد: {len(all_data['ids'])}")
-        
-        # یافتن چانک‌های مرتبط با URL
-        url_chunks = []
-        for i, (doc_id, doc_text, doc_metadata) in enumerate(zip(all_data['ids'], all_data['documents'], all_data['metadatas'])):
-            if doc_metadata.get('source') == request.url:
-                url_chunks.append({
-                    'id': doc_id,
-                    'text': doc_text,
-                    'metadata': doc_metadata,
-                    'index': i
-                })
-        
-        print(f"DEBUG: تعداد چانک‌های مربوط به URL '{request.url}': {len(url_chunks)}")
-        
-        # بررسی وجود چانک‌های مرتبط با URL
-        if not url_chunks:
-            # بررسی URL‌های موجود در پایگاه داده
-            unique_urls = set([meta.get('source', '') for meta in all_data['metadatas']])
-            print(f"DEBUG: URL‌های موجود در پایگاه داده: {unique_urls}")
-            raise HTTPException(status_code=404, detail="URL not found in knowledge base")
-        
-        # بررسی معتبر بودن شاخص چانک
-        if request.chunk_index < 0 or request.chunk_index >= len(url_chunks):
-            print(f"DEBUG: شاخص چانک خارج از محدوده است. شاخص درخواستی: {request.chunk_index}, محدوده مجاز: 0-{len(url_chunks)-1}")
-            raise HTTPException(status_code=400, detail=f"Chunk index out of range. Valid range: 0-{len(url_chunks)-1}")
-        
-        # چانک مورد نظر برای ویرایش
-        target_chunk = url_chunks[request.chunk_index]
-        doc_id = target_chunk['id']
-        doc_index = target_chunk['index']
-        
-        print(f"DEBUG: چانک هدف: ID={doc_id}, متن={target_chunk['text'][:50]}...")
-        
-        # حذف چانک قدیمی
-        try:
-            print(f"DEBUG: در حال حذف چانک با شناسه {doc_id}...")
-            collection.delete(ids=[doc_id])
-            print("DEBUG: چانک با موفقیت حذف شد")
-        except Exception as e:
-            print(f"ERROR: خطا در حذف چانک: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Failed to delete chunk: {str(e)}")
-        
-        # ایجاد embedding برای متن جدید
-        try:
-            print("DEBUG: در حال ایجاد embedding جدید...")
-            model = SentenceTransformer(os.getenv('EMBEDDING_MODEL', 'paraphrase-multilingual-MiniLM-L12-v2'))
-            new_embedding = model.encode(request.new_text).tolist()
-            
-            print(f"DEBUG: در حال افزودن چانک جدید با متن '{request.new_text}'...")
-            collection.add(
-                ids=[doc_id],
-                documents=[request.new_text],
-                metadatas=[target_chunk['metadata']],
-                embeddings=[new_embedding]
-            )
-            print("DEBUG: چانک جدید با موفقیت اضافه شد")
-        except Exception as e:
-            print(f"ERROR: خطا در افزودن چانک جدید: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Failed to add new chunk: {str(e)}")
-        
-        return JSONResponse(
-            content={
-                "message": "چانک با موفقیت ویرایش شد",
-                "chunk_id": doc_id,
-                "chunk_index": request.chunk_index,
-                "url": request.url,
-                "new_text": request.new_text
-            },
-            media_type="application/json; charset=utf-8"
-        )
-    except Exception as e:
         if not isinstance(e, HTTPException):
             print(f"ERROR in edit_chunk: {str(e)}")
             import traceback
@@ -893,102 +582,6 @@ async def get_crawled_file_content(file_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/add_plaintext", tags=["Knowledge Management"],
-         summary="افزودن متن به پایگاه دانش",
-         description="این اندپوینت یک متن را دریافت کرده و آن را به پایگاه دانش اضافه می‌کند")
-async def add_plaintext(
-    request: PlainTextRequest = Body(
-        ...,
-        example={
-            "text": "ساتیا یک پلتفرم جامع مدیریت منابع سازمانی است.",
-            "title": "درباره ساتیا",
-            "source": "دستی"
-        }
-    )
-):
-    """
-    اضافه کردن متن دلخواه به پایگاه دانش
-    
-    - **text**: متن مورد نظر (اجباری)
-    - **title**: عنوان سند (اختیاری)
-    - **source**: منبع سند (اختیاری)
-    
-    **نمونه ورودی:**
-    ```json
-    {
-      "text": "ساتیا یک پلتفرم جامع مدیریت منابع سازمانی است.",
-      "title": "درباره ساتیا",
-      "source": "دستی"
-    }
-    ```
-    
-    **نمونه خروجی:**
-    ```json
-    {
-      "status": "success",
-      "message": "متن با موفقیت به پایگاه دانش اضافه شد",
-      "document_count": 1
-    }
-    ```
-    """
-    try:
-        # استفاده از عنوان یا یک عنوان پیش‌فرض
-        title = request.title if request.title else "متن دستی"
-        # استفاده از منبع یا یک منبع پیش‌فرض
-        source = request.source if request.source else "ورودی کاربر"
-        
-        # ایجاد سند
-        document = {
-            "text": request.text,
-            "metadata": {
-                "title": title,
-                "source": source,
-                "date_added": datetime.now().isoformat()
-            }
-        }
-        
-        # پردازش سند و اضافه کردن به پایگاه دانش
-        processed_docs = text_processor.process_batch([document])
-        
-        if not processed_docs:
-            return JSONResponse(
-                content={
-                    "status": "error",
-                    "message": "خطا در پردازش متن",
-                    "document_count": 0
-                },
-                media_type="application/json; charset=utf-8"
-            )
-        
-        # اضافه کردن به vector store
-        vector_store.add_documents(processed_docs)
-        
-        # ذخیره دیتا در یک فایل JSON برای پشتیبان‌گیری
-        try:
-            data_dir = Path("data/plaintext_data")
-            data_dir.mkdir(parents=True, exist_ok=True)
-            
-            file_name = f"plaintext_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            file_path = data_dir / file_name
-            
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(document, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Warning: Could not save plaintext backup: {str(e)}")
-        
-        return JSONResponse(
-            content={
-                "status": "success",
-                "message": "متن با موفقیت به پایگاه دانش اضافه شد",
-                "document_count": len(processed_docs)
-            },
-            media_type="application/json; charset=utf-8"
-        )
-    except Exception as e:
-        print(f"Error in add_plaintext: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/all_knowledge")
 async def get_all_knowledge_api(request: AllKnowledgeRequest):
@@ -1027,6 +620,286 @@ async def health_check():
     """
     return {"status": "ok", "version": "1.0.0"}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001) 
+@app.post("/search-vector-doc", tags=["Utilities"],
+          summary="جستجو در پایگاه دانش برداری",
+          description="این اندپوینت نتایج جستجوی برداری را برای یک سوال نمایش می‌دهد")
+async def search_vector_docs(
+    request: VectorSearchRequest = Body(
+        ...,
+        example={
+            "question": "ساتیا چیست؟",
+            "limit": 5
+        }
+    )
+):
+    """
+    جستجو در پایگاه دانش برداری و نمایش نتایج خام
+    
+    - **question**: سوال یا عبارت جستجو
+    - **limit**: تعداد نتایج (پیش‌فرض: 5)
+    """
+    try:
+        # جستجو در vector store
+        relevant_docs = get_vector_store().search(request.question, request.limit)
+        
+        # تبدیل نتایج به فرمت مناسب
+        results = []
+        for doc in relevant_docs:
+            result = {
+                'text': doc['text'],
+                'metadata': doc['metadata'],
+                'score': doc.get('score', None)  # اگر امتیاز شباهت موجود باشد
+            }
+            results.append(result)
+        
+        return {
+            'query': request.question,
+            'results': results,
+            'count': len(results)
+        }
+        
+    except Exception as e:
+        error_context = f"Question: {request.question}"
+        log_error(error_logger, e, error_context)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "Failed to search vector store",
+                "error": str(e)
+            }
+        )
+
+@app.post("/store_vector", tags=["Vector Store"],
+         summary="ذخیره متن و متادیتا در پایگاه داده برداری",
+         description="این اندپوینت متن و متادیتای مربوطه را در پایگاه داده برداری ذخیره می‌کند")
+async def store_vector(
+    request: StoreVectorRequest = Body(
+        ...,
+        example={
+            "text": "<p class='content'>ساتیا یک پلتفرم مدیریت منابع سازمانی است که...</p>",
+            "metadata": {
+                "source": "دستی",
+                "title": "درباره ساتیا",
+                "author": "تیم ساتیا",
+                "date": "2024-04-26"
+            }
+        }
+    )
+):
+    try:
+        # Clean HTML content
+        soup = BeautifulSoup(request.text, 'html.parser')
+        
+        # Remove all attributes from HTML tags
+        for tag in soup.find_all(True):
+            tag.attrs = {}
+        
+        # Get cleaned text
+        cleaned_text = str(soup)
+        
+        # Initialize vector store
+        vector_store = VectorStore()
+        
+        # Create document structure with cleaned text
+        document = {
+            "text": cleaned_text,
+            "metadata": request.metadata
+        }
+        
+        # Add document to vector store
+        vector_store.add_documents([document])
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "متن با موفقیت در پایگاه داده برداری ذخیره شد",
+                "status": "success"
+            }
+        )
+    except Exception as e:
+        log_error(error_logger, str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"خطا در ذخیره متن در پایگاه داده برداری: {str(e)}"
+        )
+    
+
+
+class AddManuallyKnowledgeRequest:
+    def __init__(self, text: str, metadata: dict):
+        self.text = text
+        self.metadata = metadata
+
+@app.post("/add_manually_knowledge", tags=["Knowledge Management"],
+          summary="افزودن دانش به صورت دستی (تبدیل HTML به Markdown)",
+          description="این اندپوینت مشابه /store_vector است اما ابتدا متن HTML را به مارک‌داون تبدیل می‌کند و سپس در پایگاه داده برداری ذخیره می‌کند.")
+async def add_manually_knowledge(
+    request: StoreVectorRequest = Body(
+        ...,
+        example={
+            "text": "<p class='content'>ساتیا یک پلتفرم مدیریت منابع سازمانی است که...</p>",
+            "metadata": {
+                "source": "دستی",
+                "title": "درباره ساتیا",
+                "author": "تیم ساتیا",
+                "date": "2024-04-26"
+            }
+        }
+    ),
+    db : Session = Depends(get_db)
+):
+    try:
+        text = request.text
+
+        # Convert HTML to Markdown using RAG model
+        convertor_agent = HTMLToMarkdownAgent()
+        markdown_result = await convertor_agent.convert(text)
+        markdown_text = markdown_result if isinstance(markdown_result, str) else str(markdown_result)
+
+        # Initialize vector store
+        vector_store = VectorStore()
+
+        # Store in database
+        repo = DocumentRepository(db)
+        doc = repo.create({
+            'html' : request.text,
+            'markdown' : markdown_text,
+            'title' : request.metadata['title'],
+            'type' : 'manual'
+        })
+
+        request.metadata['document_id'] = doc.id
+
+        # Create document structure with markdown text
+        document = {
+            "text": markdown_text,
+            "metadata": request.metadata
+        }
+
+        # Add document to vector store
+        id = vector_store.add_documents([document])[0]
+
+        repo.update(doc.id, {
+            'vector_id' : id
+        })
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "متن (مارک‌داون) با موفقیت در پایگاه داده برداری ذخیره شد",
+                "status": "success"
+            }
+        )
+    except Exception as e:
+        log_error(error_logger, str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"خطا در ذخیره متن مارک‌داون در پایگاه داده برداری: {str(e)}"
+        )
+
+
+@app.delete("/data_sources/{vector_id}", tags=["Data Sources"],
+          summary="حذف یک منبع داده",
+          description="این اندپوینت یک منبع داده را با استفاده از شناسه آن حذف می‌کند")
+async def delete_data_source(vector_id: str):
+    """
+    حذف یک منبع داده با استفاده از شناسه آن
+    
+    - **vector_id**: شناسه منبع داده
+    
+    **نمونه خروجی:**
+    ```json
+    {
+      "message": "منبع داده با موفقیت حذف شد",
+      "deleted_chunks": 10
+    }
+    ```
+    """
+    try:
+        vector = VectorStore()
+
+        vector.delete_vector(vector_id)
+        
+        return JSONResponse(
+            content={
+                "message": "منبع داده با موفقیت حذف شد",
+            },
+            media_type="application/json; charset=utf-8"
+        )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error in delete_data_source: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/data_sources/{document_id}", tags=["Data Sources"],
+          summary="بروزرسانی یک سند",
+          description="این اندپوینت یک سند موجود را با استفاده از شناسه آن بروزرسانی می‌کند")
+async def update_document(document_id: str, update_request: DocumentUpdateRequest):
+    """
+    بروزرسانی یک سند با استفاده از شناسه آن
+    
+    - **document_id**: شناسه سند
+    - **text**: متن جدید سند
+    - **metadata**: متادیتای جدید سند (اختیاری)
+    
+    **نمونه درخواست:**
+    ```json
+    {
+      "text": "متن جدید سند",
+      "metadata": {
+        "source": "https://example.com",
+        "title": "عنوان جدید"
+      }
+    }
+    ```
+    
+    **نمونه خروجی:**
+    ```json
+    {
+      "message": "سند با موفقیت بروزرسانی شد",
+      "document_id": "doc_123"
+    }
+    ```
+    """
+    try:
+        # Get all documents to verify document exists
+        doc = get_vector_store().get_document(document_id=document_id)
+
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        
+        # Update document in vector store
+        get_vector_store().update_document(
+            document_id=document_id,
+            text=update_request.text,
+            metadata=doc['metadata']
+        )
+        
+        return JSONResponse(
+            content={
+                "message": "سند با موفقیت بروزرسانی شد",
+                "document_id": document_id
+            },
+            media_type="application/json; charset=utf-8"
+        )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error in update_document: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# @app.get("/data_sources/{document_id}", tags=["Data Sources"],
+#           summary="دریافت یک سند",
+#           description="این اندپوینت یک سند را با استفاده از شناسه آن برمی‌گرداند")
+# async def get_document(document_id: str):
+#     """
+#     دریافت یک سند با استفاده از شناسه آن
+    
+#     - **document_id**: شناسه سند
+    
+#     **نمونه خروجی:**
+#     ```

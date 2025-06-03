@@ -9,8 +9,9 @@ import ssl
 from scrapy.crawler import CrawlerRunner
 from twisted.internet import reactor
 from multiprocessing import Process, Queue
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin, urlunparse
 from datetime import datetime
+import re
 
 # غیرفعال کردن بررسی گواهی SSL
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -45,13 +46,17 @@ class SatyaSpider(scrapy.Spider):
 
 
     def parse(self, response):
+
+        print(f"Processing URL: {response.url}")
+
         # استخراج محتوای اصلی
         content = {
             'url': response.url,
             'title': response.css('title::text').get() or 'بدون عنوان',
             'content': self.clean_content(response.text),
-            'images': self.extract_images(response),
-            'pdfs': self.extract_pdfs(response),
+            # 'images': self.extract_images(response),
+            # 'pdfs': self.extract_pdfs(response),
+            'urls': self.content_urls(response),
             'metadata': {
                 'timestamp': response.headers.get('Date', b'').decode(),
                 'content_type': response.headers.get('Content-Type', b'').decode()
@@ -60,38 +65,106 @@ class SatyaSpider(scrapy.Spider):
         
         # اضافه کردن به لیست داده‌ها
         self.all_data.append(content)
-        
+
         # ذخیره تمام داده‌ها در یک فایل
         self.save_all_data()
 
+
+    def content_urls(self, response):
+        """
+        استخراج تمام لینک‌های معتبر از صفحه
+        
+        Args:
+            response: پاسخ دریافتی از صفحه
+            
+        Returns:
+            list: لیست URL های معتبر
+        """
+        # استخراج تمام لینک‌ها
+        urls = set()
+        for href in response.css('a::attr(href)').getall():
+            try:
+                # تبدیل URL نسبی به مطلق
+                absolute_url = response.urljoin(href).replace('www.', '')
+
+                # بررسی اینکه URL در دامنه‌های مجاز باشد
+                parsed_url = urlparse(absolute_url)
+
+                if parsed_url.netloc in self.allowed_domains:
+                    # حذف پارامترهای URL و fragment
+                    clean_url = urlunparse((
+                        parsed_url.scheme,
+                        parsed_url.netloc,
+                        parsed_url.path,
+                        '',
+                        '',
+                        ''
+                    ))
+                    urls.add(clean_url)
+                    
+            except Exception as e:
+                print(f"Error processing URL {href}: {str(e)}")
+                continue
+                
+        return list(urls)
+
     def clean_content(self, html):
+        print(f"Cleaning content ...")
         soup = BeautifulSoup(html, 'html.parser')
         
-        # حذف اسکریپت‌ها و استایل‌ها
-        for script in soup(["script", "style"]):
-            script.decompose()
+        # Remove scripts, styles, and meta tags
+        for tag in soup(['script', 'style', 'meta', 'link']):
+            tag.decompose()
             
-        # حذف منوهای بالا (معمولاً در تگ‌های header یا nav هستند)
-        for header_element in soup.select('header, .header, #header, .top-menu, #top-menu, .main-menu, #main-menu, .navigation, #navigation, nav, .nav, #nav'):
-            header_element.decompose()
+        # Remove navigation elements
+        for nav in soup.select('nav, .nav, #nav, .navigation, #navigation, .menu, #menu, .mega-menu, .mega-sub-menu, .mega-menu-item, .mega-menu-link'):
+            nav.decompose()
             
-        # حذف منوهای کناری (معمولاً در تگ‌های sidebar یا aside هستند)
-        for sidebar_element in soup.select('sidebar, .sidebar, #sidebar, aside, .aside, #aside, .side-menu, #side-menu'):
-            sidebar_element.decompose()
+        # Remove header elements
+        for header in soup.select('header, .header, #header, .top-menu, #top-menu, .main-menu, #main-menu'):
+            header.decompose()
             
-        # حذف فوتر
-        for footer_element in soup.select('footer, .footer, #footer'):
-            footer_element.decompose()
+        # Remove sidebar elements
+        for sidebar in soup.select('sidebar, .sidebar, #sidebar, aside, .aside, #aside, .side-menu, #side-menu'):
+            sidebar.decompose()
             
-        # حذف ویجت‌ها و المان‌های جانبی
-        for widget in soup.select('.widget, #widget, .widgets, #widgets'):
+        # Remove footer elements
+        for footer in soup.select('footer, .footer, #footer'):
+            footer.decompose()
+            
+        # Remove widgets and side elements
+        for widget in soup.select('.widget, #widget, .widgets, #widgets, .sidebar-widget, #sidebar-widget'):
             widget.decompose()
             
-        # حذف باکس‌های لاگین و جستجو
-        for login_search in soup.select('.login, #login, .search, #search, .search-box, #search-box'):
-            login_search.decompose()
+        # Remove login and search boxes
+        for box in soup.select('.login, #login, .search, #search, .search-box, #search-box'):
+            box.decompose()
+            
+        # Remove empty divs and spans
+        for tag in soup.find_all(['div', 'span']):
+            if not tag.contents and not tag.string:
+                tag.decompose()
+                
+        # Remove elements with specific classes or IDs
+        for tag in soup.find_all(class_=lambda x: x and any(cls in x.lower() for cls in ['menu', 'nav', 'header', 'footer', 'sidebar', 'widget'])):
+            tag.decompose()
+            
+        for tag in soup.find_all(id=lambda x: x and any(id in x.lower() for id in ['menu', 'nav', 'header', 'footer', 'sidebar', 'widget'])):
+            tag.decompose()
+            
+        # Clean up the remaining content
+        content = str(soup)
         
-        return soup.get_text(separator=' ', strip=True)
+        # Replace double quotes with single quotes
+        content = content.replace('"', "'")
+        
+        # Remove empty lines and extra whitespace
+        content = '\n'.join(line.strip() for line in content.split('\n') if line.strip())
+        
+        # Remove multiple consecutive newlines
+        content = re.sub(r'\n\s*\n', '\n\n', content)
+        
+        return content
 
     def extract_images(self, response):
         return [img.attrib['src'] for img in response.css('img') if 'src' in img.attrib]
@@ -130,7 +203,8 @@ def run_spider_in_process(url, queue):
 
     try:
         process = CrawlerProcess(settings={
-            'LOG_LEVEL': 'ERROR',
+            'LOG_LEVEL': 'INFO',
+            'LOG_FILE': 'scrapy_output.log',
             'ROBOTSTXT_OBEY': False,
             'DOWNLOAD_DELAY': 2,
             'CONCURRENT_REQUESTS': 5,
@@ -181,6 +255,7 @@ def run_spider_in_process(url, queue):
                 'metadata': {
                     'source': item['url'],
                     'url': item['url'],
+                    'sub_urls': item['urls'],
                     'title': item['title'],
                     'curation_status': 'pending',
                     'date_added': current_time,
@@ -193,7 +268,7 @@ def run_spider_in_process(url, queue):
         print(f"خطا در اجرای خزنده: {str(e)}")
         queue.put([])
     
-def run_spider(url=None):
+def run_spider(url=None, recursive=False):
     """
     اجرای خزنده برای یک URL خاص
     
@@ -203,23 +278,79 @@ def run_spider(url=None):
     Returns:
         list: لیست داده‌های استخراج شده
     """
+
+    urls = set()
+    if url:
+        urls.add(url)
+        
+    crawled_urls = set()
+    all_knowledge = []
+
+    except_urls = set([
+                'https://satia.co/parental-controls-in-apple-devices/',  # Added missing comma
+                'https://satia.co/bandwith/',
+                'https://satia.co/bandwidth-service-contract/',
+                'https://www.satia.co/noise/',
+                'https://www.satia.co/mac-filtering-in-modem/'
+            ])
+
     try:
-        queue = Queue()
-        p = Process(target=run_spider_in_process, args=(url, queue))
-        p.start()
-        p.join()
-        
-        # دریافت نتایج از صف
-        knowledge_items = queue.get()
-        
-        if not knowledge_items:
+        while len(urls) > 0:
+            current_url = urls.pop()
+
+            current_url = current_url.replace('www.', '')
+
+            if current_url in crawled_urls or current_url in except_urls:
+                continue
+
+            queue = Queue()
+            p = Process(target=run_spider_in_process, args=(current_url, queue))
+            p.start()
+            
+            # Set timeout duration
+            timeout = 10  # 10 second timeout
+            start_time = datetime.now()
+            
+            # Check in a loop if process is still alive
+            while p.is_alive():
+                # Break if timeout exceeded
+                if (datetime.now() - start_time).total_seconds() > timeout:
+                    p.terminate()
+                    p.join()
+                    print(f"Crawler timed out for URL: {current_url}")
+                    break
+                
+                # If process completed, break the loop immediately
+                if not p.is_alive():
+                    break
+            
+            # If process timed out, skip to next URL
+            if p.is_alive():
+                continue
+            # دریافت نتایج از صف
+            knowledge_items = queue.get()
+
+            print(f"Knowledge items: {knowledge_items}")
+            
+            if knowledge_items:
+                crawled_urls.add(current_url)
+                all_knowledge.extend(knowledge_items)
+
+                if not recursive:
+                    break
+                
+                # Add new URLs from metadata
+                for item in knowledge_items:
+                    if 'metadata' in item and 'sub_urls' in item['metadata']:
+                        new_urls = set(item['metadata']['sub_urls']) - crawled_urls
+                        urls.update(new_urls)
+            
+        if not all_knowledge:
             print("هیچ داده‌ای از خزنده دریافت نشد")
             return []
             
-        return knowledge_items
+        return all_knowledge
+        
     except Exception as e:
         print(f"خطا در اجرای خزنده: {str(e)}")
         return []
-
-if __name__ == '__main__':
-    run_spider() 

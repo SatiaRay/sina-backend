@@ -1,6 +1,5 @@
 import chromadb
 from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
 import os
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
@@ -8,34 +7,45 @@ import json
 from pathlib import Path
 import uuid
 from datetime import datetime
+from openai import OpenAI
+from util.event_bus import event_bus, VectorStoreEvent
 
 load_dotenv()
 
 class VectorStore:
     def __init__(self):
-        # تنظیمات ChromaDB
-        self.persist_directory = os.getenv('CHROMA_PERSIST_DIRECTORY', './data/chroma')
-        self.collection_name = os.getenv('CHROMA_COLLECTION_NAME', 'satya_docs')
-        
-        # ایجاد دایرکتوری اگر وجود نداشت
-        os.makedirs(self.persist_directory, exist_ok=True)
-        
-        # ایجاد کلاینت ChromaDB
-        self.client = chromadb.PersistentClient(
-            path=self.persist_directory,
-            settings=Settings(
-                anonymized_telemetry=False,
-                allow_reset=True
+        try:
+            # تنظیمات ChromaDB
+            self.persist_directory = os.getenv('CHROMA_PERSIST_DIRECTORY', './data/chroma')
+            self.collection_name = os.getenv('CHROMA_COLLECTION_NAME', 'satya_docs')
+            
+            # ایجاد دایرکتوری اگر وجود نداشت
+            os.makedirs(self.persist_directory, exist_ok=True)
+            
+            print(f"Initializing ChromaDB with directory: {self.persist_directory}")
+            # ایجاد کلاینت ChromaDB
+            self.client = chromadb.PersistentClient(
+                path=self.persist_directory,
+                settings=Settings(
+                    anonymized_telemetry=False,
+                    allow_reset=True
+                )
             )
-        )
-        
-        # ایجاد یا دریافت کالکشن
-        self.collection = self._get_or_create_collection()
-        
-        # مدل تبدیل متن به بردار
-        self.embedding_model = SentenceTransformer(
-            os.getenv('EMBEDDING_MODEL', 'paraphrase-multilingual-MiniLM-L12-v2')
-        )
+            
+            print("Creating or getting collection...")
+            # ایجاد یا دریافت کالکشن
+            self.__refresh()
+            
+            # print("Initializing embedding model...")
+            # # مدل تبدیل متن به بردار
+            # self.embedding_model = SentenceTransformer(
+            #     os.getenv('EMBEDDING_MODEL', 'paraphrase-multilingual-MiniLM-L12-v2')
+            # )
+            print("VectorStore initialization completed successfully")
+            
+        except Exception as e:
+            print(f"Error initializing VectorStore: {str(e)}")
+            raise
 
     def _get_or_create_collection(self):
         # ایجاد یا دریافت کالکشن
@@ -44,7 +54,11 @@ class VectorStore:
             metadata={"hnsw:space": "cosine"}
         )
 
-    def add_documents(self, documents: List[Dict[str, Any]]):
+    def __refresh(self):
+        self.collection = None
+        self.collection = self._get_or_create_collection()
+
+    def add_documents(self, documents: List[Dict[str, Any]], vector_id: str = None):
         """اضافه کردن اسناد به پایگاه داده برداری"""
         if not documents:
             return
@@ -54,23 +68,48 @@ class VectorStore:
         metadatas = [doc['metadata'] for doc in documents]
         
         # تولید ID‌های یکتا با استفاده از UUID
-        ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(documents))]
+        ids = vector_id or [f"doc_{uuid.uuid4().hex}" for _ in range(len(documents))]
         
-        # تبدیل متن‌ها به بردار
-        embeddings = self.embedding_model.encode(texts).tolist()
+        # تبدیل متن‌ها به بردار با استفاده از OpenAI
+        client = OpenAI()
         
+        embeddings = []
+        for text in texts:
+            response = client.embeddings.create(
+                input=text,
+                model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
+            )
+            embeddings.append(response.data[0].embedding)
+
         # اضافه کردن به کالکشن
+        self.save_documents(ids, texts, metadatas, embeddings)
+
+        # Publish event for document addition
+        event_bus.publish(VectorStoreEvent.DOCUMENT_ADDED, {
+            'ids': ids,
+            'documents': documents
+        })
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
+
+        return ids
+
+    def save_documents(self, ids, documents, metadatas, embeddings):
         self.collection.add(
             embeddings=embeddings,
-            documents=texts,
+            documents=documents,
             metadatas=metadatas,
             ids=ids
         )
 
     def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """جستجوی اسناد مرتبط"""
-        # تبدیل سوال به بردار
-        query_embedding = self.embedding_model.encode(query).tolist()
+        # تبدیل سوال به بردار با استفاده از OpenAI
+        client = OpenAI()
+        response = client.embeddings.create(
+            input=query,
+            model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
+        )
+        query_embedding = response.data[0].embedding
         
         # جستجو در کالکشن
         results = self.collection.query(
@@ -78,14 +117,20 @@ class VectorStore:
             n_results=n_results
         )
         
-        # تبدیل نتایج به فرمت مورد نظر
+        # تبدیل نتایج به فرمت مورد نظر و فیلتر بر اساس threshold
         documents = []
         for i in range(len(results['documents'][0])):
-            documents.append({
-                'text': results['documents'][0][i],
-                'metadata': results['metadatas'][0][i],
-                'score': results['distances'][0][i]
-            })
+            # تبدیل فاصله به امتیاز شباهت (1 - distance)
+            similarity_score = 1 - results['distances'][0][i]
+            
+            # فقط نتایج با امتیاز شباهت بالاتر از 0.3 را اضافه کن
+            if similarity_score >= 0.3:
+                documents.append({
+                    'text': results['documents'][0][i],
+                    'metadata': results['metadatas'][0][i],
+                    'score': similarity_score,
+                    'id': results['ids'][0][i]
+                })
             
         return documents
 
@@ -110,6 +155,9 @@ class VectorStore:
         
         # ایجاد مجدد کالکشن
         self.collection = self._get_or_create_collection()
+        
+        # Publish event for collection modification
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
     def backup(self, backup_path: str = "data/backup"):
         # پشتیبان‌گیری از داده‌ها
@@ -128,19 +176,45 @@ class VectorStore:
         self.delete_all()
         self.add_documents(documents)
 
-    def update_document(self, document: Dict):
+    def update_document(self, document_id: str, text: str, metadata: dict):
         """Update a document in the vector store"""
-        embedding = self.embedding_model.encode([document["text"]])[0]
-        self.collection.update(
-            embeddings=[embedding.tolist()],
-            documents=[document["text"]],
-            metadatas=[document["metadata"]],
-            ids=[document["id"]]
-        )
+        # تبدیل متن‌ها به بردار با استفاده از OpenAI
+        client = OpenAI()
 
-    def delete_document(self, document_id: str):
-        """Delete a document from the vector store"""
-        self.collection.delete(ids=[document_id])
+        print("Send modification to ebmedding model ...")
+        
+        response = client.embeddings.create(
+            input=text,
+            model=os.getenv('GPT_EMBEDDING_MODEL', 'text-embedding-3-small')
+        )
+        embedding = response.data[0].embedding
+
+        print("Embedding done !")
+
+        self.collection.update(
+            embeddings=[embedding],
+            documents=[text],
+            metadatas=[metadata],
+            ids=[document_id]
+        )
+        
+        # Publish event for document update
+        event_bus.publish(VectorStoreEvent.DOCUMENT_UPDATED, {
+            'id': document_id,
+            'text': text,
+            'metadata': metadata
+        })
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
+
+    def delete_vector(self, vector_id: str):
+        """Delete a vector from the vector store"""
+        self.collection.delete(ids=[vector_id])
+        
+        # Publish event for document deletion
+        event_bus.publish(VectorStoreEvent.DOCUMENT_DELETED, {
+            'id': vector_id
+        })
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
     def get_pending_documents(self, offset: int = 0, limit: int = 50) -> List[Dict]:
         """دریافت اسناد در انتظار بررسی"""
@@ -200,6 +274,14 @@ class VectorStore:
                     metadatas=[metadata]
                 )
             
+            # Publish event for document update
+            event_bus.publish(VectorStoreEvent.DOCUMENT_UPDATED, {
+                'id': document_id,
+                'text': edited_text,
+                'metadata': metadata
+            })
+            event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
+
             return True
         except Exception as e:
             print(f"Error updating document status: {str(e)}")
@@ -256,4 +338,23 @@ class VectorStore:
             }
         except Exception as e:
             print(f"Error getting document: {str(e)}")
-            return None 
+            return None
+
+    def get_document(self, document_id: str) -> dict:
+        """Get a document from the vector store by its ID"""
+        try:
+            result = self.collection.get(ids=[document_id])
+            if not result['ids']:
+                return None
+                
+            return {
+                'id': result['ids'][0],
+                'text': result['documents'][0],
+                'metadata': result['metadatas'][0]
+            }
+        except Exception as e:
+            print(f"Error getting document: {str(e)}")
+            return None
+        
+    
+    

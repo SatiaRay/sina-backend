@@ -1,0 +1,452 @@
+import pytest
+from fastapi.testclient import TestClient
+from datetime import datetime
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from database.models import Base, Document, CrawledDomain
+from api.crawl import router, CrawlRequest
+from fastapi import FastAPI
+from database.models import get_db
+from unittest.mock import patch, MagicMock
+import json
+import asyncio
+from rq import Queue
+from redis import Redis
+import uuid
+import time
+
+# Create test database
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Create test app
+app = FastAPI()
+
+# Override the get_db dependency
+def override_get_db():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+app.dependency_overrides[get_db] = override_get_db
+app.include_router(router)
+client = TestClient(app)
+
+@pytest.fixture(scope="function")
+def db_session():
+    # Create the database and tables
+    Base.metadata.create_all(bind=engine)
+    
+    # Create a new session for the test
+    session = TestingSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+        # Drop all tables after the test
+        Base.metadata.drop_all(bind=engine)
+
+@pytest.fixture(scope="function")
+def mock_redis():
+    with patch('api.crawl.Redis') as mock:
+        yield mock
+
+@pytest.fixture(scope="function")
+def mock_queue(mock_redis):
+    with patch('api.crawl.Queue') as mock:
+        yield mock
+
+@pytest.fixture(scope="function")
+def mock_job():
+    job = MagicMock()
+    job.id = str(uuid.uuid4())
+    job.meta = {}
+    job.get_status.return_value = 'queued'
+    job.is_finished = False
+    job.is_failed = False
+    return job
+
+def test_crawl_url_success(mock_redis, mock_queue, mock_job):
+    # Setup mock queue
+    mock_queue.return_value.enqueue.return_value = mock_job
+    
+    # Test data
+    test_url = "https://example.com"
+    request_data = {
+        "url": test_url,
+        "recursive": True,
+        "store_in_vector": True
+    }
+    
+    # Make request
+    response = client.post("/crawl", json=request_data)
+    
+    # Assertions
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "لینک وارد شده برای خزش در صف قرار داده شد."
+    assert data["url"] == f"{test_url}/"
+    assert "job_id" in data
+    
+    # Verify queue was called correctly
+    mock_queue.return_value.enqueue.assert_called_once()
+
+def test_crawl_url_invalid_url():
+    # Test with invalid URL
+    request_data = {
+        "url": "invalid-url",
+        "recursive": False,
+        "store_in_vector": False
+    }
+    
+    response = client.post("/crawl", json=request_data)
+    assert response.status_code == 422  # Validation error
+
+def test_crawl_url_redis_error(mock_redis):
+    # Simulate Redis connection error
+    mock_redis.side_effect = Exception("Redis connection failed")
+    
+    request_data = {
+        "url": "https://example.com",
+        "recursive": False,
+        "store_in_vector": False
+    }
+    
+    response = client.post("/crawl", json=request_data)
+    assert response.status_code == 500
+    assert "خطا در خزش" in response.json()["detail"]["message"]
+
+@pytest.mark.asyncio
+async def test_websocket_job_status(mock_redis, mock_job):
+    # Setup mock job
+    mock_job.meta = {
+        'progress': 'Processing...',
+        'doc_ids': ['doc1', 'doc2']
+    }
+    mock_job.get_status.return_value = 'started'
+    mock_job.is_finished = False
+    mock_job.is_failed = False
+
+    # Mock Job.fetch to return our mock job
+    with patch('api.crawl.Job.fetch', return_value=mock_job), \
+         patch('asyncio.sleep') as mock_sleep:  # Mock sleep to prevent actual waiting
+        try:
+            # Create WebSocket client
+            with client.websocket_connect(f"/ws/jobs/{mock_job.id}") as websocket:
+                # Receive doc_ids first (as per API implementation)
+                data = websocket.receive_json()
+                assert data["event"] == "docs_created"
+                assert data["doc_ids"] == ['doc1', 'doc2']
+                mock_sleep.assert_called()
+        except Exception as e:
+            pytest.fail(f"WebSocket test raised an exception: {str(e)}")
+
+@pytest.mark.asyncio
+async def test_websocket_job_progress(mock_redis, mock_job):
+    # Setup mock job with only progress (no doc_ids)
+    mock_job.meta = {
+        'progress': 'Processing...'
+    }
+    mock_job.get_status.return_value = 'started'
+    mock_job.is_finished = False
+    mock_job.is_failed = False
+
+    # Mock Job.fetch to return our mock job
+    with patch('api.crawl.Job.fetch', return_value=mock_job), \
+         patch('asyncio.sleep') as mock_sleep:  # Mock sleep to prevent actual waiting
+        try:
+            # Create WebSocket client
+            with client.websocket_connect(f"/ws/jobs/{mock_job.id}") as websocket:
+                # Receive progress update
+                data = websocket.receive_json()
+                assert data["event"] == "change_progress"
+                assert data["progress"] == "Processing..."
+                assert data["status"] == "started"
+                mock_sleep.assert_called()
+        except Exception as e:
+            pytest.fail(f"WebSocket test raised an exception: {str(e)}")
+
+@pytest.mark.asyncio
+async def test_websocket_job_error(mock_redis, mock_job):
+    # Setup mock job with error
+    mock_job.meta = {'error': {'message': 'Test error'}}
+    mock_job.is_failed = True
+    mock_job.get_status.return_value = 'failed'
+    mock_job.is_finished = False
+
+    # Mock Job.fetch to return our mock job
+    with patch('api.crawl.Job.fetch', return_value=mock_job), \
+         patch('asyncio.sleep') as mock_sleep:  # Mock sleep to prevent actual waiting
+        try:
+            # Create WebSocket client
+            with client.websocket_connect(f"/ws/jobs/{mock_job.id}") as websocket:
+                # Should receive error status
+                data = websocket.receive_json()
+                assert data["event"] == "change_progress"
+                assert data["status"] == "failed"
+                mock_sleep.assert_called()
+        except Exception as e:
+            pytest.fail(f"WebSocket test raised an exception: {str(e)}")
+
+@pytest.mark.asyncio
+async def test_websocket_job_not_found(mock_redis):
+    # Mock Job.fetch to raise an exception
+    with patch('api.crawl.Job.fetch', side_effect=Exception("Job not found")):
+        # Create WebSocket client
+        with client.websocket_connect("/ws/jobs/nonexistent-job") as websocket:
+            # Should receive error status
+            with pytest.raises(Exception):
+                websocket.receive_json()
+
+@pytest.mark.asyncio
+async def test_websocket_disconnect(mock_redis, mock_job):
+    # Setup mock job
+    mock_job.meta = {'progress': 'Processing...'}
+    mock_job.get_status.return_value = 'started'
+    mock_job.is_finished = False
+    mock_job.is_failed = False
+
+    # Mock Job.fetch to return our mock job
+    with patch('api.crawl.Job.fetch', return_value=mock_job):
+        # Create WebSocket client
+        with client.websocket_connect(f"/ws/jobs/{mock_job.id}") as websocket:
+            # Close the connection immediately
+            websocket.close()
+            # The test should complete without errors
+
+def test_crawl_task_success(db_session, mock_job):
+    from api.crawl import crawl_task
+    
+    # Setup test data
+    test_url = "https://example.com"
+    test_doc = Document(
+        id=1,
+        title="Test Document",
+        uri=test_url,
+        html="<html>Test</html>",
+        markdown="# Test"
+    )
+    db_session.add(test_doc)
+    db_session.commit()
+    
+    # Mock both the crawl function and get_current_job
+    with patch('api.crawl.crawl') as mock_crawl, \
+         patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.crawl.get_db', return_value=db_session):
+        mock_crawl.return_value = [1]  # Return document ID
+        
+        # Execute crawl task
+        crawl_task(test_url, recursive=True, store_in_vector=True)
+        
+        # Verify job metadata was updated with the final progress message
+        assert mock_job.meta['progress'] == "Finished"
+        assert mock_job.meta['doc_ids'] == [1]
+        
+        # Verify that save_meta was called
+        assert mock_job.save_meta.call_count >= 2  # At least two calls for progress updates
+
+def test_crawl_task_error_handling(mock_job, db_session):
+    from api.crawl import crawl_task
+    
+    # Mock both the crawl function and get_current_job
+    with patch('api.crawl.crawl') as mock_crawl, \
+         patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.crawl.get_db', return_value=db_session):
+        mock_crawl.side_effect = Exception("Test error")
+        
+        # Execute crawl task and expect it to raise the exception
+        with pytest.raises(Exception) as exc_info:
+            crawl_task("https://example.com")
+        
+        # Verify the exception message
+        assert str(exc_info.value) == "Test error"
+        
+        # Verify error was captured in job metadata
+        assert 'error' in mock_job.meta
+        assert str(mock_job.meta['error']['message']) == "Test error"
+        assert mock_job.save_meta.call_count >= 1  # At least one call for error update
+
+def test_crawl_task_no_job(db_session):
+    from api.crawl import crawl_task
+    
+    # Mock get_current_job to return None and patch crawl to avoid actual crawling
+    with patch('rq.get_current_job', return_value=None), \
+         patch('api.crawl.crawl') as mock_crawl, \
+         patch('api.crawl.get_db', return_value=db_session):
+        # Execute crawl task - should not raise an exception
+        crawl_task("https://example.com")
+        # Verify crawl was called
+        mock_crawl.assert_called_once()
+
+def test_clean_domain():
+    from api.crawl import clean_domain
+    
+    # Test cases
+    test_cases = [
+        ("https://www.example.com", "https://example.com"),
+        ("http://example.com", "http://example.com"),
+        ("https://sub.example.com", "https://sub.example.com"),
+        ("https://www.example.com/path", "https://example.com/path"),
+    ]
+    
+    for input_url, expected_url in test_cases:
+        assert clean_domain(input_url) == expected_url 
+
+def test_create_vectorization_batch(db_session, test_document, mock_redis):
+    from api.crawl import create_vectorization_batch
+    
+    # Setup test data
+    doc_ids = [test_document.id]
+    
+    # Mock Redis and Queue
+    mock_redis.return_value = MagicMock()
+    with patch('api.crawl.Queue') as mock_queue:
+        mock_job = MagicMock()
+        mock_job.id = str(uuid.uuid4())
+        mock_queue.return_value.enqueue.return_value = mock_job
+        
+        # Execute function
+        result = create_vectorization_batch(doc_ids, mock_redis.return_value)
+        
+        # Verify result
+        assert 'batch_id' in result
+        assert 'job_ids' in result
+        assert 'progress' in result
+        assert result['progress']['total_docs'] == len(doc_ids)
+        assert result['progress']['remaining'] == len(doc_ids)
+        assert result['progress']['done'] == 0
+        assert result['progress']['exceptions'] == 0
+        assert result['progress']['progress_percent'] == 0
+
+def test_update_batch_progress(mock_redis):
+    from api.crawl import update_batch_progress
+    
+    # Setup test data
+    job_ids = ['job1', 'job2', 'job3']
+    
+    # Mock jobs with different statuses
+    mock_job1 = MagicMock()
+    mock_job1.is_finished = True
+    mock_job1.is_failed = False
+    
+    mock_job2 = MagicMock()
+    mock_job2.is_finished = False
+    mock_job2.is_failed = True
+    
+    mock_job3 = MagicMock()
+    mock_job3.is_finished = False
+    mock_job3.is_failed = False
+    
+    # Mock Job.fetch to return different jobs
+    with patch('api.crawl.Job.fetch') as mock_fetch:
+        mock_fetch.side_effect = [mock_job1, mock_job2, mock_job3]
+        
+        # Execute function
+        result = update_batch_progress(job_ids, mock_redis.return_value)
+        
+        # Verify result
+        assert result['total_docs'] == len(job_ids)
+        assert result['done'] == 1
+        assert result['exceptions'] == 1
+        assert result['remaining'] == 1
+        assert result['progress_percent'] == 33.33
+
+def test_monitor_vectorization_batch(mock_redis, mock_job):
+    from api.crawl import monitor_vectorization_batch
+    
+    # Setup test data
+    vector_jobs = ['job1', 'job2']
+    
+    # Mock jobs that will complete after first check
+    mock_job1 = MagicMock()
+    mock_job1.is_finished = True
+    mock_job1.is_failed = False
+    
+    mock_job2 = MagicMock()
+    mock_job2.is_finished = True
+    mock_job2.is_failed = False
+    
+    # Mock Job.fetch to return different jobs
+    with patch('api.crawl.Job.fetch') as mock_fetch, \
+         patch('api.crawl.update_batch_progress') as mock_update_progress, \
+         patch('time.sleep') as mock_sleep:  # Mock sleep to prevent actual waiting
+        
+        # Setup mock to return completed jobs immediately
+        mock_fetch.side_effect = [mock_job1, mock_job2]
+        mock_update_progress.return_value = {
+            'total_docs': 2,
+            'done': 2,
+            'remaining': 0,
+            'exceptions': 0,
+            'progress_percent': 100
+        }
+        
+        # Execute function with a timeout
+        try:
+            monitor_vectorization_batch(mock_job, vector_jobs, mock_redis.return_value)
+        except Exception as e:
+            pytest.fail(f"monitor_vectorization_batch raised an exception: {str(e)}")
+        
+        # Verify job metadata was updated
+        assert mock_job.meta['vectorization_batch']['progress']['done'] == 2
+        assert mock_job.meta['vectorization_batch']['progress']['remaining'] == 0
+        assert mock_job.meta['vectorization_batch']['progress']['progress_percent'] == 100
+        assert mock_job.save_meta.call_count > 0
+        
+        # Verify sleep was called
+        mock_sleep.assert_called()
+
+def test_crawl_task_with_vectorization(db_session, mock_job):
+    from api.crawl import crawl_task
+    
+    # Setup test data
+    test_url = "https://example.com"
+    test_doc = Document(
+        id=1,
+        title="Test Document",
+        uri=test_url,
+        html="<html>Test</html>",
+        markdown="# Test"
+    )
+    db_session.add(test_doc)
+    db_session.commit()
+    
+    # Mock dependencies
+    with patch('api.crawl.crawl') as mock_crawl, \
+         patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.crawl.get_db', return_value=db_session), \
+         patch('api.crawl.create_vectorization_batch') as mock_create_batch, \
+         patch('api.crawl.monitor_vectorization_batch') as mock_monitor, \
+         patch('time.sleep') as mock_sleep:  # Mock sleep to prevent actual waiting
+        
+        # Setup mocks
+        mock_crawl.return_value = [1]  # Return document ID
+        mock_create_batch.return_value = {
+            'batch_id': 'batch_123',
+            'job_ids': ['job1', 'job2'],
+            'progress': {
+                'total_docs': 2,
+                'done': 0,
+                'remaining': 2,
+                'exceptions': 0,
+                'progress_percent': 0
+            }
+        }
+        
+        # Execute crawl task with vectorization
+        try:
+            crawl_task(test_url, recursive=True, store_in_vector=True)
+        except Exception as e:
+            pytest.fail(f"crawl_task raised an exception: {str(e)}")
+        
+        # Verify vectorization was triggered
+        mock_create_batch.assert_called_once()
+        mock_monitor.assert_called_once()
+        
+        # Verify job metadata was updated
+        assert mock_job.meta['vectorization_batch']['batch_id'] == 'batch_123'
+        assert len(mock_job.meta['vectorization_batch']['job_ids']) == 2
+        assert mock_job.save_meta.call_count >= 2 
