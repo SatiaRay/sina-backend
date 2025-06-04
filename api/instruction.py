@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from database.repository import InstructionRepository
@@ -34,20 +34,40 @@ class InstructionResponse(InstructionBase):
     class Config:
         from_attributes = True
 
+class PaginatedResponse(BaseModel):
+    items: List[InstructionResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
 @router.post("/instructions/", response_model=InstructionResponse)
 def create_instruction(instruction: InstructionCreate, db: Session = Depends(get_db)):
     repo = InstructionRepository(db)
     return repo.create(instruction.dict())
 
-@router.get("/instructions/", response_model=List[InstructionResponse])
+@router.get("/instructions/", response_model=PaginatedResponse)
 def get_instructions(
     active_only: bool = False,
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db)
 ):
     repo = InstructionRepository(db)
     if active_only:
-        return repo.get_active_instructions()
-    return repo.get_all()
+        items, total = repo.get_active_instructions_paginated(page, size)
+    else:
+        items, total = repo.get_all_paginated(page, size)
+    
+    pages = (total + size - 1) // size  # Ceiling division
+    
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=size,
+        pages=pages
+    )
 
 @router.get("/instructions/{instruction_id}", response_model=InstructionResponse)
 def get_instruction(instruction_id: int, db: Session = Depends(get_db)):

@@ -52,10 +52,26 @@ def test_get_instructions(db):
     response = client.get("/instructions/")
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
-    assert data[0]["label"] == TEST_INSTRUCTION["label"]
-    assert data[0]["text"] == TEST_INSTRUCTION["text"]
+    
+    # Check pagination structure
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    assert "pages" in data
+    
+    # Check items
+    assert isinstance(data["items"], list)
+    assert len(data["items"]) > 0
+    assert data["items"][0]["label"] == TEST_INSTRUCTION["label"]
+    assert data["items"][0]["text"] == TEST_INSTRUCTION["text"]
+    
+    # Check pagination values
+    assert data["page"] == 1
+    assert data["size"] == 10
+    assert data["total"] > 0
+    assert data["pages"] > 0
 
 def test_get_instructions_active_only(db):
     """Test getting only active instructions"""
@@ -66,12 +82,55 @@ def test_get_instructions_active_only(db):
     response = client.get("/instructions/?active_only=true")
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
-    for instruction in data:
+    
+    # Check pagination structure
+    assert isinstance(data, dict)
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    assert "pages" in data
+    
+    # Check items
+    assert isinstance(data["items"], list)
+    assert len(data["items"]) > 0
+    for instruction in data["items"]:
         assert instruction["status"] is True
         assert instruction["label"] == TEST_INSTRUCTION["label"]
         assert instruction["text"] == TEST_INSTRUCTION["text"]
+    
+    # Check pagination values
+    assert data["page"] == 1
+    assert data["size"] == 10
+    assert data["total"] > 0
+    assert data["pages"] > 0
+
+def test_get_instructions_pagination(db):
+    """Test pagination of instructions"""
+    # Create multiple test instructions
+    repo = InstructionRepository(db)
+    for i in range(15):  # Create 15 instructions
+        test_data = TEST_INSTRUCTION.copy()
+        test_data["label"] = f"Test Instruction {i}"
+        repo.create(test_data)
+    
+    # Test first page
+    response = client.get("/instructions/?page=1&size=10")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 10
+    assert data["page"] == 1
+    assert data["size"] == 10
+    assert data["total"] >= 15
+    assert data["pages"] >= 2
+    
+    # Test second page
+    response = client.get("/instructions/?page=2&size=10")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) > 0
+    assert data["page"] == 2
+    assert data["size"] == 10
 
 def test_get_instruction(test_instruction):
     """Test getting a specific instruction"""

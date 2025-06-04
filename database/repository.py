@@ -222,6 +222,38 @@ class InstructionRepository(Repository[Instruction]):
     def __init__(self, db: Session):
         super().__init__(db, Instruction)
 
+    def get_all_paginated(self, page: int = 1, size: int = 10) -> tuple[List[Instruction], int]:
+        """Get paginated instructions with non-empty label and text"""
+        query = self.db.query(Instruction).filter(
+            Instruction.label != '',
+            Instruction.text != ''
+        )
+        total = query.count()
+        items = query.offset((page - 1) * size).limit(size).all()
+        return items, total
+
+    def get_active_instructions_paginated(self, page: int = 1, size: int = 10) -> tuple[List[Instruction], int]:
+        """Get paginated active instructions with non-empty label and text"""
+        query = self.db.query(Instruction).filter(
+            Instruction.status == True,
+            Instruction.label != '',
+            Instruction.text != ''
+        )
+        total = query.count()
+        items = query.offset((page - 1) * size).limit(size).all()
+        return items, total
+
+    def get_inactive_instructions_paginated(self, page: int = 1, size: int = 10) -> tuple[List[Instruction], int]:
+        """Get paginated inactive instructions with non-empty label and text"""
+        query = self.db.query(Instruction).filter(
+            Instruction.status == False,
+            Instruction.label != '',
+            Instruction.text != ''
+        )
+        total = query.count()
+        items = query.offset((page - 1) * size).limit(size).all()
+        return items, total
+
     def get_all(self) -> List[Instruction]:
         """Get all instructions with non-empty label and text"""
         return self.db.query(Instruction).filter(
