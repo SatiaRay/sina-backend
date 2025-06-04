@@ -51,6 +51,7 @@ class DocumentUpdate(BaseModel):
     domain_id: Optional[int] = None
 
 class VectorizeDocumentRequest(BaseModel):
+    title: Optional[str] = None
     html: str
     metadata: Optional[dict] = None
 
@@ -562,6 +563,7 @@ async def vectorize_document(
     تبدیل HTML به Markdown و ذخیره در پایگاه داده برداری
     
     - **document_id**: شناسه سند
+    - **title**: عنوان سند (اختیاری)
     - **html**: محتوای HTML سند
     - **metadata**: متادیتای سند (اختیاری)
     
@@ -571,7 +573,6 @@ async def vectorize_document(
       "html": "<p>متن HTML</p>",
       "metadata": {
         "source": "https://example.com",
-        "title": "عنوان سند"
       }
     }
     ```
@@ -591,7 +592,7 @@ async def vectorize_document(
         redis_con = Redis(host=os.getenv('REDIS_HOST'))
         q = Queue(connection=redis_con)
         job_id = str(uuid.uuid4())
-        q.enqueue(vectorize_task, document_id, request.html, request.metadata, job_id = job_id)
+        q.enqueue(vectorize_task, document_id, request.html, request.metadata, request.title, job_id = job_id)
 
          # Prepare response
         response = VectorizeDocumentResponse(
@@ -610,7 +611,7 @@ async def vectorize_document(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] = None):
+async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] = None, title: Optional[str] = None):
     try:
         from database.models import SessionLocal
         from rq import get_current_job
@@ -638,12 +639,6 @@ async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] =
         job.meta['progress'] = {'type' : 'info', 'msg' : "Start html to markdown ..."}
         job.save_meta()
         
-        # Debugging: Log values before condition
-        print(f"document.ai_markdown: {document.ai_markdown}")
-        print(f"document.html: {document.html}")
-        print(f"html: {html}")
-        print(f"document.markdown: {document.markdown}")
-        
         # Set markdown from document.markdown database value if html not changed or generate markdown by AI agent
         if(document.ai_markdown and document.html == html and document.markdown):
             markdown = document.markdown
@@ -667,7 +662,7 @@ async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] =
         metadata = metadata or {}
         metadata.update({
             "document_id": document_id,
-            "title": document.title,
+            "title": title or document.title,
             "uri": uri,
             "domain_id": document.domain_id,
             "created_at": datetime.now().isoformat()
@@ -689,6 +684,7 @@ async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] =
         # Update document with vector_id
         update_data = {
             "vector_id": vector_id,
+            "title" : title or document.title,
             "html" : html,
             "markdown" : markdown,
             "ai_markdown" : True,
