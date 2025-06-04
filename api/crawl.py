@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query,WebSocket, WebSocke
 from pydantic import BaseModel, HttpUrl
 from typing import Optional, List, Dict, Any, Union
 from fastapi.responses import JSONResponse
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 import logging
 from crawler.crawler import crawl
 from database.models import Document, CrawledDomain, CrawlJobs, get_db
@@ -210,7 +210,7 @@ async def crawl_url(request: CrawlRequest):
             'save_in_vector': request.store_in_vector,
             'status': initial_status['msg'],  # Store only the status message
             'logs': json.dumps([initial_status]),  # Store full status history
-            'started_at': datetime.now(UTC)
+            'started_at': datetime.now(timezone.utc)
         })
         
         # Create RQ job with initial metadata
@@ -304,7 +304,7 @@ def create_vectorization_batch(doc_ids, redis_con):
                     "title": document.title,
                     "uri": document.uri or "",
                     "domain_id": str(document.domain_id) if document.domain_id else "0",
-                    "created_at": datetime.now().isoformat()
+                    "created_at": datetime.now(timezone.utc).isoformat()
                 }
 
                 vector_job = q.enqueue(
@@ -450,7 +450,7 @@ def update_crawl_job_status(crawl_job_id: int, status_obj: dict, db: Session):
                     current_logs = []
             
             # Add timestamp to status object
-            status_obj['timestamp'] = datetime.now(UTC).isoformat()
+            status_obj['timestamp'] = datetime.now(timezone.utc).isoformat()
             
             # Append new status to logs
             current_logs.append(status_obj)
@@ -463,7 +463,7 @@ def update_crawl_job_status(crawl_job_id: int, status_obj: dict, db: Session):
             
             # Set end_at only if status is 'Finished'
             if status_obj['msg'] == 'Finished':
-                update_data['end_at'] = datetime.now(UTC)
+                update_data['end_at'] = datetime.now(timezone.utc)
             
             # Update the record
             crawl_job_repo.update(crawl_job.id, update_data)
