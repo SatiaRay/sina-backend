@@ -65,7 +65,17 @@ class VectorStore:
             
         # استخراج متن‌ها و متادیتاها
         texts = [doc['text'] for doc in documents]
-        metadatas = [doc['metadata'] for doc in documents]
+        
+        # Clean metadata by converting None values to empty strings
+        metadatas = []
+        for doc in documents:
+            cleaned_metadata = {}
+            for key, value in doc['metadata'].items():
+                if value is None:
+                    cleaned_metadata[key] = ""
+                else:
+                    cleaned_metadata[key] = value
+            metadatas.append(cleaned_metadata)
         
         # تولید ID‌های یکتا با استفاده از UUID
         ids = vector_id or [f"doc_{uuid.uuid4().hex}" for _ in range(len(documents))]

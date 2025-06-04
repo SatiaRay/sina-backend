@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from urllib.parse import urlparse, urlunparse
 from rq import Queue
 from redis import Redis
+from rq.exceptions import NoSuchJobError
 import uuid
 import asyncio
 from rq.job import Job
@@ -187,7 +188,7 @@ async def crawl_url(request: CrawlRequest):
     try:
         # Add crawl task to queue
         redis_con = Redis(host=os.getenv('REDIS_HOST'))
-        q = Queue(connection=redis_con, default_timeout=15000)  # 10 minutes timeout
+        q = Queue('crawl', connection=redis_con, default_timeout=15000)  # 10 minutes timeout
         job_id = str(uuid.uuid4())
         
         # Initial status object
@@ -334,22 +335,29 @@ def update_batch_progress(vector_jobs, redis_con):
     try:
         done = 0
         exceptions = 0
+        missing = 0
         
         for job_id in vector_jobs:
-            vector_job = Job.fetch(job_id, connection=redis_con)
-            if vector_job.is_finished:
-                done += 1
-            elif vector_job.is_failed:
-                exceptions += 1
+            try:
+                vector_job = Job.fetch(job_id, connection=redis_con)
+                if vector_job.is_finished:
+                    done += 1
+                elif vector_job.is_failed:
+                    exceptions += 1
+            except NoSuchJobError:
+                logger.warning(f"Vectorization job {job_id} not found in Redis")
+                missing += 1
+                continue
         
-        remaining = len(vector_jobs) - done - exceptions
-        progress_percent = (done / len(vector_jobs) * 100) if vector_jobs else 0
+        remaining = len(vector_jobs) - done - exceptions - missing
+        progress_percent = ((done + missing) / len(vector_jobs) * 100) if vector_jobs else 0
         
         return {
             'total_docs': len(vector_jobs),
             'done': done,
             'remaining': remaining,
             'exceptions': exceptions,
+            'missing': missing,
             'progress_percent': round(progress_percent, 2)
         }
     except Exception as e:
