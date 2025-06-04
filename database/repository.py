@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Type, TypeVar, Generic
 from datetime import datetime
-from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain, CrawlJobs
+from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain, CrawlJobs, Instruction
 from sqlalchemy.types import String
 from sqlalchemy import text
 
@@ -216,4 +216,47 @@ class CrawlJobsRepository(Repository[CrawlJobs]):
 
     def get_recent_jobs(self, limit: int = 10) -> List[CrawlJobs]:
         """Get the most recent crawl jobs"""
-        return self.db.query(CrawlJobs).order_by(CrawlJobs.started_at.desc()).limit(limit).all() 
+        return self.db.query(CrawlJobs).order_by(CrawlJobs.started_at.desc()).limit(limit).all()
+
+class InstructionRepository(Repository[Instruction]):
+    def __init__(self, db: Session):
+        super().__init__(db, Instruction)
+
+    def get_all(self) -> List[Instruction]:
+        """Get all instructions with non-empty label and text"""
+        return self.db.query(Instruction).filter(
+            Instruction.label != '',
+            Instruction.text != ''
+        ).all()
+
+    def get_active_instructions(self) -> List[Instruction]:
+        """Get all active instructions with non-empty label and text"""
+        return self.db.query(Instruction).filter(
+            Instruction.status == True,
+            Instruction.label != '',
+            Instruction.text != ''
+        ).all()
+
+    def get_inactive_instructions(self) -> List[Instruction]:
+        """Get all inactive instructions with non-empty label and text"""
+        return self.db.query(Instruction).filter(
+            Instruction.status == False,
+            Instruction.label != '',
+            Instruction.text != ''
+        ).all()
+
+    def get_by_label(self, label: str) -> Optional[Instruction]:
+        """Get an instruction by its label"""
+        return self.db.query(Instruction).filter(
+            Instruction.label == label,
+            Instruction.label != '',
+            Instruction.text != ''
+        ).first()
+
+    def enable_instruction(self, id: int) -> Optional[Instruction]:
+        """Enable an instruction"""
+        return self.update(id, {"status": True})
+
+    def disable_instruction(self, id: int) -> Optional[Instruction]:
+        """Disable an instruction"""
+        return self.update(id, {"status": False}) 
