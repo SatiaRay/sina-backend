@@ -638,13 +638,23 @@ async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] =
         job.meta['progress'] = {'type' : 'info', 'msg' : "Start html to markdown ..."}
         job.save_meta()
         
-        # Convert HTML to Markdown
-        markdown = await html_to_markdown_agent.convert(html)
-        if markdown is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to convert HTML to Markdown"
-            )
+        # Debugging: Log values before condition
+        print(f"document.ai_markdown: {document.ai_markdown}")
+        print(f"document.html: {document.html}")
+        print(f"html: {html}")
+        print(f"document.markdown: {document.markdown}")
+        
+        # Set markdown from document.markdown database value if html not changed or generate markdown by AI agent
+        if(document.ai_markdown and document.html == html and document.markdown):
+            markdown = document.markdown
+        else:
+            markdown = await html_to_markdown_agent.convert(html)
+            
+            if markdown is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to convert HTML to Markdown"
+                )
         
         # Update progress metadata
         job.meta['progress'] = {'type' : 'info', 'msg' : "Markdown generated. Storing data ..."}
@@ -681,6 +691,7 @@ async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] =
             "vector_id": vector_id,
             "html" : html,
             "markdown" : markdown,
+            "ai_markdown" : True,
             "uri": uri  # Update with cleaned URI
         }
         document_repo.update(document_id, update_data)

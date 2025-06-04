@@ -370,6 +370,21 @@ def update_batch_progress(vector_jobs, redis_con):
 def monitor_vectorization_batch(job, vector_jobs, redis_con):
     """Monitor the progress of vectorization jobs and update job metadata"""
     try:
+        # Initialize vectorization batch info if not present
+        if 'vectorization_batch' not in job.meta:
+            job.meta['vectorization_batch'] = {
+                'batch_id': str(uuid.uuid4()),
+                'job_ids': vector_jobs,
+                'progress': {
+                    'total_docs': len(vector_jobs),
+                    'done': 0,
+                    'remaining': len(vector_jobs),
+                    'exceptions': 0,
+                    'progress_percent': 0
+                }
+            }
+            job.save_meta()
+
         while True:
             # Update batch progress
             batch_progress = update_batch_progress(vector_jobs, redis_con)
@@ -466,54 +481,61 @@ def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False)
 
         job = get_current_job()
         db = SessionLocal()
-        crawl_job_id = job.meta.get('crawl_job_id')
+        crawl_job_id = job.meta.get('crawl_job_id') if job else None
 
         try:
-            # Initialize job metadata
-            initialize_job_metadata(job)
-            if crawl_job_id:
-                update_crawl_job_status(crawl_job_id, job.meta['status'], db)
+            # Initialize job metadata if job exists
+            if job:
+                initialize_job_metadata(job)
+                if crawl_job_id:
+                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
             
             # Start crawling and get document IDs
             doc_ids = crawl(str(url), recursive=recursive, db=db, job=job)
             
             if store_in_vector and doc_ids:
-                # Update status to saving data
-                update_job_status(job, 'saving data')
-                if crawl_job_id:
-                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
+                # Update status to saving data if job exists
+                if job:
+                    update_job_status(job, 'saving data')
+                    if crawl_job_id:
+                        update_crawl_job_status(crawl_job_id, job.meta['status'], db)
                 
                 # Create batch of vectorization jobs
                 redis_con = Redis(host=os.getenv('REDIS_HOST'))
                 batch_info = create_vectorization_batch(doc_ids, redis_con)
                 
-                # Update parent job with batch information
-                job.meta['vectorization_batch'] = batch_info
-                job.save_meta()
-                if crawl_job_id:
-                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
+                # Update parent job with batch information if job exists
+                if job:
+                    job.meta['vectorization_batch'] = batch_info
+                    job.save_meta()
+                    if crawl_job_id:
+                        update_crawl_job_status(crawl_job_id, job.meta['status'], db)
                 
                 # Monitor batch progress
                 monitor_vectorization_batch(job, batch_info['job_ids'], redis_con)
                 
-                # Update final status
-                update_job_status(job, 'Finished', include_batch=True)
-                if crawl_job_id:
-                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
+                # Update final status if job exists
+                if job:
+                    update_job_status(job, 'Finished', include_batch=True)
+                    if crawl_job_id:
+                        update_crawl_job_status(crawl_job_id, job.meta['status'], db)
             else:
-                update_job_status(job, 'Finished', include_batch=False)
-                if crawl_job_id:
-                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
+                if job:
+                    update_job_status(job, 'Finished', include_batch=False)
+                    if crawl_job_id:
+                        update_crawl_job_status(crawl_job_id, job.meta['status'], db)
 
         except CrawlError as e:
-            handle_crawl_error(job, e, e.error_type)
-            if crawl_job_id:
-                update_crawl_job_status(crawl_job_id, job.meta['status'], db)
+            if job:
+                handle_crawl_error(job, e, e.error_type)
+                if crawl_job_id:
+                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
             raise
         except Exception as e:
-            handle_crawl_error(job, e, "unexpected_error")
-            if crawl_job_id:
-                update_crawl_job_status(crawl_job_id, job.meta['status'], db)
+            if job:
+                handle_crawl_error(job, e, "unexpected_error")
+                if crawl_job_id:
+                    update_crawl_job_status(crawl_job_id, job.meta['status'], db)
             raise
 
     except Exception as e:
