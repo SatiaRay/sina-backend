@@ -52,6 +52,8 @@ async def store_vectors(request: VectorStoreRequest):
     try:
         vector_store = VectorStore()
         documents = [{"text": doc.text, "metadata": doc.metadata} for doc in request.documents]
+        
+        print(request.documents)
         ids = vector_store.add_documents(documents)
         return {
             "message": f"Successfully stored {len(ids)} documents",
