@@ -3,14 +3,17 @@ from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 from database.vector_store import VectorStore
+from database.repository import InstructionRepository
+from database.models import get_db
 from models.agents.title_analyzer_agent import TitleAnalyzerAgent
 import logging
 from util.logging_config import configure_logging, log_error
 import asyncio
-from fastapi import WebSocket
+from fastapi import WebSocket, Depends
 from openai import OpenAI
 from anyio import to_thread
 from .chat_agent_rag_interface import ChatAgentRagInterface
+from sqlalchemy.orm import Session
 
 load_dotenv()
 main_logger, error_logger, api_logger = configure_logging()
@@ -77,13 +80,31 @@ SATIA_INSTRUCTIONS = """
 """
 
 class ChatAgentRag(ChatAgentRagInterface):
-    def __init__(self):
+    def __init__(self, db: Session = Depends(get_db)):
         self.vector_store = VectorStore()
-
         self.client = OpenAI()
-        
+        self.db = db
         main_logger.info("Initialized Agent RAG System with GPT-4")
 
+    def _get_active_instructions(self) -> str:
+        """Get active instructions from the database"""
+        try:
+            repo = InstructionRepository(self.db)
+            active_instructions = repo.get_active_instructions()
+            
+            if not active_instructions:
+                return ""
+            
+            instructions_text = "\n# Active Instructions from Database\n\n"
+            for instruction in active_instructions:
+                # Split the text into lines and add "* " prefix to each line
+                formatted_text = "\n".join(f"* {line}" for line in instruction.text.split("\n"))
+                instructions_text += f"## {instruction.label}\n{formatted_text}\n\n"
+            
+            return instructions_text
+        except Exception as e:
+            error_logger.error(f"Error fetching active instructions: {str(e)}")
+            return ""
 
     async def get_relevant_docs(self, question: str) -> List[Dict]:
         """
@@ -183,10 +204,15 @@ class ChatAgentRag(ChatAgentRagInterface):
                 history_text = "\n\nPrevious Conversation:\n" + "\n".join(history_parts)
             
             workflows_text = f"# Workflows\n\n{workflows}\n" if workflows else ""
+            
+            # Get active instructions from database
+            active_instructions = self._get_active_instructions()
 
             full_input = f"""# Instructions
 
             {SATIA_INSTRUCTIONS}
+
+            {active_instructions}
 
             {workflows_text}
 
