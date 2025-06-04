@@ -1,10 +1,10 @@
 import pytest
 from fastapi.testclient import TestClient
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database.models import Base, Document, CrawledDomain
-from api.document import router, DocumentCreate, DocumentUpdate, VectorizeDocumentRequest, vectorize_task
+from api.document import router, DocumentCreate, DocumentUpdate, VectorizeDocumentRequest, vectorize_task, store_vector_document, get_vector_document
 from fastapi import FastAPI
 from database.models import get_db
 from unittest.mock import patch, MagicMock
@@ -17,6 +17,7 @@ from fastapi import WebSocketDisconnect
 from fastapi import HTTPException
 import os
 import httpx
+import pytest_asyncio
 
 # Create test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -307,6 +308,7 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
     # Setup test data
     html = "<html>Test Vector Content</html>"
     metadata = {"source": "test", "title": "Test Vector"}
+    title = "New Title"  # Add test title
     
     # Mock dependencies
     with patch('rq.get_current_job', return_value=mock_job), \
@@ -328,20 +330,22 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
         mock_repo.return_value.update.side_effect = update_document
         
         # Execute task
-        await vectorize_task(test_document.id, html, metadata)
+        await vectorize_task(test_document.id, html, metadata, title)
         
         # Verify job progress updates
         assert mock_job.meta['progress']['type'] == 'info'
         assert mock_job.meta['progress']['msg'] == "Finished"
         assert mock_job.save_meta.call_count >= 5  # At least 5 progress updates
         
-        # Verify document update was called with correct data
+        # Verify document update was called with correct data including title
         mock_repo.return_value.update.assert_called_once_with(
             test_document.id,
             {
                 "vector_id": "vec_123",
+                "title": title,  # Verify title is updated
                 "html": html,
                 "markdown": "# Test Vector Content",
+                "ai_markdown": True,
                 "uri": test_document.uri
             }
         )
@@ -349,6 +353,7 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
         # Verify document was updated in the database
         db_session.refresh(test_document)
         assert test_document.vector_id == "vec_123"
+        assert test_document.title == title  # Verify title is updated
         assert test_document.html == html
         assert test_document.markdown == "# Test Vector Content"
 
@@ -450,3 +455,176 @@ async def test_get_vector_document():
         os.environ['HOST'] = 'https://custom-host:8000'
         result = await get_vector_document("vec_123")
         assert result == {"vector_id": "vec_123", "text": "Test content"}
+
+@pytest.mark.asyncio
+async def test_vectorize_task_reuse_existing_markdown(db_session, test_document, mock_job):
+    """Test that vectorize_task reuses existing markdown when HTML hasn't changed and ai_markdown is True"""
+    # Setup test document with ai_markdown=True
+    test_document.ai_markdown = True
+    test_document.html = "<html>Test Content</html>"
+    test_document.markdown = "# Test Content"
+    db_session.commit()
+
+    # Mock the HTML to Markdown agent, rq.get_current_job, and vector store functions
+    with patch('api.document.html_to_markdown_agent.convert') as mock_convert, \
+         patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.document.store_vector_document', return_value="vec_123"), \
+         patch('api.document.get_vector_document', return_value={"vector_id": "vec_123", "text": "# Test Content"}), \
+         patch('api.document.DocumentRepository') as mock_repo:
+        
+        # Setup mock repository to return our test document
+        mock_repo.return_value.get.return_value = test_document
+        
+        # Call vectorize_task with same HTML
+        await vectorize_task(test_document.id, test_document.html)
+
+        # Verify that HTML to Markdown conversion was not called
+        mock_convert.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_vectorize_task_regenerate_markdown_html_changed(db_session, test_document, mock_job):
+    """Test that vectorize_task regenerates markdown when HTML has changed"""
+    # Setup test document with ai_markdown=True
+    test_document.ai_markdown = True
+    test_document.html = "<html>Old Content</html>"
+    test_document.markdown = "# Old Content"
+    db_session.commit()
+
+    new_html = "<html>New Content</html>"
+    expected_markdown = "# New Content"
+
+    # Mock the HTML to Markdown agent, rq.get_current_job, and vector store functions
+    with patch('api.document.html_to_markdown_agent.convert', return_value=expected_markdown) as mock_convert, \
+         patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.document.store_vector_document', return_value="vec_123"), \
+         patch('api.document.get_vector_document', return_value={"vector_id": "vec_123", "text": expected_markdown}), \
+         patch('api.document.DocumentRepository') as mock_repo:
+        
+        # Setup mock repository to return our test document
+        mock_repo.return_value.get.return_value = test_document
+        
+        # Call vectorize_task with new HTML
+        await vectorize_task(test_document.id, new_html)
+
+        # Verify that HTML to Markdown conversion was called with new HTML
+        mock_convert.assert_called_once_with(new_html)
+
+@pytest.mark.asyncio
+async def test_vectorize_task_regenerate_markdown_no_ai_markdown(db_session, test_document, mock_job):
+    """Test that vectorize_task regenerates markdown when ai_markdown is False"""
+    # Setup test document with ai_markdown=False
+    test_document.ai_markdown = False
+    test_document.html = "<html>Test Content</html>"
+    test_document.markdown = "# Test Content"
+    db_session.commit()
+
+    expected_markdown = "# New Markdown"
+
+    # Mock the HTML to Markdown agent, rq.get_current_job, and vector store functions
+    with patch('api.document.html_to_markdown_agent.convert', return_value=expected_markdown) as mock_convert, \
+         patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.document.store_vector_document', return_value="vec_123"), \
+         patch('api.document.get_vector_document', return_value={"vector_id": "vec_123", "text": expected_markdown}), \
+         patch('api.document.DocumentRepository') as mock_repo:
+        
+        # Setup mock repository to return our test document
+        mock_repo.return_value.get.return_value = test_document
+        
+        # Call vectorize_task with same HTML
+        await vectorize_task(test_document.id, test_document.html)
+
+        # Verify that HTML to Markdown conversion was called
+        mock_convert.assert_called_once_with(test_document.html)
+
+@pytest.mark.asyncio
+async def test_vectorize_task_regenerate_markdown_no_existing_markdown(db_session, test_document, mock_job):
+    """Test that vectorize_task regenerates markdown when no existing markdown is present"""
+    # Setup test document with ai_markdown=True but no markdown
+    test_document.ai_markdown = True
+    test_document.html = "<html>Test Content</html>"
+    test_document.markdown = None
+    db_session.commit()
+
+    expected_markdown = "# New Markdown"
+
+    # Mock the HTML to Markdown agent, rq.get_current_job, and vector store functions
+    with patch('api.document.html_to_markdown_agent.convert', return_value=expected_markdown) as mock_convert, \
+         patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.document.store_vector_document', return_value="vec_123"), \
+         patch('api.document.get_vector_document', return_value={"vector_id": "vec_123", "text": expected_markdown}), \
+         patch('api.document.DocumentRepository') as mock_repo:
+        
+        # Setup mock repository to return our test document
+        mock_repo.return_value.get.return_value = test_document
+        
+        # Call vectorize_task with same HTML
+        await vectorize_task(test_document.id, test_document.html)
+
+        # Verify that HTML to Markdown conversion was called
+        mock_convert.assert_called_once_with(test_document.html)
+
+@pytest.mark.asyncio
+async def test_vectorize_task_title_updates(db_session, test_document, mock_job):
+    """Test that vectorize_task properly handles title updates in both metadata and document"""
+    # Setup test data
+    html = "<html>Test Vector Content</html>"
+    metadata = {"source": "test"}
+    title = "New Custom Title"
+    vector_id = "vec_123"  # Define vector_id explicitly
+    
+    # Mock dependencies
+    with patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.document.html_to_markdown_agent.convert', return_value="# Test Vector Content"), \
+         patch('api.document.store_vector_document', return_value=vector_id) as mock_store, \
+         patch('api.document.get_vector_document', return_value={"vector_id": vector_id, "text": "# Test Vector Content"}), \
+         patch('api.document.DocumentRepository') as mock_repo:
+        
+        # Setup mock repository
+        mock_repo.return_value.get.return_value = test_document
+        
+        # Define update behavior to actually update the test document
+        def update_document(document_id, update_data):
+            # Update the test document with the new values
+            for key, value in update_data.items():
+                if hasattr(test_document, key):
+                    setattr(test_document, key, value)
+            db_session.commit()
+            return test_document
+        
+        mock_repo.return_value.update.side_effect = update_document
+        
+        # Execute task with title parameter
+        await vectorize_task(test_document.id, html, metadata, title)
+        
+        # Verify store_vector_document was called with correct metadata including title
+        mock_store.assert_called_once()
+        call_args = mock_store.call_args[0][0]
+        assert call_args["metadata"]["title"] == title
+        
+        # Verify document was updated with new title
+        db_session.refresh(test_document)
+        assert test_document.title == title
+        assert test_document.vector_id == vector_id  # Verify vector_id is set correctly
+        
+        # Reset mocks for next test
+        mock_store.reset_mock()
+        
+        title = "Test title"
+        await vectorize_task(test_document.id, html, {"source": "test"}, title)
+        
+        # Verify document was updated with title from metadata
+        db_session.refresh(test_document)
+        assert test_document.title == title
+        assert test_document.vector_id == vector_id  # Verify vector_id is still set
+        
+        # Reset mocks for next test
+        mock_store.reset_mock()
+        
+        # Test with no title provided (should keep existing title)
+        original_title = test_document.title
+        await vectorize_task(test_document.id, html, {})
+        
+        # Verify document kept its existing title
+        db_session.refresh(test_document)
+        assert test_document.title == original_title
+        assert test_document.vector_id == vector_id  # Verify vector_id is still set
