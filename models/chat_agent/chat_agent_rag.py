@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 from database.vector_store import VectorStore
 from database.repository import InstructionRepository
-from database.models import get_db
+from database.models import SessionLocal
 from models.agents.title_analyzer_agent import TitleAnalyzerAgent
 import logging
 from util.logging_config import configure_logging, log_error
@@ -80,7 +80,7 @@ SATIA_INSTRUCTIONS = """
 """
 
 class ChatAgentRag(ChatAgentRagInterface):
-    def __init__(self, db: Session = Depends(get_db)):
+    def __init__(self, db: Session = SessionLocal()):
         self.vector_store = VectorStore()
         self.client = OpenAI()
         self.db = db
@@ -89,6 +89,10 @@ class ChatAgentRag(ChatAgentRagInterface):
     def _get_active_instructions(self) -> str:
         """Get active instructions from the database"""
         try:
+            if not self.db:
+                main_logger.warning("No database session available")
+                return ""
+                
             repo = InstructionRepository(self.db)
             active_instructions = repo.get_active_instructions()
             
@@ -99,7 +103,7 @@ class ChatAgentRag(ChatAgentRagInterface):
             for instruction in active_instructions:
                 # Split the text into lines and add "* " prefix to each line
                 formatted_text = "\n".join(f"* {line}" for line in instruction.text.split("\n"))
-                instructions_text += f"## {instruction.label}\n{formatted_text}\n\n"
+                instructions_text += f"{formatted_text}\n"
             
             return instructions_text
         except Exception as e:
@@ -207,6 +211,9 @@ class ChatAgentRag(ChatAgentRagInterface):
             
             # Get active instructions from database
             active_instructions = self._get_active_instructions()
+            
+            print(active_instructions)
+            exit()
 
             full_input = f"""# Instructions
 
@@ -222,6 +229,9 @@ class ChatAgentRag(ChatAgentRagInterface):
             {history_text}
 
             User Question: {question}"""
+            
+            print(full_input)
+            exit()
 
             # In your async function:
             stream = await to_thread.run_sync(self.stream_openai_response, full_input)

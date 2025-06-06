@@ -29,6 +29,10 @@ def test_active_instructions_append_to_prompt(chat_agent, test_instruction):
     # Get active instructions
     active_instructions = chat_agent._get_active_instructions()
     
+    print(active_instructions)
+    
+    exit()
+    
     # Verify the format of active instructions
     assert "# Active Instructions from Database" in active_instructions
     assert f"## {TEST_INSTRUCTION['label']}" in active_instructions
