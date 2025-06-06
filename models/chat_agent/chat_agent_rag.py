@@ -3,14 +3,17 @@ from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 from database.vector_store import VectorStore
+from database.repository import InstructionRepository
+from database.models import SessionLocal
 from models.agents.title_analyzer_agent import TitleAnalyzerAgent
 import logging
 from util.logging_config import configure_logging, log_error
 import asyncio
-from fastapi import WebSocket
+from fastapi import WebSocket, Depends
 from openai import OpenAI
 from anyio import to_thread
 from .chat_agent_rag_interface import ChatAgentRagInterface
+from sqlalchemy.orm import Session
 
 load_dotenv()
 main_logger, error_logger, api_logger = configure_logging()
@@ -33,6 +36,7 @@ SATIA_INSTRUCTIONS = """
 * به هیچ وجه جداول را به صورت markdown ارسال نکن.
 * آدرس لینک هایی که داخل markdown قرار داده شده را در پاسخ به صورت تگ a با href برابر با آدرس آن لینک قرار دهید. همچنین target="__blank" تا در صفحه ی دیگری لینک باز شود.
 * در پاسخ \n هایی که داخل سند قرار داده شده است را حذف نکنید.برای زیبایی پاسخ \n ها را باقی بگذارید.
+* اطلاعات ارائه شده در قسمت Workflows را بر اطلاعات ارائه شده در قسمت Context Information: مقدم بدانید.
 
     @example:
         Context Information:
@@ -76,13 +80,35 @@ SATIA_INSTRUCTIONS = """
 """
 
 class ChatAgentRag(ChatAgentRagInterface):
-    def __init__(self):
+    def __init__(self, db: Session = SessionLocal()):
         self.vector_store = VectorStore()
-
         self.client = OpenAI()
-        
+        self.db = db
         main_logger.info("Initialized Agent RAG System with GPT-4")
 
+    def _get_active_instructions(self) -> str:
+        """Get active instructions from the database"""
+        try:
+            if not self.db:
+                main_logger.warning("No database session available")
+                return ""
+                
+            repo = InstructionRepository(self.db)
+            active_instructions = repo.get_active_instructions()
+            
+            if not active_instructions:
+                return ""
+            
+            instructions_text = "\n# Active Instructions from Database\n\n"
+            for instruction in active_instructions:
+                # Split the text into lines and add "* " prefix to each line
+                formatted_text = "\n".join(f"* {line}" for line in instruction.text.split("\n"))
+                instructions_text += f"{formatted_text}\n"
+            
+            return instructions_text
+        except Exception as e:
+            error_logger.error(f"Error fetching active instructions: {str(e)}")
+            return ""
 
     async def get_relevant_docs(self, question: str) -> List[Dict]:
         """
@@ -182,10 +208,15 @@ class ChatAgentRag(ChatAgentRagInterface):
                 history_text = "\n\nPrevious Conversation:\n" + "\n".join(history_parts)
             
             workflows_text = f"# Workflows\n\n{workflows}\n" if workflows else ""
-
+            
+            # Get active instructions from database
+            active_instructions = self._get_active_instructions()
+            
             full_input = f"""# Instructions
 
             {SATIA_INSTRUCTIONS}
+
+            {active_instructions}
 
             {workflows_text}
 
@@ -195,7 +226,7 @@ class ChatAgentRag(ChatAgentRagInterface):
             {history_text}
 
             User Question: {question}"""
-
+            
             # In your async function:
             stream = await to_thread.run_sync(self.stream_openai_response, full_input)
 
