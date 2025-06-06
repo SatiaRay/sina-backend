@@ -45,6 +45,7 @@ from .vector import router as vector_router
 from .workflow import router as workflow_router
 from .ai import router as ai_router
 from .job import router as job_router
+from .instruction import router as instruction_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -134,6 +135,7 @@ app.include_router(workflow_router)
 app.include_router(ai_router)
 app.include_router(about_router)
 app.include_router(job_router)
+app.include_router(instruction_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [

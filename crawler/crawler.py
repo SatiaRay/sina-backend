@@ -296,9 +296,12 @@ def crawl(url, recursive=False, db: Session = None, job=None):
                 return
             
             # Check if URL has already been crawled
-            if is_url_crawled(current_url, document_repo, domain_obj.id):
+            is_already_crawled = is_url_crawled(current_url, document_repo, domain_obj.id)
+            if is_already_crawled:
                 print(f"URL already crawled: {current_url}")
-                return
+                # If recursive mode is enabled, we still need to process the links
+                if not recursive:
+                    return
             
             print(f"Processing URL: {current_url}")
             
@@ -316,32 +319,34 @@ def crawl(url, recursive=False, db: Session = None, job=None):
             if recursive:
                 total_urls += len(links)
             
-            # Clean page content
-            title, html_content, text_content = clean_page_content(soup)
-            
-            if not text_content:
-                print(f"No content found in {current_url}")
-                exception_urls += 1
+            # Only process and store content if not already crawled
+            if not is_already_crawled:
+                # Clean page content
+                title, html_content, text_content = clean_page_content(soup)
+                
+                if not text_content:
+                    print(f"No content found in {current_url}")
+                    exception_urls += 1
+                    update_progress()
+                    return
+                
+                # Prepare and store document
+                parsed_url = urlparse(current_url)
+                document_data = {
+                    'title': title,
+                    'html': html_content,
+                    'markdown': text_content,
+                    'uri': parsed_url.path or '/',
+                    'domain_id': domain_obj.id
+                }
+                
+                if not store_document(document_data, current_url):
+                    exception_urls += 1
+                    update_progress()
+                    return
+                
+                crawled_urls += 1
                 update_progress()
-                return
-            
-            # Prepare and store document
-            parsed_url = urlparse(current_url)
-            document_data = {
-                'title': title,
-                'html': html_content,
-                'markdown': text_content,
-                'uri': parsed_url.path or '/',
-                'domain_id': domain_obj.id
-            }
-            
-            if not store_document(document_data, current_url):
-                exception_urls += 1
-                update_progress()
-                return
-            
-            crawled_urls += 1
-            update_progress()
             
             # Process links recursively if enabled
             if recursive:
