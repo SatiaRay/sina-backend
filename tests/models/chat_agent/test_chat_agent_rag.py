@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from models.chat_agent.chat_agent_rag import ChatAgentRag, SATIA_INSTRUCTIONS
 from database.models import Instruction
 from database.repository import InstructionRepository
+from unittest.mock import Mock, AsyncMock, patch
+from fastapi import WebSocket
 
 # Test data
 TEST_INSTRUCTION = {
@@ -23,6 +25,11 @@ def test_instruction(db):
 def chat_agent(db):
     """Create a ChatAgentRag instance with test database session"""
     return ChatAgentRag(question="test question", db=db)
+
+@pytest.fixture
+def mock_websocket():
+    websocket = Mock(spec=WebSocket)
+    return websocket
 
 def test_active_instructions_append_to_prompt(chat_agent, test_instruction):
     """Test that active instructions are properly appended to the static instructions"""
@@ -111,4 +118,62 @@ def test_instruction_formatting(chat_agent, db):
     # Verify the lines are properly separated
     lines = active_instructions.split("\n")
     instruction_lines = [line for line in lines if line.startswith("* ")]
-    assert len(instruction_lines) == 3, "Should have exactly 3 instruction lines" 
+    assert len(instruction_lines) == 3, "Should have exactly 3 instruction lines"
+
+@pytest.mark.asyncio
+async def test_generate_response_socket_with_function_call(chat_agent, mock_websocket):
+    """Test generate_response_socket when a function is called"""
+    # Mock the OpenAI client response
+    mock_event = Mock()
+    mock_event.type = 'response.function_call'
+    mock_event.item = Mock()
+    mock_event.item.name = 'test_function'
+    mock_event.item.arguments = '{"arg1": "value1"}'
+    mock_event.item.id = 'call_123'
+    
+    # Mock the function call result
+    mock_function_result = "Function result"
+    
+    with patch('models.chat_agent.chat_agent_rag.ChatAgentRag.stream_openai_response') as mock_stream:
+        mock_stream.return_value = [mock_event]
+        
+        with patch('models.chat_agent.chat_agent_rag.call_function') as mock_call_function:
+            mock_call_function.return_value = mock_function_result
+            
+            # Act
+            response = await chat_agent.generate_response_socket()
+            
+            # Assert
+            assert isinstance(response, list)
+            assert len(response) == 2
+            assert response[0] == ""  # Initial empty response
+            assert response[1] == mock_function_result
+
+@pytest.mark.asyncio
+async def test_generate_response_socket_with_text_response(chat_agent, mock_websocket):
+    """Test generate_response_socket with a regular text response"""
+    # Mock the OpenAI client response
+    mock_event = Mock()
+    mock_event.type = 'response.output_text.delta'
+    mock_event.delta = "Hello, this is a test response"
+    
+    with patch('models.chat_agent.chat_agent_rag.ChatAgentRag.stream_openai_response') as mock_stream:
+        mock_stream.return_value = [mock_event]
+        
+        # Act
+        response = await chat_agent.generate_response_socket()
+        
+        # Assert
+        assert response == "Hello, this is a test response"
+
+@pytest.mark.asyncio
+async def test_generate_response_socket_with_error(chat_agent, mock_websocket):
+    """Test generate_response_socket when an error occurs"""
+    with patch('models.chat_agent.chat_agent_rag.ChatAgentRag.stream_openai_response') as mock_stream:
+        mock_stream.side_effect = Exception("Test error")
+        
+        # Act & Assert
+        with pytest.raises(Exception) as exc_info:
+            await chat_agent.generate_response_socket()
+        
+        assert str(exc_info.value) == "Test error" 

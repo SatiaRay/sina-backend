@@ -6,7 +6,7 @@ from .chat_agent_rag_interface import ChatAgentRagInterface
 from .chat_agent_rag import ChatAgentRag
 from database.repository import ChatRepository, ChatHistoryRepository
 from database.models import Chat, ChatHistory
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import json
 import asyncio
 
@@ -74,7 +74,10 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             # Store AI response in chat history
             self.__update_chat_history(response, role="assistant", websocket=websocket)
             
-            return response
+            return {
+                "status": "success",
+                "response": response
+            }
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             self.__update_chat_history(error_msg, role="assistant", websocket=websocket)
@@ -114,19 +117,27 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             raise e
 
     # Store new chat history message
-    def __update_chat_history(self, message: str, role: str, request: Optional[Request] = None, websocket: Optional[WebSocket] = None) -> None:
+    def __update_chat_history(self, message: Union[str, List[str]], role: str, request: Optional[Request] = None, websocket: Optional[WebSocket] = None) -> None:
         try:
             chat = self.__get_chat(request, websocket)  # Retrieve existing chat
             
-            # Create new chat history entry
-            chat_history_data = {
-                "chat_id": chat.id,
-                "body": message,
-                "role": role
-            }
+            # Convert single message to list for consistent handling
+            messages = [message] if isinstance(message, str) else message
             
-            # Add to database
-            self.chat_history_repository.create(chat_history_data)
+            # Create a chat history entry for each message
+            for msg in messages:
+                if not msg:
+                    continue
+                
+                chat_history_data = {
+                    "chat_id": chat.id,
+                    "body": msg,
+                    "role": role
+                }
+                
+                # Add to database
+                self.chat_history_repository.create(chat_history_data)
+            
             self.db.commit()
             
         except Exception as e:

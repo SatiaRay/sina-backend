@@ -300,10 +300,14 @@ class ChatAgentRag(ChatAgentRagInterface):
                     
             if self.called_function['name'] is not None:
                 # If a function was called, handle it and get the new response
-                await self.suplly_called_function()
-                return full_response
-            else:
-                return full_response
+                subResponse = await self.suplly_called_function()
+                
+                if(isinstance(subResponse, list)):
+                    full_response = [full_response] + subResponse
+                else:
+                    full_response = [full_response, subResponse]
+            
+            return full_response
             
         except Exception as e:
             error_context = f"Question: {self.question}"
