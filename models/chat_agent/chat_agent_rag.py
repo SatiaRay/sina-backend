@@ -197,6 +197,48 @@ class ChatAgentRag(ChatAgentRagInterface):
             log_error(error_logger, e, error_context)
             raise 
 
+    def _format_chat_history(self) -> List[Dict[str, str]]:
+        """
+        Format chat history into a list of messages with role and content.
+        
+        Returns:
+            List[Dict[str, str]]: List of formatted messages with role and content
+        """
+        if not self.history:
+            return []
+            
+        formatted_messages = []
+        for msg in self.history:
+            if isinstance(msg, str):
+                # If it's a string, try to parse it as JSON
+                try:
+                    msg = json.loads(msg)
+                except json.JSONDecodeError:
+                    # If it's not valid JSON, treat it as a regular message
+                    formatted_messages.append({
+                        "role": "user",
+                        "content": msg
+                    })
+                    continue
+            
+            if isinstance(msg, dict):
+                if msg.get('type'):
+                    # Handle special message types (like function calls)
+                    formatted_messages.append({
+                        "role": "developer",
+                        "content": json.dumps(msg)
+                    })
+                else:
+                    # Handle regular messages
+                    role = msg.get('role', 'user')
+                    content = msg.get('body', '')
+                    formatted_messages.append({
+                        "role": role,
+                        "content": content
+                    })
+        
+        return formatted_messages
+
     async def generate_response_socket(self):
         try:
             main_logger.info(f"Generating response for question: {self.question}")
@@ -217,50 +259,42 @@ class ChatAgentRag(ChatAgentRagInterface):
             
             context = "\n\n---\n\n".join(context_parts)
             
-            # Format chat history if provided
-            history_text = ""
-            if self.history:
-                history_parts = []
-                for msg in self.history:
-                    if isinstance(msg, str):
-                        # If it's a string, try to parse it as JSON
-                        try:
-                            msg = json.loads(msg)
-                        except json.JSONDecodeError:
-                            # If it's not valid JSON, treat it as a regular message
-                            history_parts.append(f"User: {msg}")
-                            continue
-                    
-                    if isinstance(msg, dict) and msg.get('type'):
-                        history_parts.append(json.dumps(msg))
-                    else:
-                        role = msg.get('role', 'user')
-                        content = msg.get('body', '')
-                        history_parts.append(f"{role.capitalize()}: {content}")
-                history_text = "\n\nPrevious Conversation:\n" + "\n".join(history_parts)
+            # Format chat history
+            formatted_history = self._format_chat_history()
             
             workflows_text = f"# Workflows\n\n{self.workflows}\n" if self.workflows else ""
             
             # Get active instructions from database
             active_instructions = self._get_active_instructions()
             
-            full_input = f"""# Instructions
+            # Prepare the input messages
+            messages = [
+                {
+                    "role": "developer",
+                    "content": f"""# Instructions
 
-            {SATIA_INSTRUCTIONS}
+                    {SATIA_INSTRUCTIONS}
 
-            {active_instructions}
+                    {active_instructions}
 
-            # {workflows_text}
+                    # {workflows_text}
 
-            Context Information:
-            {context}
-
-            {history_text}
-
-            User Question: {self.question}"""
+                    Context Information:
+                    {context}"""
+                }
+            ]
+            
+            # Add chat history messages
+            messages.extend(formatted_history)
+            
+            # Add the current question
+            messages.append({
+                "role": "user",
+                "content": self.question
+            })
             
             # In your async function:
-            stream = await to_thread.run_sync(self.stream_openai_response, full_input)
+            stream = await to_thread.run_sync(self.stream_openai_response, messages)
 
             print("Send response in socket ...", flush=True)
             
@@ -401,15 +435,13 @@ class ChatAgentRag(ChatAgentRagInterface):
             error_logger.error(f"Error loading tools configuration: {str(e)}")
             raise
 
-    def stream_openai_response(self, full_input):
+    def stream_openai_response(self, messages: List[Dict[str, str]]):
         """Stream response from OpenAI with tools configuration"""
         try:
             tools = self._load_tools_configuration()
             return self.client.responses.create(
                model=os.getenv("GPT_MODEL"),
-               input=[
-                   {"role": "developer", "content": full_input},
-               ],
+               input=messages,
                stream=True,
                tools=tools
             )
