@@ -17,14 +17,14 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         self.chat_repository = ChatRepository(self.db)
         self.chat_history_repository = ChatHistoryRepository(self.db)
         self.workflow_repository = WorkflowRepository(self.db)  # Initialize workflow repository
-        self.agent = ChatAgentRag()
 
     async def generate_response(self, question: str, sources=False, request: Optional[Request] = None) -> Dict[str, Any]:
         # Store user question message in chat history
         self.__update_chat_history(question, "user", request)
 
         try:
-            res = await self.agent.generate_response(question, sources)
+            agent = ChatAgentRag(question=question, db=self.db)
+            res = await agent.generate_response()
             return {
                 "status": "success",
                 "response": res
@@ -49,7 +49,6 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             chat_history = self.chat_history_repository.get_chat_history_by_chat_id(chat_id=chat.id, limit=50)
 
             # Format messages for the agent
-            
             formatted_history = [
                 {
                     "role": msg.role,
@@ -60,8 +59,17 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
 
             workflows = self.workflow_repository.get_active_workflows_schemas()
 
-            # Generate response with history
-            response = await self.agent.generate_response_socket(question, websocket, history=formatted_history, workflows=workflows)
+            # Initialize agent with all required parameters
+            agent = ChatAgentRag(
+                question=question,
+                history=formatted_history,
+                websocket=websocket,
+                workflows=workflows,
+                db=self.db
+            )
+
+            # Generate response
+            response = await agent.generate_response_socket()
             
             # Store AI response in chat history
             self.__update_chat_history(response, role="assistant", websocket=websocket)

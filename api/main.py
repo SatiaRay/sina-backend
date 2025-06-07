@@ -33,6 +33,7 @@ from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.repository import DocumentRepository
 from database.models import get_db
 import uuid
+from models.tools.functions.app_satia_co import AppSatiaCo
 
 # Routes
 from api.about import router as about_router
@@ -46,6 +47,7 @@ from .workflow import router as workflow_router
 from .ai import router as ai_router
 from .job import router as job_router
 from .instruction import router as instruction_router
+from .ai_functions_tools import router as ai_functions_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -68,12 +70,22 @@ def init_service_container():
     # Bind DocumentRepository as singleton
     container.singleton('document_repository', DocumentRepository)
     
+    # Bind AppSatiaCo as singleton with required dependencies
+    container.singleton('AppSatiaCo', lambda: AppSatiaCo(
+        access_token=os.getenv('SATIA_ACCESS_TOKEN', ''),
+        customer=os.getenv('SATIA_CUSTOMER', '')
+    ))
+    
     # Create and bind instances
     vector_store = container.make('vector_store')
     container.instance('vector_store', vector_store)
     
     chat_agent = container.make('chat_agent')
     container.instance('chat_agent', chat_agent)
+    
+    # Create and bind AppSatiaCo instance
+    app_satia_co = container.make('AppSatiaCo')
+    container.instance('AppSatiaCo', app_satia_co)
 
 # Initialize the service container
 init_service_container()
@@ -136,6 +148,7 @@ app.include_router(ai_router)
 app.include_router(about_router)
 app.include_router(job_router)
 app.include_router(instruction_router)
+app.include_router(ai_functions_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [

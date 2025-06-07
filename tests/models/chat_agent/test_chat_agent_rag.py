@@ -22,16 +22,12 @@ def test_instruction(db):
 @pytest.fixture(scope="function")
 def chat_agent(db):
     """Create a ChatAgentRag instance with test database session"""
-    return ChatAgentRag(db=db)
+    return ChatAgentRag(question="test question", db=db)
 
 def test_active_instructions_append_to_prompt(chat_agent, test_instruction):
     """Test that active instructions are properly appended to the static instructions"""
     # Get active instructions
     active_instructions = chat_agent._get_active_instructions()
-    
-    print(active_instructions)
-    
-    exit()
     
     # Verify the format of active instructions
     assert "# Active Instructions from Database" in active_instructions

@@ -1,0 +1,24 @@
+{
+    "functions" : [
+        {
+            "type": "function",
+            "name": "AppSatiaCo-get_connection_logs",
+            "description": "جزئیات مصرف اینترنت اشتراک را باز می گرداند. اینکه کاربر چه مقدار به چه صورت اینترنت خود را مصرف کرده است.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "beginDate": {
+                        "type": "string",
+                        "description": "تاریخ شروع برای فیلتر کردن"
+                    },
+                    "endDate": {
+                        "type": "string",
+                        "description": "تاریخ پایان برای فیلتر کردن"
+                    }
+                },
+                "required": [],
+                "additionalProperties": false
+            }
+        }
+    ]
+}
