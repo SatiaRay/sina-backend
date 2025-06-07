@@ -19,6 +19,46 @@
                 "required": [],
                 "additionalProperties": false
             }
+        },
+        {
+            "type": "function",
+            "name": "AppSatiaCo-get_service_info",
+            "description": "جزئیات اشتراک فعلی کاربر مثل نوع اشتراک, حجم باقی مانده, مدت زمان باقی مانده و ... را باز میگرداند",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "beginDate": {
+                        "type": "string",
+                        "description": "تاریخ شروع برای فیلتر کردن"
+                    },
+                    "endDate": {
+                        "type": "string",
+                        "description": "تاریخ پایان برای فیلتر کردن"
+                    }
+                },
+                "required": [],
+                "additionalProperties": false
+            }
+        },
+        {
+            "type": "function",
+            "name": "AppSatiaCo-get_accounts_list",
+            "description": "فهرست تمامی اشتراک های اینترنت کاربر را باز میگرداند به همراه اطلاعاتی نظیر: وضعیت, شماره خط, وضعیت و نوع آن",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "beginDate": {
+                        "type": "string",
+                        "description": "تاریخ شروع برای فیلتر کردن"
+                    },
+                    "endDate": {
+                        "type": "string",
+                        "description": "تاریخ پایان برای فیلتر کردن"
+                    }
+                },
+                "required": [],
+                "additionalProperties": false
+            }
         }
     ]
 }

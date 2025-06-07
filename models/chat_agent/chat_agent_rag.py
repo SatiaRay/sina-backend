@@ -239,25 +239,28 @@ class ChatAgentRag(ChatAgentRagInterface):
         
         return formatted_messages
 
-    async def generate_response_socket(self):
+    async def generate_response_socket(self, call_function_output: bool = False):
         try:
             main_logger.info(f"Generating response for question: {self.question}")
 
-            # Search for relevant documents
-            relevant_docs = await self.get_relevant_docs(self.question)
-            print(f"Found {len(relevant_docs)} relevant documents", flush=True)
-            
-            # Sort documents by score
-            relevant_docs = sorted(relevant_docs, key=lambda x: x.get('score', 1.0))
-            
-            # Format context with scores
-            context_parts = []
-            for doc in relevant_docs:
-                score = doc.get('score', 1.0)
-                text = doc['text']
-                context_parts.append(f"[Score: {score:.3f}]\n{text}")
-            
-            context = "\n\n---\n\n".join(context_parts)
+            if not call_function_output:
+                # Search for relevant documents
+                relevant_docs = await self.get_relevant_docs(self.question)
+                print(f"Found {len(relevant_docs)} relevant documents", flush=True)
+                
+                # Sort documents by score
+                relevant_docs = sorted(relevant_docs, key=lambda x: x.get('score', 1.0))
+                
+                # Format context with scores
+                context_parts = []
+                for doc in relevant_docs:
+                    score = doc.get('score', 1.0)
+                    text = doc['text']
+                    context_parts.append(f"[Score: {score:.3f}]\n{text}")
+                
+                context = "\n\n---\n\n".join(context_parts)
+            else:
+                context = ""
             
             # Format chat history
             formatted_history = self._format_chat_history()
@@ -392,7 +395,7 @@ class ChatAgentRag(ChatAgentRagInterface):
                 "arguments": []
             }
             # Re-call generate_response_socket with updated history
-            return asyncio.create_task(self.generate_response_socket())
+            return asyncio.create_task(self.generate_response_socket(call_function_output=True))
 
     def _load_tools_configuration(self) -> List[Dict]:
         """
