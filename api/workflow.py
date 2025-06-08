@@ -19,7 +19,7 @@ class WorkflowNode(BaseModel):
 
 class WorkflowBase(BaseModel):
     name: str
-    schema: List[WorkflowNode]
+    flow: List[WorkflowNode]
     status: bool = True
 
 class WorkflowCreate(WorkflowBase):

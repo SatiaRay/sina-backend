@@ -206,7 +206,7 @@ class ChatAgentRag(ChatAgentRagInterface):
         """
         if not self.history:
             return []
-            
+        
         formatted_messages = []
         for msg in self.history:
             if isinstance(msg, str):
@@ -306,21 +306,23 @@ class ChatAgentRag(ChatAgentRagInterface):
             # Send events to the client as they are received from OpenAI
             for event in stream:
                 # Handle function call events
-                if hasattr(event, 'item') and hasattr(event.item, 'name'):
-                    print(f"Function called: {event.item.name}")
-                    self.called_function = {
-                        "type": "function_call",
-                        "id" : event.item.id,
-                        "call_id": event.item.id,
-                        "name": event.item.name,
-                        "arguments": event.item.arguments,
-                    }
+                if event.type == 'response.output_item.done':
+                    if event.item.type == 'function_call':
+                        print(f"Function called: {event.item.name}")
+                        self.called_function = {
+                            "type": "function_call",
+                            "id" : event.item.id,
+                            "call_id": event.item.id,
+                            "name": event.item.name,
+                            "arguments": event.item.arguments,
+                        }
+                        break
                 
-                # Handle function call arguments done
-                if event.type == 'response.function_call_arguments.done':
-                    print(f"Function arguments completed: {event.arguments}")
-                    self.called_function['arguments'] = event.arguments
-                    break;
+                # # Handle function call arguments done
+                # if event.type == 'response.function_call_arguments.done':
+                #     print(f"Function arguments completed: {event.arguments}")
+                #     self.called_function['arguments'] = event.arguments
+                #     break;
                 
                 # Handle regular text output
                 if event.type == 'response.output_text.delta':
@@ -338,7 +340,7 @@ class ChatAgentRag(ChatAgentRagInterface):
                 
                 # If a function was called, handle it and get the new response
                 subResponse = await self.suplly_called_function()
-                
+
                 if(isinstance(subResponse, list)):
                     full_response = [full_response] + subResponse
                 else:

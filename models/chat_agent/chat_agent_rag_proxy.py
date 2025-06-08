@@ -70,9 +70,14 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
 
             # Generate response
             response = await agent.generate_response_socket()
-            
+
             # Store AI response in chat history
-            self.__update_chat_history(response, role="assistant", websocket=websocket)
+            if isinstance(response, list):
+                for resp in response:
+                    self.__update_chat_history(resp, role="assistant", websocket=websocket)
+            else:
+                # If response is a single string, store it directly
+                self.__update_chat_history(response, role="assistant", websocket=websocket)
             
             return {
                 "status": "success",
