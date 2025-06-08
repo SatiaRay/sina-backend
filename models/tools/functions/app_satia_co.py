@@ -92,12 +92,17 @@ class AppSatiaCo:
             print(f"Error fetching data from {endpoint}: {e}")
             return None
 
-    def get_connection_logs(self, beginDate: str = '', endDate: str = '', page: int = 1):
+    def get_connection_logs(self, serial: str = "", beginDate: str = '', endDate: str = '', page: int = 1):
         extra_params = {
             "beginDate": beginDate,
             "endDate": endDate,
             "page": page
         }
+        
+        if serial:
+            account = self.find_account(serial, return_original_value=True)
+            if account:
+                extra_params["customer"] = json.dumps(account)
         
         data = self._make_api_request("ibs/getConnectionLogs", extra_params)
         if not data:

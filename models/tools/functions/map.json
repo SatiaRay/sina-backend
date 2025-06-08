@@ -7,6 +7,10 @@
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "serial": {
+                        "type": "string",
+                        "description": "سریال سرویس مورد نظر"
+                    },
                     "beginDate": {
                         "type": "string",
                         "description": "تاریخ شروع برای فیلتر کردن"
