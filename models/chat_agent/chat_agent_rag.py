@@ -14,6 +14,10 @@ from openai import OpenAI
 from anyio import to_thread
 from .chat_agent_rag_interface import ChatAgentRagInterface
 from sqlalchemy.orm import Session
+from pathlib import Path
+import json
+import re
+from models.tools.functions import call_function
 
 load_dotenv()
 main_logger, error_logger, api_logger = configure_logging()
@@ -80,10 +84,26 @@ SATIA_INSTRUCTIONS = """
 """
 
 class ChatAgentRag(ChatAgentRagInterface):
-    def __init__(self, db: Session = SessionLocal()):
+    def __init__(
+            self,
+            question: str,
+            history: Optional[List[Dict[str, str]]] = None,
+            websocket: WebSocket = None,
+            workflows: Optional[str] = None,
+            db: Session = SessionLocal()
+        ):
+        self.db = db
+        self.question = question
+        self.history = history
+        self.websocket = websocket
+        self.workflows = workflows
+        
         self.vector_store = VectorStore()
         self.client = OpenAI()
-        self.db = db
+        self.called_function = {
+            "name": None,
+            "arguments": []
+        }
         main_logger.info("Initialized Agent RAG System with GPT-4")
 
     def _get_active_instructions(self) -> str:
@@ -177,85 +197,259 @@ class ChatAgentRag(ChatAgentRagInterface):
             log_error(error_logger, e, error_context)
             raise 
 
-    async def generate_response_socket(self, question: str, websocket: WebSocket, history: Optional[List[Dict[str, str]]] = None, workflows: Optional[str] = None):
-        try:
-            main_logger.info(f"Generating response for question: {question}")
-
-            # Search for relevant documents
-            relevant_docs = await self.get_relevant_docs(question)
-            print(f"Found {len(relevant_docs)} relevant documents", flush=True)
+    def _format_chat_history(self) -> List[Dict[str, str]]:
+        """
+        Format chat history into a list of messages with role and content.
+        
+        Returns:
+            List[Dict[str, str]]: List of formatted messages with role and content
+        """
+        if not self.history:
+            return []
+        
+        formatted_messages = []
+        for msg in self.history:
+            if isinstance(msg, str):
+                # If it's a string, try to parse it as JSON
+                try:
+                    msg = json.loads(msg)
+                except json.JSONDecodeError:
+                    # If it's not valid JSON, treat it as a regular message
+                    formatted_messages.append({
+                        "role": "user",
+                        "content": msg
+                    })
+                    continue
             
-            # Sort documents by score
-            relevant_docs = sorted(relevant_docs, key=lambda x: x.get('score', 1.0))
-            
-            # Format context with scores
-            context_parts = []
-            for doc in relevant_docs:
-                score = doc.get('score', 1.0)
-                text = doc['text']
-                context_parts.append(f"[Score: {score:.3f}]\n{text}")
-            
-            context = "\n\n---\n\n".join(context_parts)
-            
-            # Format chat history if provided
-            history_text = ""
-            if history:
-                history_parts = []
-                for msg in history:
+            if isinstance(msg, dict):
+                if msg.get('type'):
+                    # Handle special message types (like function calls)
+                    formatted_messages.append({
+                        "role": "developer",
+                        "content": json.dumps(msg)
+                    })
+                else:
+                    # Handle regular messages
                     role = msg.get('role', 'user')
                     content = msg.get('body', '')
-                    history_parts.append(f"{role.capitalize()}: {content}")
-                history_text = "\n\nPrevious Conversation:\n" + "\n".join(history_parts)
+                    formatted_messages.append({
+                        "role": role,
+                        "content": content
+                    })
+        
+        return formatted_messages
+
+    async def generate_response_socket(self, call_function_output: bool = False):
+        try:
+            main_logger.info(f"Generating response for question: {self.question}")
+
+            if not call_function_output:
+                # Search for relevant documents
+                relevant_docs = await self.get_relevant_docs(self.question)
+                print(f"Found {len(relevant_docs)} relevant documents", flush=True)
+                
+                # Sort documents by score
+                relevant_docs = sorted(relevant_docs, key=lambda x: x.get('score', 1.0))
+                
+                # Format context with scores
+                context_parts = []
+                for doc in relevant_docs:
+                    score = doc.get('score', 1.0)
+                    text = doc['text']
+                    context_parts.append(f"[Score: {score:.3f}]\n{text}")
+                
+                context = "\n\n---\n\n".join(context_parts)
+            else:
+                context = ""
             
-            workflows_text = f"# Workflows\n\n{workflows}\n" if workflows else ""
+            # Format chat history
+            formatted_history = self._format_chat_history()
+            
+            workflows_text = f"# Workflows\n\n{self.workflows}\n" if self.workflows else ""
             
             # Get active instructions from database
             active_instructions = self._get_active_instructions()
             
-            full_input = f"""# Instructions
+            # Prepare the input messages
+            messages = [
+                {
+                    "role": "developer",
+                    "content": f"""# Instructions
 
-            {SATIA_INSTRUCTIONS}
+                    {SATIA_INSTRUCTIONS}
 
-            {active_instructions}
+                    {active_instructions}
 
-            {workflows_text}
+                    # {workflows_text}
 
-            Context Information:
-            {context}
-
-            {history_text}
-
-            User Question: {question}"""
+                    Context Information:
+                    {context}"""
+                }
+            ]
+            
+            # Add chat history messages
+            messages.extend(formatted_history)
+            
+            # Add the current question
+            messages.append({
+                "role": "user",
+                "content": self.question
+            })
             
             # In your async function:
-            stream = await to_thread.run_sync(self.stream_openai_response, full_input)
+            stream = await to_thread.run_sync(self.stream_openai_response, messages)
 
             print("Send response in socket ...", flush=True)
-
+            
             full_response = ""
             
             # Send events to the client as they are received from OpenAI
             for event in stream:
+                # Handle function call events
+                if event.type == 'response.output_item.done':
+                    if event.item.type == 'function_call':
+                        print(f"Function called: {event.item.name}")
+                        self.called_function = {
+                            "type": "function_call",
+                            "id" : event.item.id,
+                            "call_id": event.item.id,
+                            "name": event.item.name,
+                            "arguments": event.item.arguments,
+                        }
+                        break
+                
+                # # Handle function call arguments done
+                # if event.type == 'response.function_call_arguments.done':
+                #     print(f"Function arguments completed: {event.arguments}")
+                #     self.called_function['arguments'] = event.arguments
+                #     break;
+                
+                # Handle regular text output
                 if event.type == 'response.output_text.delta':
                     delta = event.delta
                     full_response += delta
-                    await websocket.send_text(delta)
+                    await self.websocket.send_text(delta)
                     delay = str(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', "0.0001"))
                     await asyncio.sleep(float(delay))
+                    
+            if self.called_function['name'] is not None:
+                await self.websocket.send_json(data={
+                    'event': 'fetching data',
+                    'message': "در حال واکشی اطلاعات, لطفا صبر کنید."
+                })
+                
+                # If a function was called, handle it and get the new response
+                subResponse = await self.suplly_called_function()
 
+                if(isinstance(subResponse, list)):
+                    full_response = [full_response] + subResponse
+                else:
+                    full_response = [full_response, subResponse]
+            
             return full_response
             
         except Exception as e:
-            error_context = f"Question: {question}"
+            error_context = f"Question: {self.question}"
             log_error(error_logger, e, error_context)
             raise
+        
+    def suplly_called_function(self):
+        try:
+            # Add function call to history
+            self.history.append(self.called_function)
+            
+            # Call the function and get result
+            result = call_function(self.called_function['name'], json.loads(self.called_function['arguments']))
+            
+            # Add result to chat history
+            if self.history is None:
+                self.history = []
+            
+            self.history.append({
+                "type": "function_call_output",
+                "call_id": self.called_function['call_id'],
+                "output": json.dumps(result)
+            })
+            
+        except Exception as e:
+            error_logger.error(f"Error in supply_called_function: {str(e)}")
+            
+            # Add error information to chat history
+            if self.history is None:
+                self.history = []
+            
+            error_info = {
+                "status": "error",
+                "function": self.called_function['name'],
+                "error": str(e)
+            }
+            
+            self.history.append({
+                "type": "function_call_output",
+                "call_id": self.called_function['call_id'],
+                "output": json.dumps(error_info)
+            })
+            
+        finally:
+            # Reset called_function regardless of success or failure
+            self.called_function = {
+                "name": None,
+                "arguments": []
+            }
+            # Re-call generate_response_socket with updated history
+            return asyncio.create_task(self.generate_response_socket(call_function_output=True))
 
+    def _load_tools_configuration(self) -> List[Dict]:
+        """
+        Load and return the tools configuration from map.json.
+        Validates that function names match the required pattern ^[a-zA-Z0-9_-]+$
+        
+        Returns:
+            List[Dict]: List of function configurations from the map file
+            
+        Raises:
+            FileNotFoundError: If the map.json file is not found
+            json.JSONDecodeError: If the map.json file contains invalid JSON
+            ValueError: If any function name doesn't match the required pattern
+        """
+        try:
+            map_path = Path(__file__).parent.parent / "tools" / "functions" / "map.json"
+            with open(map_path, 'r', encoding='utf-8') as f:
+                tools_config = json.load(f)
+            
+            # Validate function names
+            name_pattern = re.compile(r'^[a-zA-Z0-9_-]+$')
+            for func in tools_config["functions"]:
+                if not name_pattern.match(func["name"]):
+                    raise ValueError(
+                        f"Invalid function name '{func['name']}'. "
+                        "Function names must contain only letters, numbers, underscores, and hyphens."
+                    )
+            
+            return tools_config["functions"]
+        except FileNotFoundError as e:
+            error_logger.error(f"Tools configuration file not found: {str(e)}")
+            raise
+        except json.JSONDecodeError as e:
+            error_logger.error(f"Invalid JSON in tools configuration file: {str(e)}")
+            raise
+        except ValueError as e:
+            error_logger.error(f"Invalid function configuration: {str(e)}")
+            raise
+        except Exception as e:
+            error_logger.error(f"Error loading tools configuration: {str(e)}")
+            raise
 
-    def stream_openai_response(self, full_input):
-        return self.client.responses.create(
-           model=os.getenv("GPT_MODEL"),
-           input=[
-               {"role": "developer", "content": full_input},
-           ],
-           stream=True,
-        )
+    def stream_openai_response(self, messages: List[Dict[str, str]]):
+        """Stream response from OpenAI with tools configuration"""
+        try:
+            tools = self._load_tools_configuration()
+            return self.client.responses.create(
+               model=os.getenv("GPT_MODEL"),
+               input=messages,
+               stream=True,
+               tools=tools
+            )
+        except Exception as e:
+            error_logger.error(f"Error in stream_openai_response: {str(e)}")
+            raise

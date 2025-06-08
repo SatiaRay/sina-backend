@@ -41,18 +41,18 @@ class WorkflowRepository:
     def get_active_workflows(self) -> List[Workflow]:
         return self.db.query(Workflow).filter(Workflow.status == True).all()
 
-    def get_active_workflows_schemas(self) -> List[Dict[str, Any]]:
+    def get_active_workflows_flows(self) -> List[Dict[str, Any]]:
         """
-        Retrieve schemas of all active workflows from the database.
+        Retrieve flows of all active workflows from the database.
             
         Returns:
-            List[Dict[str, Any]]: List of schemas from active workflows
+            List[Dict[str, Any]]: List of flows from active workflows
         """
         try:
-            # Query active workflows and extract only their schemas
-            workflows = self.db.query(Workflow.schema).filter(Workflow.status == True).all()
+            # Query active workflows and extract only their flows
+            workflows = self.db.query(Workflow.flow).filter(Workflow.status == True).all()
                 
-            # Extract schemas from the query results
+            # Extract flows from the query results
             return [workflow[0] for workflow in workflows]
         except Exception as e:
             self.db.rollback()
