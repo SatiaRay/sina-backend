@@ -78,6 +78,10 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             else:
                 # If response is a single string, store it directly
                 self.__update_chat_history(response, role="assistant", websocket=websocket)
+
+            websocket.send_json({
+                "event": "finish",
+            })
             
             return {
                 "status": "success",
