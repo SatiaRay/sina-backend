@@ -331,6 +331,11 @@ class ChatAgentRag(ChatAgentRagInterface):
                     await asyncio.sleep(float(delay))
                     
             if self.called_function['name'] is not None:
+                await self.websocket.send_json(data={
+                    'event': 'fetching data',
+                    'message': "در حال واکشی اطلاعات, لطفا صبر کنید."
+                })
+                
                 # If a function was called, handle it and get the new response
                 subResponse = await self.suplly_called_function()
                 
