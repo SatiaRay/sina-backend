@@ -71,7 +71,7 @@ class AppSatiaCo:
         
         # Add any extra parameters
         if extra_params:
-            payload.update(extra_params)
+            payload = {**payload, **extra_params}
             
         cache_key = self._get_cache_key(endpoint, payload)
         
@@ -142,11 +142,16 @@ class AppSatiaCo:
             }
         }
 
-    def get_service_info(self, beginDate: str = '', endDate: str = ''):
+    def get_service_info(self, serial: str = "", beginDate: str = '', endDate: str = ''):
         extra_params = {
             "beginDate": beginDate,
             "endDate": endDate,
         }
+        
+        if serial:
+            account = self.find_account(serial, return_original_value=True)
+            if account:
+                extra_params["customer"] = json.dumps(account)
         
         data = self._make_api_request("splash", extra_params=extra_params)
         if not data:
@@ -165,6 +170,40 @@ class AppSatiaCo:
             'is_active': services[0]['Active']
         }
         
+    def find_account(self, serial: str, return_original_value = False):
+        accounts = self.get_accounts_list()
+        if not accounts:
+            return None
+            
+        for account in accounts:
+            if str(account["serial"]) == str(serial):
+                if(return_original_value):
+                    return {
+                        "Serial": account["serial"],
+                        "Mobile": "",
+                        "AdslTel": account["number"],
+                        "Name": account["name"],
+                        "CustomerType": "W",
+                        "SmsCode": "",
+                        "UserId": "",
+                        "Type": account["type"],
+                        "status": [{
+                            "Serial": 6,
+                            "Name": account["status"],
+                            "BranchRef": "1",
+                            "pivot": {
+                                "CustomerRef": str(account["serial"]),
+                                "StatusRef": "6",
+                                "Active": "1",
+                                "Date": "",
+                                "Comment": ""
+                            }
+                        }]
+                    }
+                return account
+                
+        return None
+        
     def get_accounts_list(self, beginDate: str = '', endDate: str = ''):
         extra_params = {
             "beginDate": beginDate,
@@ -181,6 +220,7 @@ class AppSatiaCo:
         
         for account in accounts:
             output.append({
+                "serial": account['Serial'],
                 "number": account['AdslTel'],
                 "name": account['Name'],
                 "type": account['Type'],

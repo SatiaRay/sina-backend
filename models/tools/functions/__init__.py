@@ -1,4 +1,6 @@
 from provider.service_container import container
+import traceback
+import sys
 
 def call_function(function_name: str, *args):
     """
@@ -6,7 +8,8 @@ def call_function(function_name: str, *args):
     
     Args:
         function_name (str): Name in format "{class_name}-{method_name}"
-        args (list): List of arguments to pass to the function
+        args (list): List of arguments to pass to the function. If a single dictionary is passed,
+                    it will be unpacked as keyword arguments.
     
     Returns:
         The result of the called function or None if the function is not found
@@ -27,8 +30,26 @@ def call_function(function_name: str, *args):
             print(f"Method {method_name} not found in class {class_name}")
             return None
             
-        # Call the method with the provided arguments
-        return method(*args)
+        # If we have exactly one argument and it's a dictionary, unpack it
+        if len(args) == 1 and isinstance(args[0], dict):
+            return method(**args[0])
+        else:
+            # Otherwise call the method with the arguments as is
+            return method(*args)
+            
     except Exception as e:
-        print(f"Error calling function {function_name}: {str(e)}")
+        # Get the full exception information
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        stack_trace = traceback.format_exception(exc_type, exc_value, exc_traceback)
+        
+        # Print detailed error information
+        print(f"Error calling function {function_name}:")
+        print(f"Exception type: {exc_type.__name__}")
+        print(f"Exception message: {str(e)}")
+        print("Stack trace:")
+        print(''.join(stack_trace))
+        
+        # Also print the arguments that were passed
+        print(f"Arguments passed: {args}")
+        
         return None

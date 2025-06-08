@@ -315,11 +315,6 @@ class ChatAgentRag(ChatAgentRagInterface):
                         "name": event.item.name,
                         "arguments": event.item.arguments,
                     }
-                    print(f"Arguments: {event.item.arguments}")
-                
-                # Handle function call arguments delta
-                if event.type == 'response.function_call_arguments.delta':
-                    print(f"Function arguments delta: {event.delta}")
                 
                 # Handle function call arguments done
                 if event.type == 'response.function_call_arguments.done':
