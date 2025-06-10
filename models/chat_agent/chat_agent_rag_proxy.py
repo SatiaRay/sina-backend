@@ -9,6 +9,7 @@ from database.models import Chat, ChatHistory
 from typing import List, Dict, Any, Optional, Union
 import json
 import asyncio
+from provider.service_container import ServiceContainer, container
 
 
 class ChatAgentRagProxy(ChatAgentRagInterface):

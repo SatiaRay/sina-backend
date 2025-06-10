@@ -15,6 +15,7 @@ from redis import Redis
 import uuid
 import time
 from unittest.mock import AsyncMock
+from sqlalchemy.orm import Session
 
 # Create test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -70,7 +71,7 @@ def mock_job():
     job.is_failed = False
     return job
 
-def test_crawl_url_success(mock_redis, mock_queue, mock_job):
+def test_crawl_url_success(mock_redis, mock_queue, mock_job, db_session):
     # Setup mock queue
     mock_queue.return_value.enqueue.return_value = mock_job
     
@@ -163,7 +164,14 @@ def test_crawl_task_success(db_session, mock_job):
         assert mock_job.meta['status']['msg'] == "Finished"
         
         # Verify vectorization was triggered
-        mock_create_batch.assert_called_once_with([1], ANY)
+        mock_create_batch.assert_called_once()
+
+        args, kwargs = mock_create_batch.call_args
+
+        assert args[0] == [1]
+        assert isinstance(args[1], Redis)
+        assert isinstance(kwargs['db'], Session)
+        
         mock_monitor.assert_called_once()
         
         # Verify that save_meta was called
@@ -245,7 +253,7 @@ def test_create_vectorization_batch(db_session, test_document, mock_redis):
         mock_queue.return_value.enqueue.return_value = mock_job
         
         # Execute function
-        result = create_vectorization_batch(doc_ids, mock_redis.return_value)
+        result = create_vectorization_batch(doc_ids, mock_redis.return_value, db=db_session)
         
         # Verify result
         assert 'batch_id' in result
