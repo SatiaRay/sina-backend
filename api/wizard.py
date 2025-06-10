@@ -97,7 +97,7 @@ def list_wizards(
     wizard_repo = WizardRepository(db)
     if parent_id is not None:
         return wizard_repo.get_by_parent(parent_id, enable_only)
-    return wizard_repo.get_all(enable_only=enable_only)
+    return wizard_repo.get_heads(enable_only=enable_only)
 
 # Get a wizard by ID - This must come AFTER all specific paths
 @router.get("/{wizard_id}", response_model=WizardResponse)
