@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from redis import Redis
 from redis.exceptions import RedisError
 
+
 class AppSatiaCo:
     def __init__(self, access_token: str, customer: str) -> None:
         self.access_token = access_token
@@ -78,9 +79,10 @@ class AppSatiaCo:
         cached_data = self._get_from_cache(cache_key)
         if cached_data:
             return cached_data
-        
+                
+        base_url = os.getenv('APP_SATIA_CO_API_BASE_URL', 'https://app.satia.co')
         try:
-            response = requests.post(f"https://app.satia.co/proxy.php/{endpoint}", data=payload)
+            response = requests.post(f"{base_url}/{endpoint}", data=payload)
             response.raise_for_status()
             data = response.json()
             
