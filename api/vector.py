@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Body
-from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, HTTPException
+from typing import List, Dict, Any
 from pydantic import BaseModel
 from database.vector_store import VectorStore
 # from util.logging_config import log_error, error_logger

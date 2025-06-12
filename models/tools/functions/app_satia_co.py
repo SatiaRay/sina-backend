@@ -1,7 +1,6 @@
 import requests
 import json
 import os
-from functools import lru_cache
 from typing import Dict, Any, Optional
 from redis import Redis
 from redis.exceptions import RedisError

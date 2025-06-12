@@ -49,7 +49,7 @@ Examples:
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"\nStarting crawler...")
+    print("\nStarting crawler...")
     print(f"Target URL: {args.url}")
     print(f"Output directory: {output_dir}")
     print(f"Recursive mode: {args.recursive}\n")
@@ -59,7 +59,7 @@ Examples:
         results = run_spider(args.url, recursive=args.recursive)
         
         if results:
-            print(f"\nCrawling completed successfully!")
+            print("\nCrawling completed successfully!")
             print(f"Crawled {len(results)} pages")
             print(f"Results saved in: {output_dir}")
         else:

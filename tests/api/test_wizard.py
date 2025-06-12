@@ -7,7 +7,6 @@ from unittest.mock import Mock, patch
 
 from api.wizard import router
 from database.models import get_db
-from database.repository import WizardRepository
 
 # Mock data for testing
 MOCK_WIZARD = {

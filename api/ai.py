@@ -1,5 +1,4 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
-from typing import Optional, List, Dict
 import json
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from util.logging_config import configure_logging, log_error

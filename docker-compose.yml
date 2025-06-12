@@ -1,0 +1,14 @@
+version: "3"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: khan
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:.
+    networks:
+      - app_network

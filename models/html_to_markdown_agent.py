@@ -1,6 +1,5 @@
 import os
 from agents import Agent, Runner
-import asyncio
 
 # Instructions for the HTML to Markdown conversion agent
 HTML_TO_MARKDOWN_INSTRUCTIONS = """

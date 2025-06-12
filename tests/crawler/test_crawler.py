@@ -4,8 +4,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database.models import Base, Document, CrawledDomain
 from crawler.crawler import crawl
-from bs4 import BeautifulSoup
-import requests
 from urllib.parse import urlparse
 
 # Create test database
