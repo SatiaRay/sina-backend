@@ -16,6 +16,8 @@ class WorkflowNode(BaseModel):
     conditions: Optional[list] = None
     next: Optional[str] = None
     description: Optional[str] = None
+    ele: Optional[str] = None
+    
 
 class WorkflowBase(BaseModel):
     name: str
