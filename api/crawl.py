@@ -142,7 +142,7 @@ class PaginatedCrawlJobsResponse(BaseModel):
 @router.post("/crawl", response_model=CrawlResponse, tags=["Crawler"],
           summary="خزش یک URL",
           description="این اندپوینت یک URL را خزش کرده و محتوای آن را استخراج می‌کند")
-async def crawl_url(request: CrawlRequest):
+async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
     """
     خزش یک URL و استخراج محتوای آن
     
@@ -175,7 +175,6 @@ async def crawl_url(request: CrawlRequest):
     ```
     """
     start_time = datetime.now()
-    db = SessionLocal()
     crawl_job_repo = CrawlJobsRepository(db)
 
     try:
@@ -262,60 +261,59 @@ def initialize_job_metadata(job):
             "initialization_error",
             {'original_error': str(e)}
         )
-
-def create_vectorization_batch(doc_ids, redis_con):
+    
+def create_vectorization_batch(doc_ids, redis_con, db: Session = Depends(get_db)):
     """Create a batch of vectorization jobs for the given document IDs"""
     try:
         # Create database session and repository
-        db = SessionLocal()
         document_repo = DocumentRepository(db)
 
-        try:
-            q = Queue('vectorize', connection=redis_con)
-            batch_id = str(uuid.uuid4())
-            
-            # Initialize batch progress
-            batch_progress = {
-                'total_docs': len(doc_ids),
-                'done': 0,
-                'remaining': len(doc_ids),
-                'exceptions': 0,
-                'progress_percent': 0
-            }
-            
-            # Create vectorization jobs for each document
-            vector_jobs = []
-            for doc_id in doc_ids:
-                # Get document from database
-                document = document_repo.get(doc_id)
-                if not document:
-                    continue
+        # Create RQ queue
+        q = Queue('vectorize', connection=redis_con)
+        batch_id = str(uuid.uuid4())
 
-                # Prepare metadata
-                metadata = {
-                    "document_id": str(doc_id),
-                    "title": document.title,
-                    "uri": document.uri or "",
-                    "domain_id": str(document.domain_id) if document.domain_id else "0",
-                    "created_at": datetime.now(timezone.utc).isoformat()
-                }
+        # Initialize batch progress
+        batch_progress = {
+            'total_docs': len(doc_ids),
+            'done': 0,
+            'remaining': len(doc_ids),
+            'exceptions': 0,
+            'progress_percent': 0
+        }
 
-                vector_job = q.enqueue(
-                    'api.document.vectorize_task',
-                    doc_id,
-                    document.html,
-                    metadata,
-                    job_id=str(uuid.uuid4()),
-                )
-                vector_jobs.append(vector_job.id)
-            
-            return {
-                'batch_id': batch_id,
-                'job_ids': vector_jobs,
-                'progress': batch_progress
+        # Create vectorization jobs for each document
+        vector_jobs = []
+        for doc_id in doc_ids:
+            # Get document from database
+            document = document_repo.get(doc_id)
+            if not document:
+                continue
+
+            # Prepare metadata
+            metadata = {
+                "document_id": str(doc_id),
+                "title": document.title,
+                "uri": document.uri or "",
+                "domain_id": str(document.domain_id) if document.domain_id else "0",
+                "created_at": datetime.now(timezone.utc).isoformat()
             }
-        finally:
-            db.close()
+
+            # Enqueue job
+            vector_job = q.enqueue(
+                'api.document.vectorize_task',
+                doc_id,
+                document.html,
+                metadata,
+                job_id=str(uuid.uuid4()),
+            )
+            vector_jobs.append(vector_job.id)
+
+        return {
+            'batch_id': batch_id,
+            'job_ids': vector_jobs,
+            'progress': batch_progress
+        }
+
     except Exception as e:
         raise VectorizationError(
             f"Failed to create vectorization batch: {str(e)}",
@@ -495,7 +493,7 @@ def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False)
                 
                 # Create batch of vectorization jobs
                 redis_con = Redis(host=os.getenv('REDIS_HOST'))
-                batch_info = create_vectorization_batch(doc_ids, redis_con)
+                batch_info = create_vectorization_batch(doc_ids, redis_con, db=db)
                 
                 # Update parent job with batch information if job exists
                 if job:

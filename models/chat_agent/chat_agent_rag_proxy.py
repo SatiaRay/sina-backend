@@ -6,6 +6,9 @@ from .chat_agent_rag import ChatAgentRag
 from database.repository import ChatRepository, ChatHistoryRepository
 from database.models import Chat
 from typing import List, Dict, Any, Optional, Union
+import json
+import asyncio
+from provider.service_container import ServiceContainer, container
 
 
 class ChatAgentRagProxy(ChatAgentRagInterface):
@@ -54,7 +57,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 for msg in chat_history
             ]
 
-            workflows = self.workflow_repository.get_active_workflows_schemas()
+            workflows = self.workflow_repository.get_active_workflows_flows()
 
             # Initialize agent with all required parameters
             agent = ChatAgentRag(
@@ -75,6 +78,10 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             else:
                 # If response is a single string, store it directly
                 self.__update_chat_history(response, role="assistant", websocket=websocket)
+
+            websocket.send_json({
+                "event": "finish",
+            })
             
             return {
                 "status": "success",

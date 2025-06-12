@@ -25,7 +25,9 @@ services:
     command: >
       sh -c "./wait-for-it.sh mysql:3306 --timeout=60 --strict && 
             alembic upgrade head &&
-            uvicorn api.main:app --host 0.0.0.0"
+            uvicorn api.main:app --host 0.0.0.0 --reload"
+    volumes:
+      - .:/app  # ✅ Mount the project directory into the container
   
 
 volumes:

@@ -9,3 +9,4 @@ logs/
 *__pycache__*
 test.db
 mysql_data/
+*.db
