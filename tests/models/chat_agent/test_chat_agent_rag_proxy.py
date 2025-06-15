@@ -71,6 +71,7 @@ async def test_generate_response_socket_success_string(
     # Mock the internal methods
     chat_agent._ChatAgentRagProxy__get_chat = Mock(return_value=mock_chat)
     chat_agent._ChatAgentRagProxy__update_chat_history = Mock()
+    chat_agent.workflow_repository.get_active_workflows_flows.return_value = mock_workflows
     mock_chat_history_repository.get_chat_history_by_chat_id.return_value = mock_chat_history
     
     # Mock ChatAgentRag
@@ -128,6 +129,7 @@ async def test_generate_response_socket_success_list(
     # Mock the internal methods
     chat_agent._ChatAgentRagProxy__get_chat = Mock(return_value=mock_chat)
     chat_agent._ChatAgentRagProxy__update_chat_history = Mock()
+    chat_agent.workflow_repository.get_active_workflows_flows.return_value = mock_workflows
     mock_chat_history_repository.get_chat_history_by_chat_id.return_value = mock_chat_history
     
     # Mock ChatAgentRag

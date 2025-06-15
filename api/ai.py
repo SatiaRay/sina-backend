@@ -50,6 +50,12 @@ async def ask_question_agent_socket(
                 websocket=websocket
             )
 
+            if response:
+                await websocket.send_json({
+                    "event" : "finished",
+                    "msg" : "Response generated complete",
+                })
+
             if isinstance(response, dict) and response.get("status") == "error":
                 await websocket.send_text(f"Error: {response.get('error')}")
 

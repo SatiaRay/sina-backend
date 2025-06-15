@@ -8,4 +8,5 @@ temp/
 /vector_backup
 .env
 *__pycache__*
-test.db
+*.db
+*.db

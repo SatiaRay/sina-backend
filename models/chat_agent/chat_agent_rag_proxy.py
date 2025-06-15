@@ -9,6 +9,7 @@ from database.models import Chat, ChatHistory
 from typing import List, Dict, Any, Optional, Union
 import json
 import asyncio
+from provider.service_container import ServiceContainer, container
 
 
 class ChatAgentRagProxy(ChatAgentRagInterface):
@@ -78,6 +79,10 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             else:
                 # If response is a single string, store it directly
                 self.__update_chat_history(response, role="assistant", websocket=websocket)
+
+            websocket.send_json({
+                "event": "finish",
+            })
             
             return {
                 "status": "success",
