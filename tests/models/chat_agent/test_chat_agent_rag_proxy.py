@@ -41,7 +41,7 @@ def mock_chat_history_repository():
 @pytest.fixture
 def mock_workflow_repository():
     repo = Mock()
-    repo.get_active_workflows_schemas.return_value = [
+    repo.get_active_workflows_flows.return_value = [
         {"id": "workflow1", "type": "start"},
         {"id": "workflow2", "type": "end"}
     ]

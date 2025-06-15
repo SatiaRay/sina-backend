@@ -26,6 +26,8 @@ from util.constants import APP_NAME, APP_VERSION
 from util.event_bus import event_bus, VectorStoreEvent
 from .models import (DataSource, DataSourceListResponse, Chunk, AllKnowledgeRequest, UpdateKnowledgeRequest,VectorSearchRequest,StoreVectorRequest)
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
+from database.repository import DocumentRepository
+from database.repositories.workflow_repository import WorkflowRepository
 from database.models import get_db
 import uuid
 from models.tools.functions.app_satia_co import AppSatiaCo
@@ -64,6 +66,9 @@ def init_service_container():
     
     # Bind DocumentRepository as singleton
     container.singleton('document_repository', DocumentRepository)
+
+    # Bind WorkflowRepository as singleton
+    container.singleton('workflow_repository', WorkflowRepository)
     
     # Bind AppSatiaCo as singleton with required dependencies
     container.singleton('AppSatiaCo', lambda: AppSatiaCo(
