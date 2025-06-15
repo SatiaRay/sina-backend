@@ -61,26 +61,33 @@ async def ask_question_agent_socket(
     finally:
         await websocket.close()
 
-AUDIO_SAVE_DIR = "audios"
-
 @router.websocket("/ws/voice")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    print("WebSocket connected")
+
+    data = await websocket.receive_bytes()
+
+    filename = f"received_{uuid.uuid4().hex}.webm"
+    filepath = os.path.join('temp', filename)
+
+    # Ensure the directory exists
+    os.makedirs('temp', exist_ok=True)
+
     try:
-        print("WebSocket connected")
-        data = await websocket.receive_bytes()
-
-        filename = f"received_{uuid.uuid4().hex}.mp3"
-        filepath = os.path.join(AUDIO_SAVE_DIR, filename)
-
         with open(filepath, "wb") as f:
             f.write(data)
 
-        print(f"Saved MP3: {filepath}")
+        await websocket.send_json({"event": "transcribing", "msg": "در حال تبدیل صدا به متن."})
 
         # Transcribe using Whisper
         trans = speech_to_text_model.transcribe(filepath)
-        print("Transcription:", trans)
+
+        await websocket.send_text(trans)
 
     except Exception as e:
         print(f"Error: {e}")
+
+    finally:
+        if os.path.exists(filepath):
+            os.remove(filepath)

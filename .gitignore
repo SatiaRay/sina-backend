@@ -3,7 +3,7 @@ node_modules
 venv/
 data/
 logs/
-audios/
+temp/
 *.log
 /vector_backup
 .env
