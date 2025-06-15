@@ -6,9 +6,10 @@ from .chat_agent_rag_interface import ChatAgentRagInterface
 from .chat_agent_rag import ChatAgentRag
 from database.repository import ChatRepository, ChatHistoryRepository
 from database.models import Chat, ChatHistory
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import json
 import asyncio
+from provider.service_container import ServiceContainer, container
 
 
 class ChatAgentRagProxy(ChatAgentRagInterface):
@@ -17,14 +18,14 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         self.chat_repository = ChatRepository(self.db)
         self.chat_history_repository = ChatHistoryRepository(self.db)
         self.workflow_repository = WorkflowRepository(self.db)  # Initialize workflow repository
-        self.agent = ChatAgentRag()
 
     async def generate_response(self, question: str, sources=False, request: Optional[Request] = None) -> Dict[str, Any]:
         # Store user question message in chat history
         self.__update_chat_history(question, "user", request)
 
         try:
-            res = await self.agent.generate_response(question, sources)
+            agent = ChatAgentRag(question=question, db=self.db)
+            res = await agent.generate_response()
             return {
                 "status": "success",
                 "response": res
@@ -49,7 +50,6 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             chat_history = self.chat_history_repository.get_chat_history_by_chat_id(chat_id=chat.id, limit=50)
 
             # Format messages for the agent
-            
             formatted_history = [
                 {
                     "role": msg.role,
@@ -58,15 +58,36 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 for msg in chat_history
             ]
 
-            workflows = self.workflow_repository.get_active_workflows_schemas()
+            workflows = self.workflow_repository.get_active_workflows_flows()
 
-            # Generate response with history
-            response = await self.agent.generate_response_socket(question, websocket, history=formatted_history, workflows=workflows)
-            
+            # Initialize agent with all required parameters
+            agent = ChatAgentRag(
+                question=question,
+                history=formatted_history,
+                websocket=websocket,
+                workflows=workflows,
+                db=self.db
+            )
+
+            # Generate response
+            response = await agent.generate_response_socket()
+
             # Store AI response in chat history
-            self.__update_chat_history(response, role="assistant", websocket=websocket)
+            if isinstance(response, list):
+                for resp in response:
+                    self.__update_chat_history(resp, role="assistant", websocket=websocket)
+            else:
+                # If response is a single string, store it directly
+                self.__update_chat_history(response, role="assistant", websocket=websocket)
+
+            websocket.send_json({
+                "event": "finish",
+            })
             
-            return response
+            return {
+                "status": "success",
+                "response": response
+            }
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             self.__update_chat_history(error_msg, role="assistant", websocket=websocket)
@@ -106,19 +127,27 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             raise e
 
     # Store new chat history message
-    def __update_chat_history(self, message: str, role: str, request: Optional[Request] = None, websocket: Optional[WebSocket] = None) -> None:
+    def __update_chat_history(self, message: Union[str, List[str]], role: str, request: Optional[Request] = None, websocket: Optional[WebSocket] = None) -> None:
         try:
             chat = self.__get_chat(request, websocket)  # Retrieve existing chat
             
-            # Create new chat history entry
-            chat_history_data = {
-                "chat_id": chat.id,
-                "body": message,
-                "role": role
-            }
+            # Convert single message to list for consistent handling
+            messages = [message] if isinstance(message, str) else message
             
-            # Add to database
-            self.chat_history_repository.create(chat_history_data)
+            # Create a chat history entry for each message
+            for msg in messages:
+                if not msg:
+                    continue
+                
+                chat_history_data = {
+                    "chat_id": chat.id,
+                    "body": msg,
+                    "role": role
+                }
+                
+                # Add to database
+                self.chat_history_repository.create(chat_history_data)
+            
             self.db.commit()
             
         except Exception as e:

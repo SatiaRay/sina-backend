@@ -154,7 +154,7 @@ class Workflow(BaseModel):
     __tablename__ = 'workflows'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     name = Column(String(255), unique=True, nullable=False)
-    schema = Column(JSON)
+    flow = Column(JSON)
     status = Column(Boolean, default=True)
 
 class Instruction(BaseModel):

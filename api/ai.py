@@ -17,7 +17,6 @@ agent_rag = ChatAgentRagProxy()
 async def ask_question_agent_socket(
     websocket: WebSocket, 
     session_id: str = Query(..., description="Session ID is required"),
-    
 ):
     await websocket.accept()
 
@@ -33,10 +32,19 @@ async def ask_question_agent_socket(
 
             api_logger.info(f"Processing question with agent: {question}")
 
-            await agent_rag.generate_response_socket(
+            response = await agent_rag.generate_response_socket(
                 question=question,
                 websocket=websocket
             )
+
+            if response:
+                await websocket.send_json({
+                    "event" : "finished",
+                    "msg" : "Response generated complete",
+                })
+
+            if isinstance(response, dict) and response.get("status") == "error":
+                await websocket.send_text(f"Error: {response.get('error')}")
 
     except WebSocketDisconnect:
         api_logger.info("WebSocket disconnected")
