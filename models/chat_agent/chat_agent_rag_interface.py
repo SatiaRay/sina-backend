@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import Dict, Any
 from fastapi import WebSocket
 
 class ChatAgentRagInterface:

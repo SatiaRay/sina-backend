@@ -4,20 +4,14 @@ import requests
 import logging
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin, urlunparse
-from datetime import datetime
 import re
-from difflib import SequenceMatcher
 import hashlib
-import asyncio
 import time
 from dotenv import load_dotenv
 
 from sqlalchemy.orm import Session
-from database.models import Document, CrawledDomain
 from database.repository import DocumentRepository, CrawledDomainRepository
 from database.models import SessionLocal
-from models.html_to_markdown_agent import HTMLToMarkdownAgent
-from database.vector_store import VectorStore
 
 # Load environment variables
 load_dotenv()

@@ -1,0 +1,18 @@
+image: python
+
+stages:
+    - init
+
+variables:@
+  GIT_STRATEGY: none
+
+init-project:
+  stage: init
+  script:
+    - pwd
+    - sudo mkdir /srv/projects
+    - chown gitlab-runner:root /srv/projects
+    - cd /srv/projects
+    - git clone git@gitlab.com:MahdiMahmoudi/khanai.git
+    - cd khanai
+    - docker-compose up -d

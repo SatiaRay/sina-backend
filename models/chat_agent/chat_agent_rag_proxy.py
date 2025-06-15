@@ -1,11 +1,10 @@
-from fastapi import Request, Depends,WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
-from database.models import get_db, Workflow
+from fastapi import Request, WebSocket
+from database.models import get_db
 from database.repositories.workflow_repository import WorkflowRepository
 from .chat_agent_rag_interface import ChatAgentRagInterface
 from .chat_agent_rag import ChatAgentRag
 from database.repository import ChatRepository, ChatHistoryRepository
-from database.models import Chat, ChatHistory
+from database.models import Chat
 from typing import List, Dict, Any, Optional, Union
 import json
 import asyncio

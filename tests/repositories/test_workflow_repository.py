@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from database.repositories.workflow_repository import WorkflowRepository
 from database.models import Workflow
 

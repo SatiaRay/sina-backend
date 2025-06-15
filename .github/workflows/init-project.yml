@@ -1,0 +1,39 @@
+name: Init Project
+
+on:
+  workflow_dispatch:  # You can manually trigger it. Change to "push" if needed.
+
+jobs:
+  init-project:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout current repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Create project directory
+        run: |
+          sudo mkdir -p /srv/projects
+          sudo chown $USER:root /srv/projects
+
+      - name: Setup SSH to access GitLab
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan gitlab.com >> ~/.ssh/known_hosts
+
+      - name: Clone khanai project from GitLab
+        run: |
+          cd /srv/projects
+          git clone git@gitlab.com:MahdiMahmoudi/khanai.git
+
+      - name: Run docker-compose
+        run: |
+          cd /srv/projects/khanai
+          docker-compose up -d

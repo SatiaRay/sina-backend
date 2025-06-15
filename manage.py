@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 import os
 import sys
-from datetime import datetime
 from typing import Optional
 import questionary
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from database.vector_store import VectorStore
-from util.logging_config import configure_logging, log_error
 
 console = Console()
 

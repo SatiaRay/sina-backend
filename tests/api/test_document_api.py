@@ -1,23 +1,16 @@
 import pytest
 from fastapi.testclient import TestClient
-from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database.models import Base, Document, CrawledDomain
-from api.document import router, DocumentCreate, DocumentUpdate, VectorizeDocumentRequest, vectorize_task, store_vector_document, get_vector_document
+from api.document import router, vectorize_task, store_vector_document, get_vector_document
 from fastapi import FastAPI
 from database.models import get_db
 from unittest.mock import patch, MagicMock
-import json
-import asyncio
-from rq import Queue
-from redis import Redis
 import uuid
 from fastapi import WebSocketDisconnect
 from fastapi import HTTPException
 import os
-import httpx
-import pytest_asyncio
 
 # Create test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
