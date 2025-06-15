@@ -3,7 +3,7 @@ image: python
 stages:
     - init
 
-variables:
+variables:@
   GIT_STRATEGY: none
 
 init-project:
