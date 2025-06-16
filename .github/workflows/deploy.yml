@@ -20,6 +20,7 @@ jobs:
       - name: 🐳 Docker Compose - Build and Run
         run: |
           cd ai-chatbot  # Make sure to `cd` into the cloned repository
+          cp .env.example .env  # Copy the example env file to .env
           pwd
           echo "🧹 Stopping existing containers..."
           docker-compose down || true
@@ -27,7 +28,7 @@ jobs:
           ls -la
 
           echo "🚀 Building and starting containers..."
-          docker-compose up -d --build
+          docker compose up -d --build
 
       - name: ✅ Done
         run: echo "✔ Deployment completed!"
