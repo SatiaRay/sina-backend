@@ -1,33 +1,33 @@
-name: Deploy to Self-Hosted Server
+name: 🚀 Deploy with Docker Compose
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    branches:
+      - main  # or your default branch
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    name: 🧱 Build & Run Container
+    runs-on: self-hosted  # 👈 Targets your self-hosted runner
 
     steps:
-    - name: 🔐 Set up SSH
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: 📥 Clone the repository
+        run: |
+          pwd
+          git clone -b master git@github.com:satiarepomahmoudi/ai-chatbot.git
 
-    - name: 🚀 Clone and Run docker-compose on Self-hosted Server
-      run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-          set -e
-          echo "Connected to $(hostname)"
+      - name: 🐳 Docker Compose - Build and Run
+        run: |
+          cd ai-chatbot  # Make sure to `cd` into the cloned repository
+          pwd
+          echo "🧹 Stopping existing containers..."
+          docker-compose down || true
 
-          if [ ! -d "${{ secrets.PROJECT_DIR }}" ]; then
-            git clone https://github.com/${{ github.repository }} ${{ secrets.PROJECT_DIR }}
-          else
-            cd ${{ secrets.PROJECT_DIR }}
-            git pull origin main
-          fi
+          ls -la
 
-          cd ${{ secrets.PROJECT_DIR }}
+          echo "🚀 Building and starting containers..."
           docker-compose up -d --build
-        EOF
+
+      - name: ✅ Done
+        run: echo "✔ Deployment completed!"
