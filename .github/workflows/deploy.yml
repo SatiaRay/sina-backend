@@ -23,12 +23,12 @@ jobs:
           cp .env.example .env  # Copy the example env file to .env
           pwd
           echo "🧹 Stopping existing containers..."
-          docker-compose down || true
+          docker compose down || true
 
           ls -la
 
           echo "🚀 Building and starting containers..."
-          docker compose up -d --build
+          docker compose up -d
 
       - name: ✅ Done
         run: echo "✔ Deployment completed!"
