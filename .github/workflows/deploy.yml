@@ -1,0 +1,33 @@
+name: Deploy to Self-Hosted Server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 🔐 Set up SSH
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: 🚀 Clone and Run docker-compose on Self-hosted Server
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          set -e
+          echo "Connected to $(hostname)"
+
+          if [ ! -d "${{ secrets.PROJECT_DIR }}" ]; then
+            git clone https://github.com/${{ github.repository }} ${{ secrets.PROJECT_DIR }}
+          else
+            cd ${{ secrets.PROJECT_DIR }}
+            git pull origin main
+          fi
+
+          cd ${{ secrets.PROJECT_DIR }}
+          docker-compose up -d --build
+        EOF
