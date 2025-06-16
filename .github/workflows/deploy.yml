@@ -1,0 +1,12 @@
+name: Test Self-Hosted Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: self-hosted
+
+    steps:
+      - name: ✅ Runner is working
+        run: echo "🎉 Self-hosted runner is running fine!"
