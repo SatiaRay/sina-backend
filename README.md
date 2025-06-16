@@ -45,8 +45,5 @@ python -m crawler.main
 uvicorn api.main:app --reload --host=0.0.0.0
 ```
 
-## استفاده
-API در آدرس `http://localhost:8000` در دسترس است.
-
 ## مستندات
 مستندات کامل API در `/docs` در دسترس است. 

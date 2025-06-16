@@ -3,7 +3,7 @@ name: 🚀 Deploy Production
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -19,10 +19,10 @@ jobs:
           if [ -d "$PROJECT_DIR/.git" ]; then
             echo "🔄 Project already cloned. Pulling latest changes..."
             cd "$PROJECT_DIR"
-            git pull origin main
+            git pull origin master
           else
             echo "📦 Cloning fresh project..."
-            git clone -b main git@github.com:satiarepomahmoudi/ai-chatbot.git "$PROJECT_DIR"
+            git clone -b master git@github.com:satiarepomahmoudi/ai-chatbot.git "$PROJECT_DIR"
             cd "$PROJECT_DIR"
           fi
 
