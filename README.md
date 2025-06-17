@@ -49,4 +49,4 @@ uvicorn api.main:app --reload --host=0.0.0.0
 مستندات کامل API در `/docs` در دسترس است. 
 
 ## نحوه اجرا
-این پروژه dockrize هست و برای اجرای آن کافی است دستور docker compose up -d را اجرا کنید.
+این پروژه dockrize هست و برای اجرای آن کافی است دستور docker compose up -d را اجرا کنید. 
