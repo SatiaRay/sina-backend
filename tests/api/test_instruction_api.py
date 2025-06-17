@@ -1,13 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
-from datetime import datetime
-from database.models import Instruction, Base, get_db, BaseModel
+from database.models import get_db, BaseModel
 from database.repository import InstructionRepository
 from api.main import app
 from fastapi import FastAPI
-from tests.conftest import test_engine, db
+from tests.conftest import db
 from sqlalchemy.orm import sessionmaker
 from api.instruction import router
 

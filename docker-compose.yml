@@ -1,0 +1,35 @@
+services:
+  chroma:
+      image: chromadb/chroma
+  mysql:
+    image: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456789
+      MYSQL_DATABASE: ai_db
+      MYSQL_USER: ai_chatbot
+      MYSQL_PASSWORD: 123456789
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+  app:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: khan
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+      - chroma
+    command: >
+      sh -c "./wait-for-it.sh mysql:3306 --timeout=60 --strict && 
+            alembic upgrade head &&
+            uvicorn api.main:app --host 0.0.0.0 --reload"
+    volumes:
+      - .:/app  # ✅ Mount the project directory into the container
+  
+
+volumes:
+  mysql_data:
+    driver: local

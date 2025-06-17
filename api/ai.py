@@ -1,17 +1,13 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
-import asyncio
 from typing import Optional, List, Dict
 import json
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from util.logging_config import configure_logging, log_error
 import wave
-import numpy as np
-import datetime
 import os
 from models.models.speech_to_text_model import SpeechToTextModel
 import matplotlib.pyplot as plt
 import io
-from pydub import AudioSegment
 import uuid
 
 # Configure loggers

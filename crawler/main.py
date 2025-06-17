@@ -1,15 +1,12 @@
 import scrapy
 from scrapy.crawler import CrawlerProcess
 from bs4 import BeautifulSoup
-import os
 from dotenv import load_dotenv
 import json
 from pathlib import Path
 import ssl
-from scrapy.crawler import CrawlerRunner
-from twisted.internet import reactor
 from multiprocessing import Process, Queue
-from urllib.parse import urlparse, urljoin, urlunparse
+from urllib.parse import urlparse, urlunparse
 from datetime import datetime
 import re
 
@@ -109,7 +106,7 @@ class SatyaSpider(scrapy.Spider):
         return list(urls)
 
     def clean_content(self, html):
-        print(f"Cleaning content ...")
+        print("Cleaning content ...")
         soup = BeautifulSoup(html, 'html.parser')
         
         # Remove scripts, styles, and meta tags

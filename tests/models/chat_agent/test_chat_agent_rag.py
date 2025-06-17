@@ -1,8 +1,5 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-from models.chat_agent.chat_agent_rag import ChatAgentRag, SATIA_INSTRUCTIONS
-from database.models import Instruction
+from models.chat_agent.chat_agent_rag import ChatAgentRag
 from database.repository import InstructionRepository
 from unittest.mock import Mock, AsyncMock, patch
 from fastapi import WebSocket

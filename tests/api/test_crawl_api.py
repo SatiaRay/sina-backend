@@ -1,17 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
-from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database.models import Base, Document, CrawledDomain
-from api.crawl import router, CrawlRequest
+from database.models import Base, Document
+from api.crawl import router
 from fastapi import FastAPI
 from database.models import get_db
 from unittest.mock import patch, MagicMock, ANY
-import json
-import asyncio
-from rq import Queue
-from redis import Redis
 import uuid
 import time
 from unittest.mock import AsyncMock

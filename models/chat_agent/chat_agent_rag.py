@@ -1,15 +1,14 @@
-from agents import Agent, Runner
-from typing import List, Dict, Any, Optional
+from agents import Runner
+from typing import List, Dict, Optional
 import os
 from dotenv import load_dotenv
 from database.vector_store import VectorStore
 from database.repository import InstructionRepository
 from database.models import SessionLocal
 from models.agents.title_analyzer_agent import TitleAnalyzerAgent
-import logging
 from util.logging_config import configure_logging, log_error
 import asyncio
-from fastapi import WebSocket, Depends
+from fastapi import WebSocket
 from openai import OpenAI
 from anyio import to_thread
 from .chat_agent_rag_interface import ChatAgentRagInterface

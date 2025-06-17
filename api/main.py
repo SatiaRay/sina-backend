@@ -4,15 +4,13 @@ from pathlib import Path
 from urllib.parse import urlparse
 import json
 from datetime import datetime
-import logging
 from bs4 import BeautifulSoup
-import hashlib
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from fastapi import FastAPI, HTTPException, Depends, Body, Request, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, HTTPException, Depends, Body, Request
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -23,12 +21,10 @@ from provider.service_container import container, ServiceContainer
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from database.vector_store import VectorStore
 from database.repository import DocumentRepository
-from util.database import get_db_connection
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
 from util.event_bus import event_bus, VectorStoreEvent
-from .models import (DataSource, DataSourceListResponse, Chunk, EditChunkRequest, 
-PlainTextRequest, AllKnowledgeRequest, UpdateKnowledgeRequest,CurationStatus, CurationStats, VectorSearchRequest,ChatRequest, AddKnowledgeRequest,StoreVectorRequest)
+from .models import (DataSource, DataSourceListResponse, Chunk, AllKnowledgeRequest, UpdateKnowledgeRequest,VectorSearchRequest,StoreVectorRequest)
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.repository import DocumentRepository
 from database.repositories.workflow_repository import WorkflowRepository

@@ -2,8 +2,6 @@ from sqlalchemy.orm import Session
 from typing import List, Optional, Type, TypeVar, Generic
 from datetime import datetime
 from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain, CrawlJobs, Instruction
-from sqlalchemy.types import String
-from sqlalchemy import text
 
 T = TypeVar('T', bound=BaseModel)
 

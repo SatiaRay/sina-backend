@@ -1,6 +1,5 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from provider.service_container import container
 from models.tools.functions import call_function
 
 # Mock class for testing

@@ -1,11 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query
 from redis import Redis
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 from datetime import datetime
-import json
-from pathlib import Path
 import traceback
 from fastapi.responses import JSONResponse
 from urllib.parse import urlparse, urlunparse
@@ -16,11 +14,10 @@ import os
 from rq import Queue
 from rq.job import Job
 import uuid
-from util.event_bus import event_bus, VectorStoreEvent
 import re
 import httpx
 
-from database.models import get_db, SessionLocal
+from database.models import get_db
 from database.repository import DocumentRepository, CrawledDomainRepository
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.vector_store import VectorStore

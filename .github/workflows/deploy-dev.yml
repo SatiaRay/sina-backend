@@ -1,0 +1,40 @@
+name: 🧪 Deploy Development
+
+on:
+  push:
+    branches:
+      - 'release/*'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: 🛠 Deploy Development Server
+    runs-on: dev-runner
+
+    steps:
+      - name: 📥 Pull or Clone Repository
+        run: |
+          PROJECT_DIR="/srv/projects/ai-chatbot"
+          BRANCH="${{ github.ref_name }}"
+
+          if [ -d "$PROJECT_DIR/.git" ]; then
+            echo "🔄 Project already cloned. Pulling latest changes..."
+            cd "$PROJECT_DIR"
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            git pull origin "$BRANCH"
+          else
+            echo "📦 Cloning fresh project..."
+            git clone -b "$BRANCH" git@github.com:satiarepomahmoudi/ai-chatbot.git "$PROJECT_DIR"
+            cd "$PROJECT_DIR"
+          fi
+
+      - name: 🐳 Docker Compose Up
+        run: |
+          cd /srv/projects/ai-chatbot
+          cp .env.example .env || true
+          docker compose down || true
+          docker compose up -d
+
+      - name: ✅ Done
+        run: echo "✔ Development deployed!"

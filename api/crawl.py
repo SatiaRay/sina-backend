@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends, Query,WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, HttpUrl
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
 import logging
 from crawler.crawler import crawl
-from database.models import Document, CrawledDomain, CrawlJobs, get_db
+from database.models import CrawlJobs, get_db
 from sqlalchemy.orm import Session
 from urllib.parse import urlparse, urlunparse
 from rq import Queue
@@ -19,10 +19,6 @@ import os
 import re
 import time
 import json
-import requests
-from bs4 import BeautifulSoup
-from difflib import SequenceMatcher
-import hashlib
 from database.repository import DocumentRepository, CrawlJobsRepository
 from database.models import SessionLocal
 
@@ -40,15 +36,12 @@ class CrawlError(Exception):
 
 class CrawlInitializationError(CrawlError):
     """Error during crawl initialization"""
-    pass
 
 class CrawlExecutionError(CrawlError):
     """Error during crawl execution"""
-    pass
 
 class VectorizationError(CrawlError):
     """Error during vectorization process"""
-    pass
 
 def handle_crawl_error(job: Job, error: Exception, error_type: str = "unknown"):
     """Handle crawl errors and update job metadata with error information"""
@@ -550,7 +543,7 @@ def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False)
 async def websocket_job_status(websocket: WebSocket, job_id: str):
     await websocket.accept()
 
-    last_progress = None;
+    last_progress = None
 
     try:
         # Use the existing redis_con
