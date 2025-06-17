@@ -3,7 +3,7 @@ name: 🧪 Deploy Development
 on:
   push:
     branches:
-      - 'feature/*'
+      - 'release/*'
   workflow_dispatch:
 
 jobs:
