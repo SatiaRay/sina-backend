@@ -1,6 +1,9 @@
+version: "3.8"
+
 services:
   chroma:
-      image: chromadb/chroma
+    image: chromadb/chroma
+
   mysql:
     image: mysql
     environment:
@@ -12,10 +15,12 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+
   redis: 
-    image: redis:8.2-m01-alpine3.22
+    image: redis:7-alpine
     ports:
       - "6379:6379"
+
   app:
     build:
       context: .
@@ -28,12 +33,55 @@ services:
       - chroma
       - redis
     command: >
-      sh -c "./wait-for-it.sh mysql:3306 --timeout=60 --strict && 
-            alembic upgrade head &&
-            uvicorn api.main:app --host 0.0.0.0 --reload"
+      sh -c "./wait-for-it.sh mysql:3306 --timeout=60 --strict &&
+             alembic upgrade head &&
+             uvicorn api.main:app --host 0.0.0.0 --reload"
     volumes:
-      - .:/app  # ✅ Mount the project directory into the container
-  
+      - .:/app
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
+  rq_crawl:
+    build:
+      context: .
+      dockerfile: dockerfile
+    command: python worker.py crawl
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    restart: always
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+
+  rq_vectorize:
+    build:
+      context: .
+      dockerfile: dockerfile
+    command: python worker.py vectorize
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    restart: always
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+  rq_default:
+    build:
+      context: .
+      dockerfile: dockerfile
+    command: python worker.py default
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    restart: always
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
 
 volumes:
   mysql_data:
