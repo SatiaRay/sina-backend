@@ -12,6 +12,10 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+  redis: 
+    image: redis:8.2-m01-alpine3.22
+    ports:
+      - "6379:6379"
   app:
     build:
       context: .
@@ -22,6 +26,7 @@ services:
     depends_on:
       - mysql
       - chroma
+      - redis
     command: >
       sh -c "./wait-for-it.sh mysql:3306 --timeout=60 --strict && 
             alembic upgrade head &&
