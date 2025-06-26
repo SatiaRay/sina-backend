@@ -33,7 +33,7 @@ services:
       - chroma
       - redis
     command: >
-      sh -c "./wait-for-it.sh mysql:3306 --timeout=60 --strict &&
+      sh -c "python wait_for_mysql.py mysql 3306 ai_chatbot 123456789 ai_db 60 &&
              alembic upgrade head &&
              uvicorn api.main:app --host 0.0.0.0 --reload"
     volumes:
@@ -69,6 +69,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+
   rq_default:
     build:
       context: .
