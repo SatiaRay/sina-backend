@@ -93,7 +93,7 @@ Login user and receive access token.
 Get current user information (requires authentication).
 
 **Headers:**
-```
+``` 
 Authorization: Bearer <access_token>
 ```
 
