@@ -150,10 +150,13 @@ class Chat(BaseModel):
     __tablename__ = 'chats'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     session_id = Column(String(255), unique=True, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # Link to user
     status = Column(String(20), default='active')
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Relationships
+    user = relationship("User", back_populates="chats")
     chat_history = relationship('ChatHistory', backref='session', lazy=True)
 
 class ChatHistory(BaseModel):
