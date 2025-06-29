@@ -58,7 +58,7 @@ class User(BaseModel):
     # Relationships
     chats = relationship("Chat", back_populates="user")
     owned_workspaces = relationship("Workspace", back_populates="owner")
-    workspaces = relationship("WorkspaceUser", back_populates="user")
+    workspaces = relationship("WorkspaceUser", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', user_type='{self.user_type}')>"
@@ -74,7 +74,7 @@ class Workspace(BaseModel):
     
     # Relationships
     owner = relationship("User", back_populates="owned_workspaces")
-    users = relationship("WorkspaceUser", back_populates="workspace")
+    users = relationship("WorkspaceUser", back_populates="workspace", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Workspace(id={self.id}, name='{self.name}', owner_id={self.owner_id})>"

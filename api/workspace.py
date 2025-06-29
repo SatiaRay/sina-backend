@@ -118,6 +118,11 @@ def delete_workspace(workspace_id: int, db: Session = Depends(get_db)):
     ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if not ws:
         raise HTTPException(status_code=404, detail="Workspace not found")
+    
+    # Delete all workspace users first to avoid foreign key constraint issues
+    db.query(WorkspaceUser).filter(WorkspaceUser.workspace_id == workspace_id).delete()
+    
+    # Now delete the workspace
     db.delete(ws)
     db.commit()
     return
