@@ -57,9 +57,43 @@ class User(BaseModel):
     
     # Relationships
     chats = relationship("Chat", back_populates="user")
+    owned_workspaces = relationship("Workspace", back_populates="owner")
+    workspaces = relationship("WorkspaceUser", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', user_type='{self.user_type}')>"
+
+# Workspace model
+class Workspace(BaseModel):
+    __tablename__ = "workspaces"
+    
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Relationships
+    owner = relationship("User", back_populates="owned_workspaces")
+    users = relationship("WorkspaceUser", back_populates="workspace", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Workspace(id={self.id}, name='{self.name}', owner_id={self.owner_id})>"
+
+# Association table for many-to-many relationship between users and workspaces
+class WorkspaceUser(BaseModel):
+    __tablename__ = "workspace_users"
+    
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(Enum('owner', 'admin', 'member', 'viewer', name='workspace_role_enum'), default='member', nullable=False)
+    joined_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    workspace = relationship("Workspace", back_populates="users")
+    user = relationship("User", back_populates="workspaces")
+    
+    def __repr__(self):
+        return f"<WorkspaceUser(workspace_id={self.workspace_id}, user_id={self.user_id}, role='{self.role}')>"
 
 # Wizard model
 class Wizard(BaseModel):
