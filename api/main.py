@@ -45,6 +45,8 @@ from .ai import router as ai_router
 from .job import router as job_router
 from .instruction import router as instruction_router
 from .ai_functions_tools import router as ai_functions_router
+from .auth import router as auth_router
+from .user import router as user_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -149,6 +151,8 @@ app.include_router(about_router)
 app.include_router(job_router)
 app.include_router(instruction_router)
 app.include_router(ai_functions_router)
+app.include_router(auth_router)
+app.include_router(user_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [

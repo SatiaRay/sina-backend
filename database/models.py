@@ -41,6 +41,26 @@ class BaseModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+# User model for authentication
+class User(BaseModel):
+    __tablename__ = "users"
+    
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
+    user_type = Column(Enum('admin', 'supporter', 'customer', name='user_type_enum'), default='customer', nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_verified = Column(Boolean, default=False, nullable=False)
+    last_login = Column(DateTime, nullable=True)
+    email_verified_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    chats = relationship("Chat", back_populates="user")
+    
+    def __repr__(self):
+        return f"<User(id={self.id}, email='{self.email}', user_type='{self.user_type}')>"
+
 # Wizard model
 class Wizard(BaseModel):
     __tablename__ = "wizards"
@@ -130,10 +150,13 @@ class Chat(BaseModel):
     __tablename__ = 'chats'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     session_id = Column(String(255), unique=True, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # Link to user
     status = Column(String(20), default='active')
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Relationships
+    user = relationship("User", back_populates="chats")
     chat_history = relationship('ChatHistory', backref='session', lazy=True)
 
 class ChatHistory(BaseModel):
