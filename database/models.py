@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean, JSON, Enum, TEXT
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import os
@@ -41,6 +41,18 @@ class BaseModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+# Base model for workspace-scoped models (row-level isolation)
+class WorkspaceScopedModel(BaseModel):
+    __abstract__ = True
+
+    @declared_attr
+    def workspace_id(cls):
+        return Column(Integer, ForeignKey("workspaces.id"), nullable=False, index=True)
+
+    @declared_attr
+    def workspace(cls):
+        return relationship("Workspace", backref="scoped_models")
+
 # User model for authentication
 class User(BaseModel):
     __tablename__ = "users"
@@ -75,6 +87,13 @@ class Workspace(BaseModel):
     # Relationships
     owner = relationship("User", back_populates="owned_workspaces")
     users = relationship("WorkspaceUser", back_populates="workspace", cascade="all, delete-orphan")
+    # Add one-to-many relationships for each workspace-scoped model
+    wizards = relationship("Wizard", back_populates="workspace", cascade="all, delete-orphan")
+    crawled_domains = relationship("CrawledDomain", back_populates="workspace", cascade="all, delete-orphan")
+    crawl_jobs = relationship("CrawlJobs", back_populates="workspace", cascade="all, delete-orphan")
+    documents = relationship("Document", back_populates="workspace", cascade="all, delete-orphan")
+    workflows = relationship("Workflow", back_populates="workspace", cascade="all, delete-orphan")
+    instructions = relationship("Instruction", back_populates="workspace", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Workspace(id={self.id}, name='{self.name}', owner_id={self.owner_id})>"
@@ -95,8 +114,8 @@ class WorkspaceUser(BaseModel):
     def __repr__(self):
         return f"<WorkspaceUser(workspace_id={self.workspace_id}, user_id={self.user_id}, role='{self.role}')>"
 
-# Wizard model
-class Wizard(BaseModel):
+# Wizard model - now workspace-scoped
+class Wizard(WorkspaceScopedModel):
     __tablename__ = "wizards"
     
     title = Column(String(255), nullable=False)
@@ -110,18 +129,27 @@ class Wizard(BaseModel):
         remote_side=lambda: [Wizard.id],
         backref="children"
     )
+    workspace = relationship("Workspace", back_populates="wizards")
+    
+    def __repr__(self):
+        return f"<Wizard(id={self.id}, title='{self.title}', workspace_id={self.workspace_id})>"
 
-# CrawledDomain model
-class CrawledDomain(BaseModel):
+# CrawledDomain model - now workspace-scoped
+class CrawledDomain(WorkspaceScopedModel):
     __tablename__ = "crawled_domains"
     
-    domain = Column(String(255), unique=True, nullable=False)
+    domain = Column(String(255), nullable=False)  # Removed unique constraint for multi-tenant
     documents = relationship("Document", back_populates="domain")
+    workspace = relationship("Workspace", back_populates="crawled_domains")
     
-class CrawlJobs(BaseModel):
+    def __repr__(self):
+        return f"<CrawledDomain(id={self.id}, domain='{self.domain}', workspace_id={self.workspace_id})>"
+
+# CrawlJobs model - now workspace-scoped
+class CrawlJobs(WorkspaceScopedModel):
     __tablename__ = "crawl_jobs"
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    job_id = Column(String(255), unique=True, nullable=False)
+    
+    job_id = Column(String(255), nullable=False)  # Removed unique constraint for multi-tenant
     init_url = Column(String(255), nullable=False)
     recursive = Column(Boolean, default=False, nullable=False)
     save_in_vector = Column(Boolean, default=False, nullable=False)
@@ -129,12 +157,15 @@ class CrawlJobs(BaseModel):
     status = Column(JSON, nullable=True)
     started_at = Column(DateTime, default=datetime.utcnow)
     end_at = Column(DateTime, nullable=True)
+    workspace = relationship("Workspace", back_populates="crawl_jobs")
+    
+    def __repr__(self):
+        return f"<CrawlJobs(id={self.id}, job_id='{self.job_id}', workspace_id={self.workspace_id})>"
 
-# Document model
-class Document(BaseModel):
+# Document model - now workspace-scoped
+class Document(WorkspaceScopedModel):
     __tablename__ = "documents"
     
-    id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255))
     _html = Column("html", Text(length=4294967295))  # MySQL LONGTEXT
     markdown = Column(Text(length=4294967295), nullable=True)  # MySQL LONGTEXT
@@ -147,6 +178,7 @@ class Document(BaseModel):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     domain = relationship("CrawledDomain", back_populates="documents")
+    workspace = relationship("Workspace", back_populates="documents")
 
     @property
     def html(self):
@@ -179,6 +211,9 @@ class Document(BaseModel):
             return bytes.fromhex(encoded_html).decode('utf-8')
         except:
             return encoded_html  # Return original if decoding fails
+    
+    def __repr__(self):
+        return f"<Document(id={self.id}, title='{self.title}', workspace_id={self.workspace_id})>"
         
 class Chat(BaseModel):
     __tablename__ = 'chats'
@@ -206,22 +241,29 @@ class ChatHistory(BaseModel):
     # Renamed 'metadata' to 'extra_metadata'
     extra_metadata = Column(JSON, nullable=True)
 
-class Workflow(BaseModel):
+class Workflow(WorkspaceScopedModel):
     __tablename__ = 'workflows'
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    name = Column(String(255), unique=True, nullable=False)
+    
+    name = Column(String(255), nullable=False)  # Removed unique constraint for multi-tenant
     flow = Column(JSON)
     status = Column(Boolean, default=True)
+    workspace = relationship("Workspace", back_populates="workflows")
+    
+    def __repr__(self):
+        return f"<Workflow(id={self.id}, name='{self.name}', workspace_id={self.workspace_id})>"
 
-class Instruction(BaseModel):
+class Instruction(WorkspaceScopedModel):
     __tablename__ = 'instructions'
     
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     label = Column(String(255), nullable=False)
     text = Column(Text, nullable=False)
     status = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    workspace = relationship("Workspace", back_populates="instructions")
+    
+    def __repr__(self):
+        return f"<Instruction(id={self.id}, label='{self.label}', workspace_id={self.workspace_id})>"
 
 # Database dependency for FastAPI
 def get_db():
