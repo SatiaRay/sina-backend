@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean, JSON, Enum, TEXT
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Boolean, JSON, Enum, TEXT, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -71,6 +71,7 @@ class User(BaseModel):
     chats = relationship("Chat", back_populates="user")
     owned_workspaces = relationship("Workspace", back_populates="owner")
     workspaces = relationship("WorkspaceUser", back_populates="user", cascade="all, delete-orphan")
+    owned_aibots = relationship("AiBot", back_populates="owner", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', user_type='{self.user_type}')>"
@@ -94,6 +95,7 @@ class Workspace(BaseModel):
     documents = relationship("Document", back_populates="workspace", cascade="all, delete-orphan")
     workflows = relationship("Workflow", back_populates="workspace", cascade="all, delete-orphan")
     instructions = relationship("Instruction", back_populates="workspace", cascade="all, delete-orphan")
+    aibots = relationship("AiBot", back_populates="workspace", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Workspace(id={self.id}, name='{self.name}', owner_id={self.owner_id})>"
@@ -179,6 +181,7 @@ class Document(WorkspaceScopedModel):
 
     domain = relationship("CrawledDomain", back_populates="documents")
     workspace = relationship("Workspace", back_populates="documents")
+    aibots = relationship("AiBot", secondary="aibot_documents", back_populates="documents")
 
     @property
     def html(self):
@@ -223,10 +226,12 @@ class Chat(BaseModel):
     status = Column(String(20), default='active')
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    aibot_id = Column(Integer, ForeignKey('aibots.id'), nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="chats")
     chat_history = relationship('ChatHistory', backref='session', lazy=True)
+    aibot = relationship("AiBot", back_populates="chats")
 
 class ChatHistory(BaseModel):
     __tablename__ = 'chat_history'
@@ -248,6 +253,8 @@ class Workflow(WorkspaceScopedModel):
     flow = Column(JSON)
     status = Column(Boolean, default=True)
     workspace = relationship("Workspace", back_populates="workflows")
+    aibot_id = Column(Integer, ForeignKey('aibots.id'), nullable=True)
+    aibot = relationship("AiBot", back_populates="workflows")
     
     def __repr__(self):
         return f"<Workflow(id={self.id}, name='{self.name}', workspace_id={self.workspace_id})>"
@@ -261,9 +268,40 @@ class Instruction(WorkspaceScopedModel):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     workspace = relationship("Workspace", back_populates="instructions")
+    aibot_id = Column(Integer, ForeignKey('aibots.id'), nullable=True)
+    aibot = relationship("AiBot", back_populates="instructions")
     
     def __repr__(self):
         return f"<Instruction(id={self.id}, label='{self.label}', workspace_id={self.workspace_id})>"
+
+# Association table for AiBot <-> Document with extra column vectorize_id
+class AiBotDocument(Base):
+    __tablename__ = 'aibot_documents'
+    id = Column(Integer, primary_key=True, index=True)
+    aibot_id = Column(Integer, ForeignKey('aibots.id'), nullable=False)
+    document_id = Column(Integer, ForeignKey('documents.id'), nullable=False)
+    vectorize_id = Column(String(255), nullable=True, comment="Vectorized document id in Chroma DB")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (UniqueConstraint('aibot_id', 'document_id', name='_aibot_document_uc'),)
+
+# AiBot model
+class AiBot(BaseModel):
+    __tablename__ = 'aibots'
+    name = Column(String(255), nullable=False)
+    workspace_id = Column(Integer, ForeignKey('workspaces.id'), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    # Relationships
+    workspace = relationship('Workspace', back_populates='aibots')
+    owner = relationship('User', back_populates='owned_aibots')
+    documents = relationship('Document', secondary='aibot_documents', back_populates='aibots')
+    chats = relationship('Chat', back_populates='aibot', cascade="all, delete-orphan")
+    workflows = relationship('Workflow', back_populates='aibot', cascade="all, delete-orphan")
+    instructions = relationship('Instruction', back_populates='aibot', cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<AiBot(id={self.id}, name='{self.name}', workspace_id={self.workspace_id}, owner_id={self.owner_id})>"
 
 # Database dependency for FastAPI
 def get_db():
