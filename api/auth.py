@@ -7,7 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
-from database.models import get_db, User, SessionLocal
+from database.models import get_db, User, SessionLocal, Workspace
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -185,6 +185,15 @@ async def register_user(
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
+        # Auto-create workspace for customer
+        if str(db_user.user_type) == "customer":
+            workspace = Workspace(
+                name=db_user.email,
+                owner_id=db_user.id,
+                is_active=True
+            )
+            db.add(workspace)
+            db.commit()
         return db_user
     except Exception as e:
         db.rollback()

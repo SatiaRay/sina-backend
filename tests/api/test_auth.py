@@ -17,7 +17,7 @@ root_dir = Path(__file__).parent.parent.parent
 sys.path.append(str(root_dir))
 
 from api.main import app
-from database.models import Base, User, get_db
+from database.models import Base, User, get_db, Workspace
 from api.auth import SECRET_KEY, ALGORITHM
 
 # Create in-memory SQLite database for testing
@@ -81,6 +81,13 @@ class TestAuthEndpoints:
         assert "id" in data
         assert "created_at" in data
         assert "password_hash" not in data  # Password should not be returned
+
+        # Check that a workspace was created for the customer
+        db = TestingSessionLocal()
+        workspace = db.query(Workspace).filter(Workspace.name == user_data["email"]).first()
+        assert workspace is not None
+        assert workspace.owner_id == data["id"]
+        db.close()
     
     def test_register_user_duplicate_email(self):
         """Test registration with duplicate email"""
@@ -127,6 +134,13 @@ class TestAuthEndpoints:
         assert data["user_type"] == "customer"  # Default value
         assert data["first_name"] is None
         assert data["last_name"] is None
+
+        # Check that a workspace was created for the customer
+        db = TestingSessionLocal()
+        workspace = db.query(Workspace).filter(Workspace.name == user_data["email"]).first()
+        assert workspace is not None
+        assert workspace.owner_id == data["id"]
+        db.close()
     
     def test_login_user_success(self):
         """Test successful user login"""
@@ -257,6 +271,12 @@ class TestAuthEndpoints:
         assert response.status_code == 201
         data = response.json()
         assert data["user_type"] == "admin"
+
+        # Check that no workspace is created for admin
+        db = TestingSessionLocal()
+        workspace = db.query(Workspace).filter(Workspace.name == user_data["email"]).first()
+        assert workspace is None
+        db.close()
     
     def test_register_user_with_supporter_type(self):
         """Test registration with supporter user type"""
@@ -273,6 +293,12 @@ class TestAuthEndpoints:
         assert response.status_code == 201
         data = response.json()
         assert data["user_type"] == "supporter"
+
+        # Check that no workspace is created for supporter
+        db = TestingSessionLocal()
+        workspace = db.query(Workspace).filter(Workspace.name == user_data["email"]).first()
+        assert workspace is None
+        db.close()
     
     def test_register_user_invalid_email_format(self):
         """Test registration with invalid email format"""
