@@ -67,9 +67,13 @@ class User(BaseModel):
     last_login = Column(DateTime, nullable=True)
     email_verified_at = Column(DateTime, nullable=True)
     
+    # New: Current workspace selection
+    current_workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)
+    current_workspace = relationship("Workspace", foreign_keys="User.current_workspace_id", post_update=True)
+    
     # Relationships
     chats = relationship("Chat", back_populates="user")
-    owned_workspaces = relationship("Workspace", back_populates="owner")
+    owned_workspaces = relationship("Workspace", back_populates="owner", foreign_keys="Workspace.owner_id")
     workspaces = relationship("WorkspaceUser", back_populates="user", cascade="all, delete-orphan")
     owned_aibots = relationship("AiBot", back_populates="owner", cascade="all, delete-orphan")
     
@@ -86,7 +90,7 @@ class Workspace(BaseModel):
     is_active = Column(Boolean, default=True, nullable=False)
     
     # Relationships
-    owner = relationship("User", back_populates="owned_workspaces")
+    owner = relationship("User", back_populates="owned_workspaces", foreign_keys=[owner_id])
     users = relationship("WorkspaceUser", back_populates="workspace", cascade="all, delete-orphan")
     # Add one-to-many relationships for each workspace-scoped model
     wizards = relationship("Wizard", back_populates="workspace", cascade="all, delete-orphan")

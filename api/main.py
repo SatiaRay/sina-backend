@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 import json
 from datetime import datetime
 from bs4 import BeautifulSoup
+import uuid
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
@@ -28,9 +29,10 @@ from .models import (DataSource, DataSourceListResponse, Chunk, AllKnowledgeRequ
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.repository import DocumentRepository
 from database.repositories.workflow_repository import WorkflowRepository
-from database.models import get_db
-import uuid
+from database.models import get_db, User
 from models.tools.functions.app_satia_co import AppSatiaCo
+from api.auth import verify_token, SECRET_KEY, ALGORITHM
+from fastapi.security.utils import get_authorization_scheme_param
 
 # Routes
 from api.about import router as about_router
@@ -223,6 +225,40 @@ async def log_requests(request: Request, call_next):
                 "request_id": request_id
             }
         )
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    authorization: str = request.headers.get("Authorization")
+    scheme, token = get_authorization_scheme_param(authorization)
+    request.state.user = None
+    db = None
+    try:
+        if scheme and scheme.lower() == "bearer" and token:
+            get_db_override = getattr(request.app, 'dependency_overrides', {}).get(get_db)
+            db_gen = (get_db_override() if get_db_override else get_db())
+            db = next(db_gen)
+            token_data = verify_token(token)
+            if token_data and token_data.email:
+                user = db.query(User).filter(User.email == token_data.email).first()
+                if user and user.is_active:
+                    request.state.user = user  # Attach the ORM instance
+                    db = None  # Don't close session here; let FastAPI handle it
+    except Exception as e:
+        pass
+    finally:
+        if db:
+            db.close()
+    # Check if the route is private and block if not authenticated
+    route = request.scope.get('endpoint')
+    if not route:
+        for r in request.app.routes:
+            if hasattr(r, 'endpoint') and r.path == request.url.path and r.methods and request.method in r.methods:
+                route = r.endpoint
+                break
+    if route and getattr(route, 'is_private', False) and request.state.user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    response = await call_next(request)
+    return response
 
 # مدل‌های درخواست و پاسخ
 class QuestionRequest(BaseModel):

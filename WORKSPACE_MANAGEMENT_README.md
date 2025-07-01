@@ -256,6 +256,60 @@ Get all users in a specific workspace.
 
 ---
 
+## 9. Select/Switch Current Workspace
+
+### PATCH `/workspaces/select/{workspace_id}`
+Select or switch the current workspace for the authenticated user. This sets the user's `current_workspace_id` field, which is used for tenancy isolation in other APIs (e.g., document creation).
+
+**Authentication Required:** Yes (Bearer token)
+
+**Path Parameter:**
+- `workspace_id` (int): The ID of the workspace to select
+
+**Request Example:**
+```
+PATCH /workspaces/select/2
+Authorization: Bearer <your_jwt_token>
+```
+
+**Response (200):**
+```json
+{
+  "id": 2,
+  "name": "Another Workspace",
+  "description": "Another team workspace",
+  "owner_id": 2,
+  "is_active": true
+}
+```
+
+**Error Responses:**
+- 403 Forbidden: User is not a member of the workspace
+```json
+{
+  "detail": "User is not a member of the workspace"
+}
+```
+- 404 Not Found: Workspace does not exist
+```json
+{
+  "detail": "Workspace not found"
+}
+```
+
+**Business Logic:**
+- The user must be a member of the workspace (in `workspace_users` table)
+- On success, the user's `current_workspace_id` is updated in the database
+- This value is used as the default workspace for other APIs if not explicitly provided
+
+**Usage Example:**
+```bash
+curl -X PATCH "http://localhost:8000/workspaces/select/2" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+---
+
 ## Usage Examples
 
 ### 1. Create a Workspace
@@ -319,6 +373,12 @@ curl -X DELETE "http://localhost:8000/workspaces/1/users/2" \
 ### 8. Delete Workspace
 ```bash
 curl -X DELETE "http://localhost:8000/workspaces/1" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### 9. Select/Switch Current Workspace
+```bash
+curl -X PATCH "http://localhost:8000/workspaces/select/2" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 

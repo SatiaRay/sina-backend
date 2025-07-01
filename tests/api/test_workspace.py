@@ -53,7 +53,7 @@ def db():
 def customer_user(db: sessionmaker):
     """Create a customer user for testing"""
     email = f"customer_{uuid.uuid4()}@example.com"
-    user = User(email=email, password_hash="hash", user_type="customer", is_active=True)
+    user = User(email=email, password_hash="hash", user_type="customer", is_active=True, current_workspace_id=None)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -63,7 +63,7 @@ def customer_user(db: sessionmaker):
 def another_user(db: sessionmaker):
     """Create another user for testing"""
     email = f"member_{uuid.uuid4()}@example.com"
-    user = User(email=email, password_hash="hash", user_type="customer", is_active=True)
+    user = User(email=email, password_hash="hash", user_type="customer", is_active=True, current_workspace_id=None)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -209,4 +209,84 @@ def test_list_workspace_users(db, customer_user, another_user):
     assert response.status_code == 200
     data = response.json()
     assert len(data) >= 1
-    assert any(u["user_id"] == another_user.id for u in data) 
+    assert any(u["user_id"] == another_user.id for u in data)
+
+def test_select_current_workspace(db, customer_user, another_user):
+    """Test selecting/switching current workspace for a user"""
+    # Create two workspaces
+    ws1 = Workspace(name="WS1", owner_id=customer_user.id)
+    ws2 = Workspace(name="WS2", owner_id=customer_user.id)
+    db.add_all([ws1, ws2])
+    db.commit()
+    db.refresh(ws1)
+    db.refresh(ws2)
+    # Add another_user to ws1 and ws2
+    db.add(WorkspaceUser(workspace_id=ws1.id, user_id=another_user.id, role="member"))
+    db.add(WorkspaceUser(workspace_id=ws2.id, user_id=another_user.id, role="member"))
+    db.commit()
+    # Authenticate as another_user
+    from api.auth import create_access_token
+    token = create_access_token({"sub": another_user.email})
+    headers = {"Authorization": f"Bearer {token}"}
+    # Select ws1
+    response = client.patch(f"/workspaces/select/{ws1.id}", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == ws1.id
+    # Check DB
+    db.refresh(another_user)
+    assert another_user.current_workspace_id == ws1.id
+    # Select ws2
+    response = client.patch(f"/workspaces/select/{ws2.id}", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == ws2.id
+    db.refresh(another_user)
+    assert another_user.current_workspace_id == ws2.id
+    # Try selecting a workspace user is not a member of
+    ws3 = Workspace(name="WS3", owner_id=customer_user.id)
+    db.add(ws3)
+    db.commit()
+    db.refresh(ws3)
+    response = client.patch(f"/workspaces/select/{ws3.id}", headers=headers)
+    assert response.status_code == 403
+    assert "not a member" in response.json()["detail"]
+
+def test_get_current_workspace(db, customer_user, another_user):
+    """Test getting the current workspace for a user"""
+    ws1 = Workspace(name="WS1", owner_id=customer_user.id)
+    ws2 = Workspace(name="WS2", owner_id=customer_user.id)
+    db.add_all([ws1, ws2])
+    db.commit()
+    db.refresh(ws1)
+    db.refresh(ws2)
+    # Add another_user to ws1 and ws2
+    db.add(WorkspaceUser(workspace_id=ws1.id, user_id=another_user.id, role="member"))
+    db.add(WorkspaceUser(workspace_id=ws2.id, user_id=another_user.id, role="member"))
+    db.commit()
+    # Authenticate as another_user
+    from api.auth import create_access_token
+    token = create_access_token({"sub": another_user.email})
+    headers = {"Authorization": f"Bearer {token}"}
+    # No current workspace set
+    another_user.current_workspace_id = None
+    db.commit()
+    response = client.get("/workspaces/current", headers=headers)
+    if response.status_code != 404:
+        print(f"DEBUG: status_code={response.status_code}, content={response.content}")
+    assert response.status_code == 404
+    # Set current workspace
+    another_user.current_workspace_id = ws2.id
+    db.commit()
+    response = client.get("/workspaces/current", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == ws2.id
+    assert data["name"] == "WS2"
+    # Set to a non-existent workspace
+    another_user.current_workspace_id = 9999
+    db.commit()
+    response = client.get("/workspaces/current", headers=headers)
+    if response.status_code != 404:
+        print(f"DEBUG: status_code={response.status_code}, content={response.content}")
+    assert response.status_code == 404 

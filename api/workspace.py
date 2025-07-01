@@ -1,9 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from database.models import Workspace, User, WorkspaceUser, SessionLocal, get_db
 from pydantic import BaseModel
 from datetime import datetime
+from api.auth import get_current_user
+from sqlalchemy.orm.attributes import InstrumentedAttribute
+import logging
+from tests.crawler.test_crawler import db_session
+from util.tenancy import WorkspaceTenancyManager
+from functools import wraps
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
@@ -47,6 +53,13 @@ class PaginatedWorkspaceResponse(BaseModel):
     has_next: bool
     has_prev: bool
 
+def private_route(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    wrapper.is_private = True
+    return wrapper
+
 # Create workspace
 @router.post("/", response_model=WorkspaceOut)
 def create_workspace(workspace: WorkspaceCreate, db: Session = Depends(get_db)):
@@ -65,25 +78,22 @@ def create_workspace(workspace: WorkspaceCreate, db: Session = Depends(get_db)):
 
 # Get all workspaces with pagination
 @router.get("/", response_model=PaginatedWorkspaceResponse)
+@private_route
 def list_workspaces(
+    request: Request,
     page: int = Query(1, description="Page number (starting from 1)", ge=1),
     per_page: int = Query(10, description="Number of workspaces per page", ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
+    query = WorkspaceTenancyManager.get_user_workspaces(db, request.state.user.id)
     # Calculate offset
     offset = (page - 1) * per_page
-    
-    # Get total count
-    total = db.query(Workspace).count()
-    
-    # Calculate total pages
-    total_pages = (total + per_page - 1) // per_page  # Ceiling division
-    
-    # Get workspaces for current page
-    workspaces = db.query(Workspace).offset(offset).limit(per_page).all()
-    
+    total = len(query)
+    total_pages = (total + per_page - 1) // per_page
+    workspaces = query[offset:offset+per_page]
+    workspaces_out = [WorkspaceOut.model_validate(ws) for ws in workspaces]
     return PaginatedWorkspaceResponse(
-        workspaces=workspaces,
+        workspaces=workspaces_out,
         total=total,
         page=page,
         per_page=per_page,
@@ -159,4 +169,52 @@ def remove_user_from_workspace(workspace_id: int, user_id: int, db: Session = De
 @router.get("/{workspace_id}/users", response_model=List[WorkspaceUserOut])
 def list_workspace_users(workspace_id: int, db: Session = Depends(get_db)):
     ws_users = db.query(WorkspaceUser).filter_by(workspace_id=workspace_id).all()
-    return ws_users 
+    return ws_users
+
+# Endpoint to select/switch current workspace for the authenticated user
+@router.patch("/select/{workspace_id}", response_model=WorkspaceOut)
+def select_current_workspace(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Check if the user is a member of the workspace
+    ws_user = db.query(WorkspaceUser).filter_by(workspace_id=workspace_id, user_id=current_user.id).first()
+    if not ws_user:
+        raise HTTPException(status_code=403, detail="User is not a member of the workspace")
+    ws = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not ws:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    # Update user's current_workspace_id
+    current_user.current_workspace_id = workspace_id
+    db.commit()
+    db.refresh(ws)
+    return ws
+
+# Endpoint to get the current workspace for the authenticated user
+@router.get("/current")
+def get_current_workspace(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        logging.warning(f"DEBUG: current_workspace_id type={type(current_user.current_workspace_id)}, value={current_user.current_workspace_id}")
+        ws_id = getattr(current_user, 'current_workspace_id', None)
+        ws_id_int = int(ws_id)
+        if ws_id_int <= 0:
+            return Response(content='{"detail": "No current workspace selected"}', status_code=404, media_type='application/json')
+        ws = db.query(Workspace).filter(Workspace.id == ws_id_int).first()
+        if not ws:
+            return Response(content='{"detail": "Current workspace not found"}', status_code=404, media_type='application/json')
+        return {
+            "id": ws.id,
+            "name": ws.name,
+            "description": ws.description,
+            "owner_id": ws.owner_id,
+            "is_active": ws.is_active,
+            "created_at": ws.created_at.isoformat() if ws.created_at else None,
+            "updated_at": ws.updated_at.isoformat() if ws.updated_at else None
+        }
+    except Exception as e:
+        logging.error(f"Exception in /workspaces/current: {e}")
+        return Response(content='{"detail": "No current workspace selected (exception)"}', status_code=404, media_type='application/json') 

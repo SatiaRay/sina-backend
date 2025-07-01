@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 from unittest.mock import patch
 import jwt
 from datetime import datetime, timedelta
+from fastapi import Request
 
 # Import your app and models
 import sys
@@ -45,6 +46,16 @@ def override_get_db():
 app.dependency_overrides[get_db] = override_get_db
 
 client = TestClient(app)
+
+# Add a test route for middleware user extraction
+def add_test_user_state_route(app):
+    @app.get("/test-user-state")
+    async def test_user_state(request: Request):
+        user = getattr(request.state, "user", None)
+        if user:
+            return {"email": user.email, "id": user.id}
+        return {"user": None}
+add_test_user_state_route(app)
 
 class TestAuthEndpoints:
     """Test cases for authentication endpoints"""
@@ -410,4 +421,56 @@ class TestAuthUtilities:
         
         # Should not verify with invalid token
         invalid_token_data = verify_token("invalid_token")
-        assert invalid_token_data is None 
+        assert invalid_token_data is None
+
+class TestAuthMiddleware:
+    def setup_method(self):
+        db = TestingSessionLocal()
+        db.query(User).delete()
+        db.commit()
+        db.close()
+
+    def test_user_in_request_state_with_valid_token(self):
+        # Register and login user
+        user_data = {"email": "middleware@example.com", "password": "pass123", "user_type": "customer"}
+        client.post("/auth/register", json=user_data)
+        login_resp = client.post("/auth/login", json={"email": user_data["email"], "password": user_data["password"]})
+        token = login_resp.json()["access_token"]
+        # Call test route with token
+        resp = client.get("/test-user-state", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        data = resp.json()
+        print('DEBUG RESPONSE:', data)
+        assert data["email"] == user_data["email"]
+        assert "id" in data
+
+    def test_user_in_request_state_with_invalid_token(self):
+        # Call test route with invalid token
+        resp = client.get("/test-user-state", headers={"Authorization": "Bearer invalidtoken"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["user"] is None
+
+    def test_user_in_request_state_with_no_token(self):
+        # Call test route with no token
+        resp = client.get("/test-user-state")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["user"] is None
+
+    def test_private_route_blocks_unauthenticated(self):
+        # Should return 401 for unauthenticated request
+        resp = client.get("/workspaces/")
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "Not authenticated"
+
+    def test_private_route_allows_authenticated(self):
+        # Register and login user
+        user_data = {"email": "private@example.com", "password": "pass123", "user_type": "customer"}
+        client.post("/auth/register", json=user_data)
+        login_resp = client.post("/auth/login", json={"email": user_data["email"], "password": user_data["password"]})
+        token = login_resp.json()["access_token"]
+        # Should allow access with valid token
+        resp = client.get("/workspaces/", headers={"Authorization": f"Bearer {token}"})
+        # 200 or 422 is fine (422 if required params missing)
+        assert resp.status_code in (200, 422) 
