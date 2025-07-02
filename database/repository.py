@@ -1,79 +1,12 @@
 from sqlalchemy.orm import Session, Query
 from typing import List, Optional, Type, TypeVar, Generic
 from datetime import datetime
+
 from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain, CrawlJobs, Instruction
+from .repositories.repository_base import RepositoryBase       
+from .repositories.tenancy_repository import TenancyRepository
 
 T = TypeVar('T', bound=BaseModel)
-       
-
-class Repository(Generic[T]):
-    def __init__(self, db: Session, model_class: Type[T]):
-        self.db = db
-        self.model_class = model_class
-
-    def get_all(self) -> List[T]:
-        return self.db.query(self.model_class).all()
-
-    def get(self, id: int) -> Optional[T]:
-        return self.db.query(self.model_class).filter(self.model_class.id == id).first()
-
-    def create(self, data: dict) -> T:
-        instance = self.model_class(**data)
-        self.db.add(instance)
-        self.db.commit()
-        self.db.refresh(instance)
-        return instance
-
-    def update(self, id: int, data: dict) -> Optional[T]:
-        instance = self.get(id)
-        if instance:
-            for key, value in data.items():
-                setattr(instance, key, value)
-            self.db.commit()
-            self.db.refresh(instance)
-        return instance
-
-    def delete(self, id: int) -> bool:
-        instance = self.get(id)
-        if instance:
-            self.db.delete(instance)
-            self.db.commit()
-            return True
-        return False
-    
-class CustomSession(Session):
-    def __init__(self, db_session: Session, tenancy_id: int|None = None):
-        """
-        This constructor initializes a custom session by wrapping the base session and applying tenancy conditions.
-        """
-        super().__init__(bind=db_session.bind, autoflush=db_session.autoflush)
-        self.tenancy_id = tenancy_id
-
-    def apply_tenancy_filter(self, query: Query, model: T) -> Query:
-        """
-        Apply the tenancy filter to the query if the tenancy_id is set.
-        """
-        if self.tenancy_id is not None:
-            query = query.filter(model.id == self.tenancy_id)
-        return query
-
-    def query(self, *args, **kwargs):
-        """
-        Override the query method to automatically apply the tenancy filter for any query.
-        """
-        model = args[0]
-        query = super().query(*args, **kwargs)
-        if model:
-            query = self.apply_tenancy_filter(query, model)
-        return query
-    
-    
-class TenancyRepository(Repository):
-    def __init__(self, db_session: Session, model_class):
-        # Wrap the base session with the custom session that applies tenancy filters
-        self.model_class = model_class
-        self.db = CustomSession(db_session=db_session)
-        super().__init__(self.db, model_class)        
 
 class WizardRepository(TenancyRepository):
     def __init__(self, db: Session):
@@ -150,7 +83,7 @@ class WizardRepository(TenancyRepository):
     def get_disabled_wizards(self) -> List[Wizard]:
         return self.db.query(Wizard).filter(Wizard.enabled == False).all()
 
-class ChatRepository(Repository[Chat]):
+class ChatRepository(RepositoryBase[Chat]):
     def __init__(self, db: Session):
         super().__init__(db, Chat)
 
@@ -160,7 +93,7 @@ class ChatRepository(Repository[Chat]):
     def get_all_with_messages(self) -> List[Chat]:
         return self.db.query(Chat).all()
     
-class ChatHistoryRepository(Repository[ChatHistory]):
+class ChatHistoryRepository(RepositoryBase[ChatHistory]):
     def __init__(self, db: Session):
         super().__init__(db, ChatHistory)
 
@@ -176,7 +109,7 @@ class ChatHistoryRepository(Repository[ChatHistory]):
         """
         return self.db.query(Chat).filter(Chat.id == id).join(Chat.chat_history).first()
 
-class CrawledDomainRepository(Repository[CrawledDomain]):
+class CrawledDomainRepository(TenancyRepository):
     def __init__(self, db: Session):
         super().__init__(db, CrawledDomain)
 
@@ -202,7 +135,7 @@ class DocumentRepository(TenancyRepository):
     def search_by_title(self, query: str) -> List[Document]:
         return self.db.query(Document).filter(Document.title.ilike(f"%{query}%")).all()
 
-class CrawlJobsRepository(Repository[CrawlJobs]):
+class CrawlJobsRepository(RepositoryBase[CrawlJobs]):
     def __init__(self, db: Session):
         super().__init__(db, CrawlJobs)
 
@@ -227,7 +160,7 @@ class CrawlJobsRepository(Repository[CrawlJobs]):
             return self.update(job.id, {"status": current_status})
         return None
 
-    def complete_job(self, job_id: str, status: dict = None) -> Optional[CrawlJobs]:
+    def complete_job(self, job_id: str, status: dict|None = None) -> Optional[CrawlJobs]:
         """Mark a job as completed and update its status"""
         job = self.get_by_job_id(job_id)
         if job:
@@ -258,7 +191,7 @@ class CrawlJobsRepository(Repository[CrawlJobs]):
         """Get the most recent crawl jobs"""
         return self.db.query(CrawlJobs).order_by(CrawlJobs.started_at.desc()).limit(limit).all()
 
-class InstructionRepository(Repository[Instruction]):
+class InstructionRepository(TenancyRepository):
     def __init__(self, db: Session):
         super().__init__(db, Instruction)
 

@@ -241,6 +241,7 @@ async def auth_middleware(request: Request, call_next):
             if token_data and token_data.email:
                 user = db.query(User).filter(User.email == token_data.email).first()
                 if user and user.is_active:
+                    container.bind('auth_user', user)
                     request.state.user = user  # Attach the ORM instance
                     db = None  # Don't close session here; let FastAPI handle it
     except Exception as e:
@@ -824,7 +825,8 @@ async def add_manually_knowledge(
             'html' : request.text,
             'markdown' : markdown_text,
             'title' : request.metadata['title'],
-            'type' : 'manual'
+            'type' : 'manual',
+            'workspace_id' : container.make("auth_user").current_workspace_id
         })
 
         request.metadata['document_id'] = doc.id
