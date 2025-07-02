@@ -44,3 +44,8 @@ class TenancyRepository(RepositoryBase):
         self.model_class = model_class
         self.db = CustomSession(db_session=db_session)
         super().__init__(self.db, model_class) 
+        
+    def create(self, data: dict) -> T:
+        if 'workspace_id' not in data:
+            data['workspace_id'] = container.make('auth_user').current_workspace_id
+        return super().create(data)
