@@ -1,9 +1,10 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 from typing import List, Optional, Type, TypeVar, Generic
 from datetime import datetime
 from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain, CrawlJobs, Instruction
 
 T = TypeVar('T', bound=BaseModel)
+       
 
 class Repository(Generic[T]):
     def __init__(self, db: Session, model_class: Type[T]):
@@ -39,8 +40,42 @@ class Repository(Generic[T]):
             self.db.commit()
             return True
         return False
+    
+class CustomSession(Session):
+    def __init__(self, db_session: Session, tenancy_id: int|None = None):
+        """
+        This constructor initializes a custom session by wrapping the base session and applying tenancy conditions.
+        """
+        super().__init__(bind=db_session.bind, autoflush=db_session.autoflush)
+        self.tenancy_id = tenancy_id
 
-class WizardRepository(Repository[Wizard]):
+    def apply_tenancy_filter(self, query: Query, model: T) -> Query:
+        """
+        Apply the tenancy filter to the query if the tenancy_id is set.
+        """
+        if self.tenancy_id is not None:
+            query = query.filter(model.id == self.tenancy_id)
+        return query
+
+    def query(self, *args, **kwargs):
+        """
+        Override the query method to automatically apply the tenancy filter for any query.
+        """
+        model = args[0]
+        query = super().query(*args, **kwargs)
+        if model:
+            query = self.apply_tenancy_filter(query, model)
+        return query
+    
+    
+class TenancyRepository(Repository):
+    def __init__(self, db_session: Session, model_class):
+        # Wrap the base session with the custom session that applies tenancy filters
+        self.model_class = model_class
+        self.db = CustomSession(db_session=db_session)
+        super().__init__(self.db, model_class)        
+
+class WizardRepository(TenancyRepository):
     def __init__(self, db: Session):
         super().__init__(db, Wizard)
 
@@ -154,7 +189,7 @@ class CrawledDomainRepository(Repository[CrawledDomain]):
             return existing
         return self.create({"domain": domain})
 
-class DocumentRepository(Repository[Document]):
+class DocumentRepository(TenancyRepository):
     def __init__(self, db: Session):
         super().__init__(db, Document)
 
