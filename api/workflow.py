@@ -43,8 +43,10 @@ def create_workflow(workflow: WorkflowCreate, db: Session = Depends(get_db)):
     if repo.get_by_name(workflow.name):
         raise HTTPException(status_code=400, detail="Workflow with this name already exists")
     
-    db_workflow = Workflow(**workflow.model_dump())
-    return repo.create(db_workflow)
+    # db_workflow = Workflow(**workflow.model_dump())
+    # return repo.create(db_workflow)
+
+    return repo.create(data=workflow.model_dump())
 
 @router.get("", response_model=List[WorkflowResponse])
 def get_workflows(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):

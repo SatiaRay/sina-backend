@@ -51,3 +51,7 @@ def db(test_engine):
         db.close()
         # Drop all tables after the test
         Base.metadata.drop_all(bind=test_engine)
+
+@pytest.fixture
+def db_session(db):
+    yield db

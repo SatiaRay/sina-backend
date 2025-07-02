@@ -1,46 +1,14 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 from typing import List, Optional, Type, TypeVar, Generic
 from datetime import datetime
+
 from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain, CrawlJobs, Instruction
+from .repositories.repository_base import RepositoryBase       
+from .repositories.tenancy_repository import TenancyRepository
 
 T = TypeVar('T', bound=BaseModel)
 
-class Repository(Generic[T]):
-    def __init__(self, db: Session, model_class: Type[T]):
-        self.db = db
-        self.model_class = model_class
-
-    def get_all(self) -> List[T]:
-        return self.db.query(self.model_class).all()
-
-    def get(self, id: int) -> Optional[T]:
-        return self.db.query(self.model_class).filter(self.model_class.id == id).first()
-
-    def create(self, data: dict) -> T:
-        instance = self.model_class(**data)
-        self.db.add(instance)
-        self.db.commit()
-        self.db.refresh(instance)
-        return instance
-
-    def update(self, id: int, data: dict) -> Optional[T]:
-        instance = self.get(id)
-        if instance:
-            for key, value in data.items():
-                setattr(instance, key, value)
-            self.db.commit()
-            self.db.refresh(instance)
-        return instance
-
-    def delete(self, id: int) -> bool:
-        instance = self.get(id)
-        if instance:
-            self.db.delete(instance)
-            self.db.commit()
-            return True
-        return False
-
-class WizardRepository(Repository[Wizard]):
+class WizardRepository(TenancyRepository):
     def __init__(self, db: Session):
         super().__init__(db, Wizard)
 
@@ -115,7 +83,7 @@ class WizardRepository(Repository[Wizard]):
     def get_disabled_wizards(self) -> List[Wizard]:
         return self.db.query(Wizard).filter(Wizard.enabled == False).all()
 
-class ChatRepository(Repository[Chat]):
+class ChatRepository(RepositoryBase[Chat]):
     def __init__(self, db: Session):
         super().__init__(db, Chat)
 
@@ -125,7 +93,7 @@ class ChatRepository(Repository[Chat]):
     def get_all_with_messages(self) -> List[Chat]:
         return self.db.query(Chat).all()
     
-class ChatHistoryRepository(Repository[ChatHistory]):
+class ChatHistoryRepository(RepositoryBase[ChatHistory]):
     def __init__(self, db: Session):
         super().__init__(db, ChatHistory)
 
@@ -141,7 +109,7 @@ class ChatHistoryRepository(Repository[ChatHistory]):
         """
         return self.db.query(Chat).filter(Chat.id == id).join(Chat.chat_history).first()
 
-class CrawledDomainRepository(Repository[CrawledDomain]):
+class CrawledDomainRepository(TenancyRepository):
     def __init__(self, db: Session):
         super().__init__(db, CrawledDomain)
 
@@ -154,7 +122,7 @@ class CrawledDomainRepository(Repository[CrawledDomain]):
             return existing
         return self.create({"domain": domain})
 
-class DocumentRepository(Repository[Document]):
+class DocumentRepository(TenancyRepository):
     def __init__(self, db: Session):
         super().__init__(db, Document)
 
@@ -167,7 +135,7 @@ class DocumentRepository(Repository[Document]):
     def search_by_title(self, query: str) -> List[Document]:
         return self.db.query(Document).filter(Document.title.ilike(f"%{query}%")).all()
 
-class CrawlJobsRepository(Repository[CrawlJobs]):
+class CrawlJobsRepository(RepositoryBase[CrawlJobs]):
     def __init__(self, db: Session):
         super().__init__(db, CrawlJobs)
 
@@ -192,7 +160,7 @@ class CrawlJobsRepository(Repository[CrawlJobs]):
             return self.update(job.id, {"status": current_status})
         return None
 
-    def complete_job(self, job_id: str, status: dict = None) -> Optional[CrawlJobs]:
+    def complete_job(self, job_id: str, status: dict|None = None) -> Optional[CrawlJobs]:
         """Mark a job as completed and update its status"""
         job = self.get_by_job_id(job_id)
         if job:
@@ -223,7 +191,7 @@ class CrawlJobsRepository(Repository[CrawlJobs]):
         """Get the most recent crawl jobs"""
         return self.db.query(CrawlJobs).order_by(CrawlJobs.started_at.desc()).limit(limit).all()
 
-class InstructionRepository(Repository[Instruction]):
+class InstructionRepository(TenancyRepository):
     def __init__(self, db: Session):
         super().__init__(db, Instruction)
 

@@ -1,16 +1,11 @@
 from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 from database.models import Workflow
+from database.repositories.tenancy_repository import TenancyRepository
 
-class WorkflowRepository:
+class WorkflowRepository(TenancyRepository):
     def __init__(self, db: Session):
-        self.db = db
-
-    def create(self, workflow: Workflow) -> Workflow:
-        self.db.add(workflow)
-        self.db.commit()
-        self.db.refresh(workflow)
-        return workflow
+        super().__init__(db, Workflow)
 
     def get_by_id(self, workflow_id: int) -> Optional[Workflow]:
         return self.db.query(Workflow).filter(Workflow.id == workflow_id).first()
@@ -20,23 +15,6 @@ class WorkflowRepository:
 
     def get_all(self) -> List[Workflow]:
         return self.db.query(Workflow).all()
-
-    def update(self, workflow_id: int, workflow_data: dict) -> Optional[Workflow]:
-        workflow = self.get_by_id(workflow_id)
-        if workflow:
-            for key, value in workflow_data.items():
-                setattr(workflow, key, value)
-            self.db.commit()
-            self.db.refresh(workflow)
-        return workflow
-
-    def delete(self, workflow_id: int) -> bool:
-        workflow = self.get_by_id(workflow_id)
-        if workflow:
-            self.db.delete(workflow)
-            self.db.commit()
-            return True
-        return False
 
     def get_active_workflows(self) -> List[Workflow]:
         return self.db.query(Workflow).filter(Workflow.status == True).all()

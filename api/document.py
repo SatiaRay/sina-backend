@@ -21,6 +21,7 @@ from database.models import get_db
 from database.repository import DocumentRepository, CrawledDomainRepository
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.vector_store import VectorStore
+from api.auth import get_current_user
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -36,6 +37,7 @@ class DocumentBase(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     vector_id: Optional[str] = None
+    workspace_id: Optional[int] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -129,27 +131,54 @@ def clean_domain(url: str) -> str:
 
 # Create a new document
 @router.post("/", response_model=DocumentResponse)
-def create_document(document: DocumentCreate, db: Session = Depends(get_db)):
+def create_document(document: DocumentCreate, db: Session = Depends(get_db), current_user: Any = Depends(get_current_user)):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
     
-    # Verify domain exists
-    domain = domain_repo.get(document.domain_id)
-    if not domain:
-        raise HTTPException(status_code=400, detail="Domain not found")
-    
+    # Set workspace_id if not provided
+    doc_data = document.model_dump()
+    if not doc_data.get("workspace_id"):
+        if hasattr(current_user, "current_workspace_id") and current_user.current_workspace_id:
+            doc_data["workspace_id"] = current_user.current_workspace_id
+        else:
+            raise HTTPException(status_code=400, detail="workspace_id must be provided or selected by user.")
+
+    # Verify domain exists if provided
+    domain = None
+    if doc_data.get("domain_id"):
+        domain = domain_repo.get(doc_data["domain_id"])
+        if not domain:
+            raise HTTPException(status_code=400, detail="Domain not found")
+
     # Create document
-    created_doc = document_repo.create(document.model_dump())
+    created_doc = document_repo.create(doc_data)
+    # Ensure required fields are present and not SQLAlchemy Column objects
+    def get_value(obj, attr):
+        value = getattr(obj, attr, None)
+        # If value is a SQLAlchemy Column, get from instance
+        if hasattr(value, 'expression') and hasattr(obj, '__table__'):
+            value = getattr(obj, attr, None)
+        return value
+
+    id_val = get_value(created_doc, 'id')
+    title_val = get_value(created_doc, 'title')
+    html_val = get_value(created_doc, 'html')
+    markdown_val = get_value(created_doc, 'markdown')
+    created_at_val = get_value(created_doc, 'created_at')
+    updated_at_val = get_value(created_doc, 'updated_at')
+    if None in [id_val, title_val, html_val, markdown_val, created_at_val, updated_at_val]:
+        raise HTTPException(status_code=500, detail="Document creation failed: missing required fields.")
     return DocumentResponse(
-        id=created_doc.id,
-        title=created_doc.title,
-        html=created_doc.html,
-        markdown=created_doc.markdown,
-        uri=created_doc.uri,
-        domain_id=created_doc.domain_id,
-        created_at=created_doc.created_at,
-        updated_at=created_doc.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        id=int(id_val),
+        title=str(title_val),
+        html=str(html_val),
+        markdown=str(markdown_val),
+        uri=get_value(created_doc, 'uri'),
+        domain_id=get_value(created_doc, 'domain_id'),
+        vector_id=get_value(created_doc, 'vector_id'),
+        created_at=created_at_val,
+        updated_at=updated_at_val,
+        domain=DomainInfo(id=int(domain.id), domain=str(domain.domain)) if domain else None
     )
 
 # Get manual documents with pagination
