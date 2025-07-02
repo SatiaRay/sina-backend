@@ -4,10 +4,10 @@ from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
-from database.models import get_db, User, SessionLocal, Workspace
+from database.models import get_db, User, SessionLocal, Workspace, WorkspaceUser
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -54,6 +54,16 @@ class UserLoginRequest(BaseModel):
             }
         }
 
+class WorkspaceResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    is_active: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
 class UserResponse(BaseModel):
     id: int
     email: str
@@ -63,6 +73,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_verified: bool
     created_at: datetime
+    current_workspace: Optional[WorkspaceResponse] = None
     
     class Config:
         from_attributes = True
@@ -122,7 +133,9 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    user = db.query(User).filter(User.email == token_data.email).first()
+    user = db.query(User).options(
+        joinedload(User.current_workspace)
+    ).filter(User.email == token_data.email).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -130,7 +143,7 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    if not user.is_active:
+    if not bool(user.is_active):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user"
@@ -194,6 +207,24 @@ async def register_user(
             )
             db.add(workspace)
             db.commit()
+            db.refresh(workspace)
+            
+            db_user.current_workspace_id = workspace.id
+            
+            # Add user to workspace through pivot table
+            workspace_user = WorkspaceUser(
+                workspace_id=workspace.id,
+                user_id=db_user.id,
+                role='owner'
+            )
+            db.add(workspace_user)
+            
+            # Set current workspace for the user
+            db_user.current_workspace_id = workspace.id
+            
+            db.commit()
+        # Refresh user to get current workspace
+        db.refresh(db_user)
         return db_user
     except Exception as e:
         db.rollback()
@@ -213,8 +244,10 @@ async def login_user(
     - **email**: User's email address
     - **password**: User's password
     """
-    # Find user by email
-    user = db.query(User).filter(User.email == user_data.email).first()
+    # Find user by email with current workspace
+    user = db.query(User).options(
+        joinedload(User.current_workspace)
+    ).filter(User.email == user_data.email).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -222,21 +255,21 @@ async def login_user(
         )
     
     # Verify password
-    if not verify_password(user_data.password, user.password_hash):
+    if not verify_password(user_data.password, str(user.password_hash)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
     
     # Check if user is active
-    if not user.is_active:
+    if not bool(user.is_active):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user account"
         )
     
     # Update last login
-    user.last_login = datetime.utcnow()
+    setattr(user, 'last_login', datetime.utcnow())
     db.commit()
     
     # Create access token

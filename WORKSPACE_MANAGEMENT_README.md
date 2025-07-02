@@ -273,7 +273,7 @@ Authorization: Bearer <your_jwt_token>
 ```
 
 **Response (200):**
-```json
+```json`
 {
   "id": 2,
   "name": "Another Workspace",
