@@ -68,28 +68,32 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("WebSocket connected")
 
-    data = await websocket.receive_bytes()
+    while True:
+        data = await websocket.receive_bytes()
 
-    filename = f"received_{uuid.uuid4().hex}.webm"
-    filepath = os.path.join('temp', filename)
+        filename = f"received_{uuid.uuid4().hex}.webm"
+        filepath = os.path.join('temp', filename)
 
-    # Ensure the directory exists
-    os.makedirs('temp', exist_ok=True)
+        # Ensure the directory exists
+        os.makedirs('temp', exist_ok=True)
 
-    try:
-        with open(filepath, "wb") as f:
-            f.write(data)
+        try:
+            with open(filepath, "wb") as f:
+                f.write(data)
 
-        await websocket.send_json({"event": "transcribing", "msg": "در حال تبدیل صدا به متن."})
+            await websocket.send_json({"event": "transcribing", "msg": "در حال تبدیل صدا به متن."})
 
-        # Transcribe using Whisper
-        trans = speech_to_text_model.transcribe(filepath)
+            # Transcribe using Whisper
+            trans = speech_to_text_model.transcribe(filepath)
 
-        await websocket.send_text(trans)
+            await websocket.send_json({"event": "transcribe_complete", "text": trans})
 
-    except Exception as e:
-        print(f"Error: {e}")
+        except Exception as e:
+            print(f"Error: {e}")
 
-    finally:
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        finally:
+            del trans
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            
+        
