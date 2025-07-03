@@ -11,3 +11,4 @@ temp/
 test.db
 mysql_data/
 *.db
+/chroma
