@@ -1,5 +1,6 @@
 import chromadb
-from chromadb.config import Settings
+from chromadb.api import AdminAPI, ClientAPI
+from chromadb.config import DEFAULT_DATABASE, DEFAULT_TENANT, Settings
 import os
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
@@ -8,44 +9,51 @@ from pathlib import Path
 import uuid
 from datetime import datetime
 from openai import OpenAI
+from util import database
 from util.event_bus import event_bus, VectorStoreEvent
 
 load_dotenv()
 
 class VectorStore:
-    def __init__(self):
+    def __init__(self, collection_name:str|None = None, tenant: str = DEFAULT_TENANT, database: str = DEFAULT_DATABASE):
         try:
-            # تنظیمات ChromaDB
-            self.persist_directory = os.getenv('CHROMA_PERSIST_DIRECTORY', './data/chroma')
-            self.collection_name = os.getenv('CHROMA_COLLECTION_NAME', 'satya_docs')
+            self.tenant = tenant
+            self.database = database
+            self.collection_name = collection_name or os.getenv('VECTOR_DEFAULT_COLLECTION')
             
-            # ایجاد دایرکتوری اگر وجود نداشت
-            os.makedirs(self.persist_directory, exist_ok=True)
-            
-            print(f"Initializing ChromaDB with directory: {self.persist_directory}")
             # ایجاد کلاینت ChromaDB
-            self.client = chromadb.PersistentClient(
-                path=self.persist_directory,
-                settings=Settings(
-                    anonymized_telemetry=False,
-                    allow_reset=True
-                )
-            )
+            self.client = self.get_client(chromadb.AdminClient())
             
             print("Creating or getting collection...")
             # ایجاد یا دریافت کالکشن
             self.__refresh()
             
-            # print("Initializing embedding model...")
-            # # مدل تبدیل متن به بردار
-            # self.embedding_model = SentenceTransformer(
-            #     os.getenv('EMBEDDING_MODEL', 'paraphrase-multilingual-MiniLM-L12-v2')
-            # )
             print("VectorStore initialization completed successfully")
             
         except Exception as e:
             print(f"Error initializing VectorStore: {str(e)}")
             raise
+        
+    def get_client(self, admin: AdminAPI):                        
+        self.__create_tenant_if_not_exists(admin)
+        
+        self.__create_database_if_not_exists(admin)
+        
+        client = chromadb.Client(database=self.database, tenant=self.tenant)
+            
+        return client
+    
+    def __create_tenant_if_not_exists(self, adminApi: AdminAPI):
+        try:
+            return adminApi.create_tenant(name=self.tenant)
+        except:
+            return adminApi.get_tenant(name=self.tenant)
+    
+    def __create_database_if_not_exists(self, adminApi: AdminAPI):
+        try:
+            return adminApi.create_database(name=self.database, tenant=self.tenant)
+        except:
+            return adminApi.get_database(name=self.database, tenant=self.tenant)
 
     def _get_or_create_collection(self):
         # ایجاد یا دریافت کالکشن
