@@ -5,12 +5,15 @@ from database.models import AiBot, User, Workspace, Document, Chat, Workflow, In
 from pydantic import BaseModel
 from datetime import datetime
 
+from database.vector_store import VectorStore
+from .auth import get_current_user
+
 router = APIRouter(prefix="/aibots", tags=["aibots"])
 
 # Pydantic Schemas
 class AiBotCreate(BaseModel):
     name: str
-    workspace_id: int
+    workspace_id: Optional[int] = None
     owner_id: int
 
 class AiBotUpdate(BaseModel):
@@ -48,9 +51,9 @@ class PaginatedAiBotResponse(BaseModel):
 
 # Create AiBot
 @router.post("/", response_model=AiBotOut)
-def create_aibot(aibot: AiBotCreate, db: Session = Depends(get_db)):
+def create_aibot(aibot: AiBotCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     # Validate workspace exists
-    workspace = db.query(Workspace).filter(Workspace.id == aibot.workspace_id).first()
+    workspace = db.query(Workspace).filter(Workspace.id == aibot.workspace_id).first() if aibot.workspace_id else user.current_workspace
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
     
@@ -59,9 +62,15 @@ def create_aibot(aibot: AiBotCreate, db: Session = Depends(get_db)):
     if not owner:
         raise HTTPException(status_code=400, detail="Owner must be a valid customer user.")
     
+    # Create new Bot's vector database
+    try:
+        VectorStore("docs", workspace.name, f"{aibot.name}_db")
+    except:
+        raise HTTPException(status_code=500, detail="Init database for new Ai Bot failed.")
+    
     # Check if owner has access to the workspace
     workspace_user = db.query(Workspace).filter(
-        Workspace.id == aibot.workspace_id,
+        Workspace.id == workspace.id,
         Workspace.owner_id == aibot.owner_id
     ).first()
     if not workspace_user:
@@ -70,7 +79,7 @@ def create_aibot(aibot: AiBotCreate, db: Session = Depends(get_db)):
     # Create AiBot
     new_aibot = AiBot(
         name=aibot.name,
-        workspace_id=aibot.workspace_id,
+        workspace_id=workspace.id,
         owner_id=aibot.owner_id
     )
     db.add(new_aibot)

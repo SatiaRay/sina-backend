@@ -225,6 +225,8 @@ async def register_user(
             db.commit()
         # Refresh user to get current workspace
         db.refresh(db_user)
+        print('#################***************##################')
+        print(db.query(User).all())
         return db_user
     except Exception as e:
         db.rollback()

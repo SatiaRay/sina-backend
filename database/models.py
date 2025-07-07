@@ -178,7 +178,6 @@ class Document(WorkspaceScopedModel):
     ai_markdown = Column(Boolean, default=False, comment="Indicates the document markdown generated with AI model or is simple text or html text output")
     uri = Column(String(255), nullable=True)
     domain_id = Column(Integer, ForeignKey("crawled_domains.id"), nullable=True)
-    vector_id = Column(String(255), nullable=True)
     type = Column(Enum('manual', 'crawl'), default="crawl")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
