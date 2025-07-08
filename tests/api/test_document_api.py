@@ -2,51 +2,54 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database.models import Base, Document, CrawledDomain, User, Workspace, AiBot
+from sqlalchemy.pool import StaticPool
+from database.models import Base, Document, CrawledDomain, User, Workspace, AiBot, get_db
 from api.document import router, vectorize_task, store_vector_document, get_vector_document
 from api.auth import router as auth_router
 from fastapi import FastAPI
-from database.models import get_db
 from unittest.mock import patch, MagicMock
 import uuid
 from fastapi import WebSocketDisconnect
 from fastapi import HTTPException
 import os
 
-# Create test database
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+# Create in-memory SQLite database for testing
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create test app
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+# Import app after setting up the database
 from api.main import app
-
-# Override the get_db dependency
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-app.dependency_overrides[get_db] = override_get_db
-
 
 client = TestClient(app)
 
 @pytest.fixture(scope="function")
 def db_session():
-    # Create the database and tables
-    Base.metadata.create_all(bind=engine)
-    
-    # Create a new session for the test
-    session = TestingSessionLocal()
+    """Create a fresh database session for each test"""
+    db = TestingSessionLocal()
+    # Patch the dependency to always yield this session
+    app.dependency_overrides[get_db] = lambda: (yield db)
     try:
-        yield session
+        yield db
     finally:
-        session.close()
-        # Drop all tables after the test
-        Base.metadata.drop_all(bind=engine)
+        # Clean up all data after each test
+        db.query(Document).delete()
+        db.query(CrawledDomain).delete()
+        db.query(AiBot).delete()
+        db.query(Workspace).delete()
+        db.query(User).delete()
+        db.commit()
+        db.close()
+        # Clear the override after the test
+        app.dependency_overrides.pop(get_db, None)
 
 @pytest.fixture(scope="function")
 def mock_redis():
@@ -69,7 +72,7 @@ def mock_job():
     return job
 
 @pytest.fixture(scope="function")
-def test_workspace(db_session: sessionmaker, auth_user):
+def test_workspace(db_session, auth_user):
     """Create a workspace for testing (owned by user)"""
     auth_headers, user = auth_user
     
@@ -124,10 +127,7 @@ def test_document(db_session, test_domain, test_aibot, auth_user):
 
 # Add fixture for authenticated customer user and token
 @pytest.fixture(scope="function")
-def auth_user(db_session, request):
-    if hasattr(request, "_cached_auth_user"):
-        return request._cached_auth_user
-
+def auth_user(db_session):
     email = f"customer_{uuid.uuid4()}@example.com"
     password = "securepassword123"
     # Register
@@ -154,9 +154,7 @@ def auth_user(db_session, request):
     db_session.close()
 
     auth_headers = {"Authorization": f"Bearer {token}"}
-    result = (auth_headers, user)
-    request._cached_auth_user = result
-    return result
+    return auth_headers, user
 
 def test_create_document(db_session, test_domain, test_aibot, auth_user):
     auth_headers, user = auth_user

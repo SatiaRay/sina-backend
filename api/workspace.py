@@ -7,7 +7,6 @@ from datetime import datetime
 from api.auth import get_current_user
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 import logging
-from tests.crawler.test_crawler import db_session
 from util.tenancy import WorkspaceTenancyManager
 from functools import wraps
 
@@ -192,18 +191,17 @@ def select_current_workspace(
     return ws
 
 # Endpoint to get the current workspace for the authenticated user
-@router.get("/current")
+@router.get("/current/me")
 def get_current_workspace(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
         logging.warning(f"DEBUG: current_workspace_id type={type(current_user.current_workspace_id)}, value={current_user.current_workspace_id}")
-        ws_id = getattr(current_user, 'current_workspace_id', None)
-        ws_id_int = int(ws_id)
-        if ws_id_int <= 0:
+        
+        if not current_user.current_workspace_id:
             return Response(content='{"detail": "No current workspace selected"}', status_code=404, media_type='application/json')
-        ws = db.query(Workspace).filter(Workspace.id == ws_id_int).first()
+        ws = db.query(Workspace).filter(Workspace.id == current_user.current_workspace_id).first()
         if not ws:
             return Response(content='{"detail": "Current workspace not found"}', status_code=404, media_type='application/json')
         return {

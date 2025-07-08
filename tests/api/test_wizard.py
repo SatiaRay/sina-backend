@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 from api.wizard import router
 from database.models import get_db
+from api.main import app
 
 # Mock data for testing
 MOCK_WIZARD = {
@@ -33,8 +34,13 @@ def mock_wizard_repo():
 def client(mock_db):
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_db] = lambda: mock_db
     return TestClient(app)
+
+@pytest.fixture(autouse=True)
+def _override_db(mock_db):
+    app.dependency_overrides[get_db] = lambda: mock_db
+    yield
+    app.dependency_overrides.pop(get_db, None)
 
 def test_get_root_wizards(client, mock_wizard_repo):
     # Arrange

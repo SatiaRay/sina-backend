@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from database.models import Base, User, Workspace, Document, AiBot, AiBotDocument, get_db
+from database.models import Base, User, Workspace, Document, AiBot, get_db
 from datetime import datetime
 import uuid
 from unittest.mock import patch
@@ -31,20 +31,15 @@ client = TestClient(app)
 @pytest.fixture(scope="function")
 def db():
     db = TestingSessionLocal()
-    # Patch the dependency to always yield this session
-    app.dependency_overrides[get_db] = lambda: (yield db)
     try:
         yield db
     finally:
-        db.query(AiBotDocument).delete()
         db.query(AiBot).delete()
         db.query(Document).delete()
         db.query(Workspace).delete()
         db.query(User).delete()
         db.commit()
         db.close()
-        # Optionally clear the override after the test
-        app.dependency_overrides[get_db] = lambda: (_ for _ in ()).throw(RuntimeError("No DB override set"))
 
 @pytest.fixture(scope="function")
 def test_workspace(db: sessionmaker, auth_user):
@@ -121,6 +116,12 @@ def auth_user(db):
     auth_headers = {"Authorization": f"Bearer {token}"}
     
     return auth_headers, user
+
+@pytest.fixture(autouse=True)
+def _override_db(db):
+    app.dependency_overrides[get_db] = lambda: (yield db)
+    yield
+    app.dependency_overrides.pop(get_db, None)
 
 class TestAiBotAPI:
     

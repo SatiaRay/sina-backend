@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from unittest.mock import patch
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import Request
 
 # Import your app and models
@@ -34,6 +34,7 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 # Create tables
 Base.metadata.create_all(bind=engine)
 
+# Add a per-test fixture for dependency override
 def override_get_db():
     """Override the database dependency for testing"""
     try:
@@ -42,8 +43,12 @@ def override_get_db():
     finally:
         db.close()
 
-# Override the database dependency
-app.dependency_overrides[get_db] = override_get_db
+import pytest
+@pytest.fixture(autouse=True)
+def _override_db():
+    app.dependency_overrides[get_db] = override_get_db
+    yield
+    app.dependency_overrides.pop(get_db, None)
 
 client = TestClient(app)
 
@@ -374,7 +379,7 @@ class TestAuthEndpoints:
         # Create an expired token
         expired_payload = {
             "sub": user_data["email"],
-            "exp": datetime.utcnow() - timedelta(minutes=1)  # Expired 1 minute ago
+            "exp": datetime.now(timezone.utc) - timedelta(minutes=1)  # Expired 1 minute ago
         }
         expired_token = jwt.encode(expired_payload, SECRET_KEY, algorithm=ALGORITHM)
         

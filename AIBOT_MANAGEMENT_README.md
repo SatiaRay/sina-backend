@@ -432,23 +432,6 @@ CREATE TABLE aibots (
 );
 ```
 
-### AiBotDocument Model (Association Table)
-```sql
-CREATE TABLE aibot_documents (
-    id INTEGER PRIMARY KEY AUTO_INCREMENT,
-    aibot_id INTEGER NOT NULL,
-    document_id INTEGER NOT NULL,
-    vectorize_id VARCHAR(255),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (aibot_id) REFERENCES aibots(id),
-    FOREIGN KEY (document_id) REFERENCES documents(id),
-    UNIQUE KEY _aibot_document_uc (aibot_id, document_id)
-);
-```
-
----
-
 ## Security Features
 
 ### Access Control

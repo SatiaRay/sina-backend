@@ -41,8 +41,15 @@ def override_get_db():
     finally:
         db.close()
 
-# Override the database dependency
-app.dependency_overrides[get_db] = override_get_db
+# Remove the global override:
+# app.dependency_overrides[get_db] = override_get_db
+
+import pytest
+@pytest.fixture(autouse=True)
+def _override_db():
+    app.dependency_overrides[get_db] = override_get_db
+    yield
+    app.dependency_overrides.pop(get_db, None)
 
 client = TestClient(app)
 
