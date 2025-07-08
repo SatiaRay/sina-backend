@@ -178,13 +178,15 @@ class Document(WorkspaceScopedModel):
     ai_markdown = Column(Boolean, default=False, comment="Indicates the document markdown generated with AI model or is simple text or html text output")
     uri = Column(String(255), nullable=True)
     domain_id = Column(Integer, ForeignKey("crawled_domains.id"), nullable=True)
+    aibot_id = Column(Integer, ForeignKey("aibots.id"), nullable=True)
+    vector_id = Column(String(255), nullable=True)
     type = Column(Enum('manual', 'crawl'), default="crawl")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     domain = relationship("CrawledDomain", back_populates="documents")
     workspace = relationship("Workspace", back_populates="documents")
-    aibots = relationship("AiBot", secondary="aibot_documents", back_populates="documents")
+    aibot = relationship("AiBot", back_populates="documents")
 
     @property
     def html(self):
@@ -277,17 +279,6 @@ class Instruction(WorkspaceScopedModel):
     def __repr__(self):
         return f"<Instruction(id={self.id}, label='{self.label}', workspace_id={self.workspace_id})>"
 
-# Association table for AiBot <-> Document with extra column vectorize_id
-class AiBotDocument(Base):
-    __tablename__ = 'aibot_documents'
-    id = Column(Integer, primary_key=True, index=True)
-    aibot_id = Column(Integer, ForeignKey('aibots.id'), nullable=False)
-    document_id = Column(Integer, ForeignKey('documents.id'), nullable=False)
-    vectorize_id = Column(String(255), nullable=True, comment="Vectorized document id in Chroma DB")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    __table_args__ = (UniqueConstraint('aibot_id', 'document_id', name='_aibot_document_uc'),)
-
 # AiBot model
 class AiBot(BaseModel):
     __tablename__ = 'aibots'
@@ -298,7 +289,7 @@ class AiBot(BaseModel):
     # Relationships
     workspace = relationship('Workspace', back_populates='aibots')
     owner = relationship('User', back_populates='owned_aibots')
-    documents = relationship('Document', secondary='aibot_documents', back_populates='aibots')
+    documents = relationship('Document', back_populates='aibot', cascade="all, delete-orphan")
     chats = relationship('Chat', back_populates='aibot', cascade="all, delete-orphan")
     workflows = relationship('Workflow', back_populates='aibot', cascade="all, delete-orphan")
     instructions = relationship('Instruction', back_populates='aibot', cascade="all, delete-orphan")

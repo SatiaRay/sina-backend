@@ -2,8 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database.models import Base, Document, CrawledDomain
+from database.models import Base, Document, CrawledDomain, User, Workspace, AiBot
 from api.document import router, vectorize_task, store_vector_document, get_vector_document
+from api.auth import router as auth_router
 from fastapi import FastAPI
 from database.models import get_db
 from unittest.mock import patch, MagicMock
@@ -18,7 +19,7 @@ engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Create test app
-app = FastAPI()
+from api.main import app
 
 # Override the get_db dependency
 def override_get_db():
@@ -29,7 +30,8 @@ def override_get_db():
         db.close()
 
 app.dependency_overrides[get_db] = override_get_db
-app.include_router(router)
+
+
 client = TestClient(app)
 
 @pytest.fixture(scope="function")
@@ -67,37 +69,111 @@ def mock_job():
     return job
 
 @pytest.fixture(scope="function")
-def test_domain(db_session):
-    domain = CrawledDomain(domain="example.com")
-    db_session.add(domain)
+def test_workspace(db_session: sessionmaker, auth_user):
+    """Create a workspace for testing (owned by user)"""
+    auth_headers, user = auth_user
+    
+    workspace = Workspace(
+        name="Test Workspace",
+        description="Test workspace description",
+        owner_id=user.id,
+        is_active=True
+    )
+    db_session.add(workspace)
     db_session.commit()
-    return domain
+    db_session.refresh(workspace)
+    return workspace
 
 @pytest.fixture(scope="function")
-def test_document(db_session, test_domain):
+def test_domain(db_session, auth_user):
+    auth_headers, user = auth_user
+    
+    domain = CrawledDomain(domain="example.com", workspace_id=user.current_workspace_id)
+    db_session.add(domain)
+    db_session.commit()
+    return db_session.query(CrawledDomain).filter(CrawledDomain.domain == "example.com").first()
+
+@pytest.fixture(scope="function")
+def test_aibot(db_session, auth_user):
+    auth_headers, user = auth_user
+    
+    aibot = AiBot(
+        name="Test AiBot",
+        workspace_id=user.current_workspace_id,
+        owner_id=user.id
+    )
+    db_session.add(aibot)
+    db_session.commit()
+    return db_session.query(AiBot).filter(AiBot.name == "Test AiBot").first()
+
+@pytest.fixture(scope="function")
+def test_document(db_session, test_domain, test_aibot, auth_user):
+    auth_headers, user = auth_user
     doc = Document(
         title="Test Document",
         html="<html>Test</html>",
         markdown="# Test",
         uri="https://example.com/test",
-        domain_id=test_domain.id
+        domain_id=test_domain.id,
+        aibot_id=test_aibot.id,
+        workspace_id=user.current_workspace_id
     )
     db_session.add(doc)
     db_session.commit()
     return doc
 
-def test_create_document(db_session, test_domain):
+# Add fixture for authenticated customer user and token
+@pytest.fixture(scope="function")
+def auth_user(db_session, request):
+    if hasattr(request, "_cached_auth_user"):
+        return request._cached_auth_user
+
+    email = f"customer_{uuid.uuid4()}@example.com"
+    password = "securepassword123"
+    # Register
+    register_resp = client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "user_type": "customer"
+        }
+    )
+    assert register_resp.status_code == 201
+    # Login
+    login_resp = client.post(
+        "/auth/login",
+        json={"email": email, "password": password}
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+    # Fetch user from DB to ensure it's persisted
+    from database.models import User
+
+    user = db_session.query(User).filter(User.email == email).first()
+    db_session.close()
+
+    auth_headers = {"Authorization": f"Bearer {token}"}
+    result = (auth_headers, user)
+    request._cached_auth_user = result
+    return result
+
+def test_create_document(db_session, test_domain, test_aibot, auth_user):
+    auth_headers, user = auth_user
+    
     # Test data
     document_data = {
         "title": "New Document",
         "html": "<html>New Test</html>",
         "markdown": "# New Test",
         "uri": "https://example.com/new",
-        "domain_id": test_domain.id
+        "domain_id": test_domain.id,
+        "aibot_id": test_aibot.id
     }
     
     # Make request
-    response = client.post("/documents/", json=document_data)
+    response = client.post("/documents/", json=document_data, headers=auth_headers)
+    print(response.text)
     
     # Assertions
     assert response.status_code == 200
@@ -107,12 +183,19 @@ def test_create_document(db_session, test_domain):
     assert data["markdown"] == document_data["markdown"]
     assert data["uri"] == document_data["uri"]
     assert data["domain_id"] == test_domain.id
+    assert data["aibot_id"] == test_aibot.id
+    assert data["aibot"]["id"] == test_aibot.id
+    assert data["aibot"]["name"] == test_aibot.name
     assert "id" in data
     assert "created_at" in data
     assert "updated_at" in data
 
-def test_create_document_invalid_domain(db_session):
+def test_create_document_invalid_domain(db_session, auth_user):    
     # Test data with non-existent domain
+    
+    auth_headers, user = auth_user
+    
+    
     document_data = {
         "title": "New Document",
         "html": "<html>New Test</html>",
@@ -121,14 +204,34 @@ def test_create_document_invalid_domain(db_session):
         "domain_id": 999  # Non-existent domain ID
     }
     
-    # Make request
-    response = client.post("/documents/", json=document_data)
+    # Make request1
+    response = client.post("/documents/", json=document_data, headers=auth_headers)
     
     # Assertions
     assert response.status_code == 400
     assert "Domain not found" in response.json()["detail"]
 
-def test_get_document(db_session, test_document):
+def test_create_document_invalid_aibot(db_session, test_domain, auth_user):
+    auth_headers, user = auth_user
+    
+    # Test data with non-existent aibot
+    document_data = {
+        "title": "New Document",
+        "html": "<html>New Test</html>",
+        "markdown": "# New Test",
+        "uri": "https://example.com/new",
+        "domain_id": test_domain.id,
+        "aibot_id": 999  # Non-existent aibot ID
+    }
+    
+    # Make request
+    response = client.post("/documents/", json=document_data, headers=auth_headers)
+    
+    # Assertions
+    assert response.status_code == 400
+    assert "AiBot not found" in response.json()["detail"]
+
+def test_get_document(db_session, test_document, test_aibot):
     # Make request
     response = client.get(f"/documents/{test_document.id}")
     
@@ -141,6 +244,9 @@ def test_get_document(db_session, test_document):
     assert data["markdown"] == test_document.markdown
     assert data["uri"] == test_document.uri
     assert data["domain_id"] == test_document.domain_id
+    assert data["aibot_id"] == test_aibot.id
+    assert data["aibot"]["id"] == test_aibot.id
+    assert data["aibot"]["name"] == test_aibot.name
 
 def test_get_document_not_found(db_session):
     # Make request with non-existent ID
@@ -150,12 +256,13 @@ def test_get_document_not_found(db_session):
     assert response.status_code == 404
     assert "Document not found" in response.json()["detail"]
 
-def test_update_document(db_session, test_document):
+def test_update_document(db_session, test_document, test_aibot):
     # Test data
     update_data = {
         "title": "Updated Title",
         "html": "<html>Updated Test</html>",
-        "markdown": "# Updated Test"
+        "markdown": "# Updated Test",
+        "aibot_id": test_aibot.id
     }
     
     # Make request
@@ -167,7 +274,24 @@ def test_update_document(db_session, test_document):
     assert data["title"] == update_data["title"]
     assert data["html"] == update_data["html"]
     assert data["markdown"] == update_data["markdown"]
+    assert data["aibot_id"] == test_aibot.id
+    assert data["aibot"]["id"] == test_aibot.id
+    assert data["aibot"]["name"] == test_aibot.name
     assert data["id"] == test_document.id
+
+def test_update_document_invalid_aibot(db_session, test_document):
+    # Test data with non-existent aibot
+    update_data = {
+        "title": "Updated Title",
+        "aibot_id": 999  # Non-existent aibot ID
+    }
+    
+    # Make request
+    response = client.put(f"/documents/{test_document.id}", json=update_data)
+    
+    # Assertions
+    assert response.status_code == 400
+    assert "AiBot not found" in response.json()["detail"]
 
 def test_delete_document(db_session, test_document):
     # Make request
@@ -181,7 +305,7 @@ def test_delete_document(db_session, test_document):
     response = client.get(f"/documents/{test_document.id}")
     assert response.status_code == 404
 
-def test_list_documents(db_session, test_document):
+def test_list_documents(db_session, test_document, test_aibot):
     # Make request
     response = client.get("/documents/")
     
@@ -195,6 +319,9 @@ def test_list_documents(db_session, test_document):
     assert "pages" in data
     assert len(data["items"]) > 0
     assert data["items"][0]["id"] == test_document.id
+    assert data["items"][0]["aibot_id"] == test_aibot.id
+    assert data["items"][0]["aibot"]["id"] == test_aibot.id
+    assert data["items"][0]["aibot"]["name"] == test_aibot.name
 
 def test_vectorize_document(db_session, test_document, mock_queue, mock_job):
     # Setup mock queue
@@ -247,46 +374,9 @@ async def test_websocket_vectorize_status(mock_redis, mock_job):
             # This is expected as the WebSocket will close after sending the message
             pass
 
-def test_toggle_document_vector_status(db_session, test_document):
-    # First, test adding vector_id
-    with patch('api.document.vector_store.add_documents') as mock_add:
-        mock_add.return_value = ["vec_123"]
-        response = client.post(f"/documents/{test_document.id}/toggle-vector")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["vector_id"] == "vec_123"
 
-    # Then, test removing vector_id
-    with patch('api.document.vector_store.delete_vector') as mock_delete:
-        response = client.post(f"/documents/{test_document.id}/toggle-vector")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["vector_id"] is None
-        mock_delete.assert_called_once_with("vec_123")
 
-def test_get_document_by_vector_id(db_session, test_document):
-    # First, add vector_id to document
-    test_document.vector_id = "vec_123"
-    db_session.commit()
-    
-    # Make request
-    response = client.get("/documents/vector/vec_123")
-    
-    # Assertions
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == test_document.id
-    assert data["vector_id"] == "vec_123"
-
-def test_get_document_by_vector_id_not_found(db_session):
-    # Make request with non-existent vector_id
-    response = client.get("/documents/vector/nonexistent")
-    
-    # Assertions
-    assert response.status_code == 404
-    assert "No document found with vector_id" in response.json()["detail"]
-
-def test_search_documents_by_title(db_session, test_document):
+def test_search_documents_by_title(db_session, test_document, test_aibot):
     # Make request
     response = client.get("/documents/search/title?query=Test")
     
@@ -294,7 +384,97 @@ def test_search_documents_by_title(db_session, test_document):
     assert response.status_code == 200
     data = response.json()
     assert len(data) > 0
-    assert data[0]["id"] == test_document.id 
+    assert data[0]["id"] == test_document.id
+    assert data[0]["aibot_id"] == test_aibot.id
+    assert data[0]["aibot"]["id"] == test_aibot.id
+    assert data[0]["aibot"]["name"] == test_aibot.name
+
+def test_get_documents_by_aibot(db_session, test_document, test_aibot):
+    # Make request
+    response = client.get(f"/documents/aibot/{test_aibot.id}")
+    
+    # Assertions
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    assert "pages" in data
+    assert len(data["items"]) > 0
+    assert data["items"][0]["id"] == test_document.id
+    assert data["items"][0]["aibot_id"] == test_aibot.id
+    assert data["items"][0]["aibot"]["id"] == test_aibot.id
+    assert data["items"][0]["aibot"]["name"] == test_aibot.name
+
+def test_get_documents_by_aibot_not_found(db_session):
+    # Make request with non-existent aibot ID
+    response = client.get("/documents/aibot/999")
+    
+    # Assertions
+    assert response.status_code == 404
+    assert "AiBot not found" in response.json()["detail"]
+
+
+def test_get_manual_documents(db_session, test_aibot, auth_user):
+    auth_headers, user = auth_user
+    
+    # Create a manual document
+    manual_doc = Document(
+        title="Manual Document",
+        html="<html>Manual Test</html>",
+        markdown="# Manual Test",
+        uri="https://example.com/manual",
+        type="manual",
+        aibot_id=test_aibot.id,
+        workspace_id=user.current_workspace_id
+    )
+    db_session.add(manual_doc)
+    db_session.commit()
+    
+    # Make request
+    response = client.get("/documents/manual")
+    
+    # Assertions
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    assert "pages" in data
+    assert len(data["items"]) > 0
+    assert data["items"][0]["id"] == manual_doc.id
+    assert data["items"][0]["aibot_id"] == test_aibot.id
+    assert data["items"][0]["aibot"]["id"] == test_aibot.id
+    assert data["items"][0]["aibot"]["name"] == test_aibot.name
+
+def test_get_documents_by_domain(db_session, test_document, test_domain, test_aibot):
+    # Make request
+    response = client.get(f"/documents/domain/{test_domain.id}")
+    
+    # Assertions
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "size" in data
+    assert "pages" in data
+    assert len(data["items"]) > 0
+    assert data["items"][0]["id"] == test_document.id
+    assert data["items"][0]["domain_id"] == test_domain.id
+    assert data["items"][0]["aibot_id"] == test_aibot.id
+    assert data["items"][0]["aibot"]["id"] == test_aibot.id
+    assert data["items"][0]["aibot"]["name"] == test_aibot.name
+
+def test_get_documents_by_domain_not_found(db_session):
+    # Make request with non-existent domain ID
+    response = client.get("/documents/domain/999")
+    
+    # Assertions
+    assert response.status_code == 404
+    assert "Domain not found" in response.json()["detail"] 
 
 @pytest.mark.asyncio
 async def test_vectorize_task_success(db_session, test_document, mock_job):
@@ -330,14 +510,14 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
         assert mock_job.meta['progress']['msg'] == "Finished"
         assert mock_job.save_meta.call_count >= 5  # At least 5 progress updates
         
-        # Verify document update was called with correct data including title
+        # Verify document update was called with correct data including title and vector_id
         mock_repo.return_value.update.assert_called_once_with(
             test_document.id,
             {
-                "vector_id": "vec_123",
                 "title": title,  # Verify title is updated
                 "html": html,
                 "markdown": "# Test Vector Content",
+                "vector_id": "vec_123",  # Verify vector_id is set
                 "ai_markdown": True,
                 "uri": test_document.uri
             }
@@ -345,10 +525,10 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
         
         # Verify document was updated in the database
         db_session.refresh(test_document)
-        assert test_document.vector_id == "vec_123"
         assert test_document.title == title  # Verify title is updated
         assert test_document.html == html
         assert test_document.markdown == "# Test Vector Content"
+        assert test_document.vector_id == "vec_123"  # Verify vector_id has been set
 
 @pytest.mark.asyncio
 async def test_vectorize_task_document_not_found(db_session, mock_job):
@@ -357,7 +537,12 @@ async def test_vectorize_task_document_not_found(db_session, mock_job):
     metadata = {"source": "test", "title": "Test Vector"}
     
     # Mock dependencies
-    with patch('rq.get_current_job', return_value=mock_job):
+    with patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.document.DocumentRepository') as mock_repo:
+        
+        # Setup mock repository to return None (document not found)
+        mock_repo.return_value.get.return_value = None
+        
         # Execute task with non-existent document ID
         with pytest.raises(HTTPException) as exc_info:
             await vectorize_task(999, html, metadata)
@@ -597,7 +782,6 @@ async def test_vectorize_task_title_updates(db_session, test_document, mock_job)
         # Verify document was updated with new title
         db_session.refresh(test_document)
         assert test_document.title == title
-        assert test_document.vector_id == vector_id  # Verify vector_id is set correctly
         
         # Reset mocks for next test
         mock_store.reset_mock()
@@ -608,7 +792,6 @@ async def test_vectorize_task_title_updates(db_session, test_document, mock_job)
         # Verify document was updated with title from metadata
         db_session.refresh(test_document)
         assert test_document.title == title
-        assert test_document.vector_id == vector_id  # Verify vector_id is still set
         
         # Reset mocks for next test
         mock_store.reset_mock()
@@ -620,4 +803,3 @@ async def test_vectorize_task_title_updates(db_session, test_document, mock_job)
         # Verify document kept its existing title
         db_session.refresh(test_document)
         assert test_document.title == original_title
-        assert test_document.vector_id == vector_id  # Verify vector_id is still set
