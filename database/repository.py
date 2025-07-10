@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session, Query
 from typing import List, Optional, Type, TypeVar, Generic
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .models import BaseModel, Chat, ChatHistory, Document, Wizard, CrawledDomain, CrawlJobs, Instruction
 from .repositories.repository_base import RepositoryBase       
@@ -164,7 +164,7 @@ class CrawlJobsRepository(RepositoryBase[CrawlJobs]):
         """Mark a job as completed and update its status"""
         job = self.get_by_job_id(job_id)
         if job:
-            update_data = {"end_at": datetime.utcnow()}
+            update_data = {"end_at": datetime.now(timezone.utc)}
             if status:
                 current_status = job.status or {}
                 current_status.update(status)
@@ -177,7 +177,7 @@ class CrawlJobsRepository(RepositoryBase[CrawlJobs]):
         job = self.get_by_job_id(job_id)
         if job:
             current_logs = job.logs or ""
-            timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             new_log = f"[{timestamp}] {log_message}\n"
             updated_logs = current_logs + new_log
             return self.update(job.id, {"logs": updated_logs})

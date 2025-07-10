@@ -1,16 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from database.models import AiBot, User, Workspace, Document, Chat, Workflow, Instruction, AiBotDocument, SessionLocal, get_db
+from database.models import AiBot, User, Workspace, Document, Chat, Workflow, Instruction, SessionLocal, get_db
 from pydantic import BaseModel
 from datetime import datetime
+
+from database.vector_store import VectorStore
+from .auth import get_current_user
 
 router = APIRouter(prefix="/aibots", tags=["aibots"])
 
 # Pydantic Schemas
 class AiBotCreate(BaseModel):
     name: str
-    workspace_id: int
+    workspace_id: Optional[int] = None
     owner_id: int
 
 class AiBotUpdate(BaseModel):
@@ -48,9 +51,9 @@ class PaginatedAiBotResponse(BaseModel):
 
 # Create AiBot
 @router.post("/", response_model=AiBotOut)
-def create_aibot(aibot: AiBotCreate, db: Session = Depends(get_db)):
+def create_aibot(aibot: AiBotCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     # Validate workspace exists
-    workspace = db.query(Workspace).filter(Workspace.id == aibot.workspace_id).first()
+    workspace = db.query(Workspace).filter(Workspace.id == aibot.workspace_id).first() if aibot.workspace_id else user.current_workspace
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
     
@@ -59,9 +62,15 @@ def create_aibot(aibot: AiBotCreate, db: Session = Depends(get_db)):
     if not owner:
         raise HTTPException(status_code=400, detail="Owner must be a valid customer user.")
     
+    # Create new Bot's vector database
+    try:
+        VectorStore("docs", workspace.name, f"{aibot.name}_db")
+    except:
+        raise HTTPException(status_code=500, detail="Init database for new Ai Bot failed.")
+    
     # Check if owner has access to the workspace
     workspace_user = db.query(Workspace).filter(
-        Workspace.id == aibot.workspace_id,
+        Workspace.id == workspace.id,
         Workspace.owner_id == aibot.owner_id
     ).first()
     if not workspace_user:
@@ -70,7 +79,7 @@ def create_aibot(aibot: AiBotCreate, db: Session = Depends(get_db)):
     # Create AiBot
     new_aibot = AiBot(
         name=aibot.name,
-        workspace_id=aibot.workspace_id,
+        workspace_id=workspace.id,
         owner_id=aibot.owner_id
     )
     db.add(new_aibot)
@@ -145,9 +154,6 @@ def delete_aibot(aibot_id: int, db: Session = Depends(get_db)):
     if not aibot:
         raise HTTPException(status_code=404, detail="AiBot not found")
     
-    # Delete associated AiBotDocument relationships
-    db.query(AiBotDocument).filter(AiBotDocument.aibot_id == aibot_id).delete()
-    
     # Delete the AiBot (cascade will handle related records)
     db.delete(aibot)
     db.commit()
@@ -170,35 +176,40 @@ def add_document_to_aibot(aibot_id: int, document: AiBotDocumentAdd, db: Session
         raise HTTPException(status_code=404, detail="Document not found or not accessible")
     
     # Check if document is already associated with this AiBot
-    existing = db.query(AiBotDocument).filter_by(
-        aibot_id=aibot_id, 
-        document_id=document.document_id
-    ).first()
-    if existing:
+    if doc.aibot_id == aibot_id:
         raise HTTPException(status_code=400, detail="Document already associated with this AiBot")
     
-    # Create association
-    aibot_doc = AiBotDocument(
-        aibot_id=aibot_id,
-        document_id=document.document_id,
-        vectorize_id=document.vectorize_id
-    )
-    db.add(aibot_doc)
+    # Update document to associate with this AiBot
+    doc.aibot_id = aibot_id
+    doc.vector_id = document.vectorize_id
     db.commit()
-    db.refresh(aibot_doc)
-    return aibot_doc
+    db.refresh(doc)
+    
+    return AiBotDocumentOut(
+        document_id=doc.id,
+        vectorize_id=doc.vector_id,
+        created_at=doc.updated_at
+    )
 
 # Remove document from AiBot
 @router.delete("/{aibot_id}/documents/{document_id}", status_code=204)
 def remove_document_from_aibot(aibot_id: int, document_id: int, db: Session = Depends(get_db)):
-    aibot_doc = db.query(AiBotDocument).filter_by(
-        aibot_id=aibot_id, 
-        document_id=document_id
+    # Validate AiBot exists
+    aibot = db.query(AiBot).filter(AiBot.id == aibot_id).first()
+    if not aibot:
+        raise HTTPException(status_code=404, detail="AiBot not found")
+    
+    # Find document and check if it's associated with this AiBot
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.aibot_id == aibot_id
     ).first()
-    if not aibot_doc:
+    if not doc:
         raise HTTPException(status_code=404, detail="Document not associated with this AiBot")
     
-    db.delete(aibot_doc)
+    # Remove association
+    doc.aibot_id = None
+    doc.vector_id = None
     db.commit()
     return
 
@@ -210,7 +221,18 @@ def list_aibot_documents(aibot_id: int, db: Session = Depends(get_db)):
     if not aibot:
         raise HTTPException(status_code=404, detail="AiBot not found")
     
-    aibot_docs = db.query(AiBotDocument).filter_by(aibot_id=aibot_id).all()
+    # Get documents associated with this AiBot
+    documents = db.query(Document).filter(Document.aibot_id == aibot_id).all()
+    
+    # Convert to AiBotDocumentOut format
+    aibot_docs = []
+    for doc in documents:
+        aibot_docs.append(AiBotDocumentOut(
+            document_id=doc.id,
+            vectorize_id=doc.vector_id,
+            created_at=doc.updated_at
+        ))
+    
     return aibot_docs
 
 # Get AiBot statistics
@@ -221,7 +243,7 @@ def get_aibot_stats(aibot_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="AiBot not found")
     
     # Count related records
-    documents_count = db.query(AiBotDocument).filter_by(aibot_id=aibot_id).count()
+    documents_count = db.query(Document).filter(Document.aibot_id == aibot_id).count()
     chats_count = db.query(Chat).filter_by(aibot_id=aibot_id).count()
     workflows_count = db.query(Workflow).filter_by(aibot_id=aibot_id).count()
     instructions_count = db.query(Instruction).filter_by(aibot_id=aibot_id).count()

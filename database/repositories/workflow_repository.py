@@ -27,11 +27,10 @@ class WorkflowRepository(TenancyRepository):
             List[Dict[str, Any]]: List of flows from active workflows
         """
         try:
-            # Query active workflows and extract only their flows
-            workflows = self.db.query(Workflow.flow).filter(Workflow.status == True).all()
-                
+            # Query active workflows as objects, not just the flow column
+            workflows = self.db.query(Workflow).filter(Workflow.status == True).all()
             # Extract flows from the query results
-            return [workflow[0] for workflow in workflows]
+            return [workflow.flow for workflow in workflows]
         except Exception as e:
             self.db.rollback()
             raise e 

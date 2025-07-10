@@ -2,42 +2,96 @@ import pytest
 from unittest.mock import patch, MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database.models import Base, Document, CrawledDomain
+from database.models import Base, Document, CrawledDomain, get_db
 from crawler.crawler import crawl
 from urllib.parse import urlparse
+from sqlalchemy.pool import StaticPool
+from fastapi.testclient import TestClient
+import uuid
 
-# Create test database
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_crawler.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+from provider.service_container import container
+
+# Create in-memory SQLite database for testing
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+# Import app after setting up the database
+from api.main import app
+
+client = TestClient(app)
 
 @pytest.fixture(scope="function")
 def db_session():
-    # Create tables
-    Base.metadata.create_all(bind=engine)
-    
-    # Create session
-    session = TestingSessionLocal()
+    """Create a fresh database session for each test"""
+    db = TestingSessionLocal()
+    # Patch the dependency to always yield this session
+    app.dependency_overrides[get_db] = lambda: (yield db)
     try:
-        yield session
+        yield db
     finally:
-        session.close()
-        # Drop tables after test
-        Base.metadata.drop_all(bind=engine)
+        # Clean up all data after each test
+        db.query(CrawledDomain).delete()
+        db.query(Document).delete()
+        db.commit()
+        db.close()
+        # Clear the override after the test
+        app.dependency_overrides.pop(get_db, None)
+        
+    # Add fixture for authenticated customer user and token
+@pytest.fixture(scope="function")
+def auth_user(db_session):
+    email = f"customer_{uuid.uuid4()}@example.com"
+    password = "securepassword123"
+    # Register
+    register_resp = client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "user_type": "customer"
+        }
+    )
+    assert register_resp.status_code == 201
+    # Login
+    login_resp = client.post(
+        "/auth/login",
+        json={"email": email, "password": password}
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+    # Fetch user from DB to ensure it's persisted
+    from database.models import User
+
+    user = db_session.query(User).filter(User.email == email).first()
+    db_session.close()
+
+    auth_headers = {"Authorization": f"Bearer {token}"}
+    return auth_headers, user
 
 @pytest.fixture(scope="function")
 def mock_requests():
     with patch('requests.get') as mock:
         yield mock
 
-def test_recursive_crawl_with_existing_initial_url(db_session, mock_requests):
+def test_recursive_crawl_with_existing_initial_url(db_session, mock_requests, auth_user):
     """Test that recursive crawling works even when the initial URL is already crawled"""
+    auth_headers, user = auth_user
+    
     # Setup test data
     test_url = "https://example.com"
     test_domain = "example.com"
     
     # Create domain record
-    domain = CrawledDomain(domain=test_domain)
+    domain = CrawledDomain(domain=test_domain, workspace_id=user.current_workspace_id)
     db_session.add(domain)
     db_session.commit()
     domain_id = domain.id
@@ -48,7 +102,8 @@ def test_recursive_crawl_with_existing_initial_url(db_session, mock_requests):
         uri="/",
         html="<html><body><a href='/page1'>Link 1</a><a href='/page2'>Link 2</a></body></html>",
         markdown="Initial Page",
-        domain_id=domain_id
+        domain_id=domain_id,
+        workspace_id=user.current_workspace_id
     )
     db_session.add(initial_doc)
     db_session.commit()
@@ -78,6 +133,8 @@ def test_recursive_crawl_with_existing_initial_url(db_session, mock_requests):
     # Create mock job for progress tracking
     mock_job = MagicMock()
     mock_job.meta = {}
+    
+    container.bind('auth_user', user)
     
     # Run crawler in recursive mode
     doc_ids = crawl(test_url, recursive=True, db=db_session, job=mock_job)

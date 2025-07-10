@@ -51,7 +51,7 @@ class WorkspaceScopedModel(BaseModel):
 
     @declared_attr
     def workspace(cls):
-        return relationship("Workspace", backref="scoped_models")
+        return relationship("Workspace", back_populates=cls.__tablename__)
 
 # User model for authentication
 class User(BaseModel):
@@ -61,7 +61,7 @@ class User(BaseModel):
     password_hash = Column(String(255), nullable=False)
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
-    user_type = Column(Enum('admin', 'supporter', 'customer', name='user_type_enum'), default='customer', nullable=False)
+    user_type = Column(Enum('admin', 'supporter', 'customer', 'operator', name='user_type_enum'), default='customer', nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     last_login = Column(DateTime, nullable=True)
@@ -135,7 +135,6 @@ class Wizard(WorkspaceScopedModel):
         remote_side=lambda: [Wizard.id],
         backref="children"
     )
-    workspace = relationship("Workspace", back_populates="wizards")
     
     def __repr__(self):
         return f"<Wizard(id={self.id}, title='{self.title}', workspace_id={self.workspace_id})>"
@@ -146,7 +145,6 @@ class CrawledDomain(WorkspaceScopedModel):
     
     domain = Column(String(255), nullable=False)  # Removed unique constraint for multi-tenant
     documents = relationship("Document", back_populates="domain")
-    workspace = relationship("Workspace", back_populates="crawled_domains")
     
     def __repr__(self):
         return f"<CrawledDomain(id={self.id}, domain='{self.domain}', workspace_id={self.workspace_id})>"
@@ -163,7 +161,6 @@ class CrawlJobs(WorkspaceScopedModel):
     status = Column(JSON, nullable=True)
     started_at = Column(DateTime, default=datetime.utcnow)
     end_at = Column(DateTime, nullable=True)
-    workspace = relationship("Workspace", back_populates="crawl_jobs")
     
     def __repr__(self):
         return f"<CrawlJobs(id={self.id}, job_id='{self.job_id}', workspace_id={self.workspace_id})>"
@@ -178,14 +175,14 @@ class Document(WorkspaceScopedModel):
     ai_markdown = Column(Boolean, default=False, comment="Indicates the document markdown generated with AI model or is simple text or html text output")
     uri = Column(String(255), nullable=True)
     domain_id = Column(Integer, ForeignKey("crawled_domains.id"), nullable=True)
+    aibot_id = Column(Integer, ForeignKey("aibots.id"), nullable=True)
     vector_id = Column(String(255), nullable=True)
     type = Column(Enum('manual', 'crawl'), default="crawl")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     domain = relationship("CrawledDomain", back_populates="documents")
-    workspace = relationship("Workspace", back_populates="documents")
-    aibots = relationship("AiBot", secondary="aibot_documents", back_populates="documents")
+    aibot = relationship("AiBot", back_populates="documents")
 
     @property
     def html(self):
@@ -256,7 +253,6 @@ class Workflow(WorkspaceScopedModel):
     name = Column(String(255), nullable=False)  # Removed unique constraint for multi-tenant
     flow = Column(JSON)
     status = Column(Boolean, default=True)
-    workspace = relationship("Workspace", back_populates="workflows")
     aibot_id = Column(Integer, ForeignKey('aibots.id'), nullable=True)
     aibot = relationship("AiBot", back_populates="workflows")
     
@@ -271,23 +267,11 @@ class Instruction(WorkspaceScopedModel):
     status = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    workspace = relationship("Workspace", back_populates="instructions")
     aibot_id = Column(Integer, ForeignKey('aibots.id'), nullable=True)
     aibot = relationship("AiBot", back_populates="instructions")
     
     def __repr__(self):
         return f"<Instruction(id={self.id}, label='{self.label}', workspace_id={self.workspace_id})>"
-
-# Association table for AiBot <-> Document with extra column vectorize_id
-class AiBotDocument(Base):
-    __tablename__ = 'aibot_documents'
-    id = Column(Integer, primary_key=True, index=True)
-    aibot_id = Column(Integer, ForeignKey('aibots.id'), nullable=False)
-    document_id = Column(Integer, ForeignKey('documents.id'), nullable=False)
-    vectorize_id = Column(String(255), nullable=True, comment="Vectorized document id in Chroma DB")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    __table_args__ = (UniqueConstraint('aibot_id', 'document_id', name='_aibot_document_uc'),)
 
 # AiBot model
 class AiBot(BaseModel):
@@ -299,7 +283,7 @@ class AiBot(BaseModel):
     # Relationships
     workspace = relationship('Workspace', back_populates='aibots')
     owner = relationship('User', back_populates='owned_aibots')
-    documents = relationship('Document', secondary='aibot_documents', back_populates='aibots')
+    documents = relationship('Document', back_populates='aibot', cascade="all, delete-orphan")
     chats = relationship('Chat', back_populates='aibot', cascade="all, delete-orphan")
     workflows = relationship('Workflow', back_populates='aibot', cascade="all, delete-orphan")
     instructions = relationship('Instruction', back_populates='aibot', cascade="all, delete-orphan")

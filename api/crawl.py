@@ -4,8 +4,9 @@ from typing import Optional, List, Dict, Any
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
 import logging
+from api.auth import get_current_user
 from crawler.crawler import crawl
-from database.models import CrawlJobs, get_db
+from database.models import CrawlJobs, User, get_db
 from sqlalchemy.orm import Session
 from urllib.parse import urlparse, urlunparse
 from rq import Queue
@@ -21,6 +22,7 @@ import time
 import json
 from database.repository import DocumentRepository, CrawlJobsRepository
 from database.models import SessionLocal
+from provider.service_container import container
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -142,7 +144,7 @@ class PaginatedCrawlJobsResponse(BaseModel):
 @router.post("/crawl", response_model=CrawlResponse, tags=["Crawler"],
           summary="خزش یک URL",
           description="این اندپوینت یک URL را خزش کرده و محتوای آن را استخراج می‌کند")
-async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
+async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """
     خزش یک URL و استخراج محتوای آن
     
@@ -202,11 +204,12 @@ async def crawl_url(request: CrawlRequest, db: Session = Depends(get_db)):
             'save_in_vector': request.store_in_vector,
             'status': initial_status['msg'],  # Store only the status message
             'logs': json.dumps([initial_status]),  # Store full status history
-            'started_at': datetime.now(timezone.utc)
+            'started_at': datetime.now(timezone.utc),
+            'workspace_id': user.current_workspace_id
         })
         
         # Create RQ job with initial metadata
-        job = q.enqueue(crawl_task, request.url, request.recursive, request.store_in_vector, job_id=job_id)
+        job = q.enqueue(crawl_task, request.url, user, request.recursive, request.store_in_vector, job_id=job_id)
         job.meta = {
             'type': 'crawl',
             'url': str(request.url),
@@ -262,9 +265,11 @@ def initialize_job_metadata(job):
             {'original_error': str(e)}
         )
     
-def create_vectorization_batch(doc_ids, redis_con, db: Session = Depends(get_db)):
+def create_vectorization_batch(doc_ids, redis_con, user: User, db: Session = Depends(get_db)):
     """Create a batch of vectorization jobs for the given document IDs"""
     try:
+        container.bind('auth_user', user)
+        
         # Create database session and repository
         document_repo = DocumentRepository(db)
 
@@ -461,8 +466,10 @@ def update_crawl_job_status(crawl_job_id: int, status_obj: dict, db: Session):
     except Exception as e:
         logger.error(f"Error updating CrawlJob status: {str(e)}")
 
-def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False):
+def crawl_task(url: str, user: User, recursive: bool = False, store_in_vector: bool = False):
     """Main crawl task that orchestrates the crawling and vectorization process"""
+    container.bind('auth_user', user)
+    
     job = None
     db = None
     
@@ -493,7 +500,7 @@ def crawl_task(url: str, recursive: bool = False, store_in_vector: bool = False)
                 
                 # Create batch of vectorization jobs
                 redis_con = Redis(host=os.getenv('REDIS_HOST'))
-                batch_info = create_vectorization_batch(doc_ids, redis_con, db=db)
+                batch_info = create_vectorization_batch(doc_ids, redis_con, user=user, db=db)
                 
                 # Update parent job with batch information if job exists
                 if job:

@@ -31,7 +31,11 @@ def override_get_db():
 from api.main import app
 
 # Override the database dependency
-app.dependency_overrides[get_db] = override_get_db
+@pytest.fixture(autouse=True)
+def _override_db():
+    app.dependency_overrides[get_db] = override_get_db
+    yield
+    app.dependency_overrides.pop(get_db, None)
 
 client = TestClient(app)
 
@@ -69,31 +73,66 @@ def another_user(db: sessionmaker):
     db.refresh(user)
     return user
 
-def test_create_workspace(db, customer_user):
+# Add fixture for authenticated customer user and token
+@pytest.fixture(scope="function")
+def auth_user(db_session):
+    email = f"customer_{uuid.uuid4()}@example.com"
+    password = "securepassword123"
+    # Register
+    register_resp = client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "user_type": "customer"
+        }
+    )
+    assert register_resp.status_code == 201
+    # Login
+    login_resp = client.post(
+        "/auth/login",
+        json={"email": email, "password": password}
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+    # Fetch user from DB to ensure it's persisted
+    from database.models import User
+
+    user = db_session.query(User).filter(User.email == email).first()
+    db_session.close()
+
+    auth_headers = {"Authorization": f"Bearer {token}"}
+    return auth_headers, user
+
+def test_create_workspace(db, customer_user, auth_user):
     """Test creating a workspace"""
+    auth_headers, user = auth_user
+    
     workspace_data = {
         "name": "Test Workspace",
         "description": "A test workspace",
         "owner_id": customer_user.id
     }
     
-    response = client.post("/workspaces/", json=workspace_data)
+    response = client.post("/workspaces/", json=workspace_data, headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Test Workspace"
     assert data["owner_id"] == customer_user.id
     assert data["is_active"] is True
 
-def test_list_workspaces(db, customer_user):
+def test_list_workspaces(db, auth_user):
     """Test listing workspaces with pagination"""
+    auth_headers, user = auth_user
+    
     # Create multiple workspaces
-    ws1 = Workspace(name="WS1", owner_id=customer_user.id)
-    ws2 = Workspace(name="WS2", owner_id=customer_user.id)
-    ws3 = Workspace(name="WS3", owner_id=customer_user.id)
+    ws1 = Workspace(name="WS1", owner_id=user.id)
+    ws2 = Workspace(name="WS2", owner_id=user.id)
+    ws3 = Workspace(name="WS3", owner_id=user.id)
     db.add_all([ws1, ws2, ws3])
     db.commit()
     
-    response = client.get("/workspaces/")
+    response = client.get("/workspaces/", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert "workspaces" in data
@@ -107,25 +146,27 @@ def test_list_workspaces(db, customer_user):
     assert len(data["workspaces"]) >= 3
     assert any(w["name"] == "WS1" for w in data["workspaces"])
 
-def test_list_workspaces_pagination(db, customer_user):
+def test_list_workspaces_pagination(db, auth_user):
     """Test workspace pagination"""
+    auth_headers, user = auth_user
+    
     # Create 15 workspaces
     workspaces = []
     for i in range(15):
-        ws = Workspace(name=f"WS{i}", owner_id=customer_user.id)
+        ws = Workspace(name=f"WS{i}", owner_id=user.id)
         workspaces.append(ws)
     db.add_all(workspaces)
     db.commit()
     
     # Test first page with 5 items
-    response = client.get("/workspaces/?page=1&per_page=5")
+    response = client.get("/workspaces/?page=1&per_page=4", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
-    assert len(data["workspaces"]) == 5
+    assert len(data["workspaces"]) == 4
     assert data["page"] == 1
-    assert data["per_page"] == 5
-    assert data["total"] == 15
-    assert data["total_pages"] == 3
+    assert data["per_page"] == 4
+    assert data["total"] == 15 + 1 # one more because a default workspace is created for user when register
+    assert data["total_pages"] == 4
     assert data["has_next"] is True
     assert data["has_prev"] is False
 
@@ -271,14 +312,15 @@ def test_get_current_workspace(db, customer_user, another_user):
     # No current workspace set
     another_user.current_workspace_id = None
     db.commit()
-    response = client.get("/workspaces/current", headers=headers)
+    response = client.get("/workspaces/current/me", headers=headers)
+    print(response.text)
     if response.status_code != 404:
         print(f"DEBUG: status_code={response.status_code}, content={response.content}")
     assert response.status_code == 404
     # Set current workspace
     another_user.current_workspace_id = ws2.id
     db.commit()
-    response = client.get("/workspaces/current", headers=headers)
+    response = client.get("/workspaces/current/me", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == ws2.id
@@ -286,7 +328,7 @@ def test_get_current_workspace(db, customer_user, another_user):
     # Set to a non-existent workspace
     another_user.current_workspace_id = 9999
     db.commit()
-    response = client.get("/workspaces/current", headers=headers)
+    response = client.get("/workspaces/current/me", headers=headers)
     if response.status_code != 404:
         print(f"DEBUG: status_code={response.status_code}, content={response.content}")
     assert response.status_code == 404 

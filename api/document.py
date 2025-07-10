@@ -36,8 +36,8 @@ class DocumentBase(BaseModel):
     markdown: str
     uri: Optional[str] = None
     domain_id: Optional[int] = None
-    vector_id: Optional[str] = None
     workspace_id: Optional[int] = None
+    aibot_id: Optional[int] = None
 
 class DocumentCreate(DocumentBase):
     pass
@@ -48,6 +48,7 @@ class DocumentUpdate(BaseModel):
     markdown: Optional[str] = None
     uri: Optional[str] = None
     domain_id: Optional[int] = None
+    aibot_id: Optional[int] = None
 
 class VectorizeDocumentRequest(BaseModel):
     title: Optional[str] = None
@@ -65,11 +66,19 @@ class DomainInfo(BaseModel):
     class Config:
         from_attributes = True
 
+class AiBotInfo(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
 class DocumentResponse(DocumentBase):
     id: int
     created_at: datetime
     updated_at: datetime
     domain: Optional[DomainInfo] = None
+    aibot: Optional[AiBotInfo] = None
 
     class Config:
         from_attributes = True
@@ -80,7 +89,8 @@ class DocumentListResponse(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     domain: Optional[DomainInfo] = None
-    vector_id: Optional[str] = None
+    aibot_id: Optional[int] = None
+    aibot: Optional[AiBotInfo] = None
     created_at: datetime
     updated_at: datetime
 
@@ -150,6 +160,17 @@ def create_document(document: DocumentCreate, db: Session = Depends(get_db), cur
         if not domain:
             raise HTTPException(status_code=400, detail="Domain not found")
 
+    # Verify AiBot exists if provided
+    aibot = None
+    if doc_data.get("aibot_id"):
+        from database.models import AiBot
+        aibot = db.query(AiBot).filter(AiBot.id == doc_data["aibot_id"]).first()
+        if not aibot:
+            raise HTTPException(status_code=400, detail="AiBot not found")
+        # Verify AiBot belongs to the same workspace
+        if aibot.workspace_id != doc_data.get("workspace_id"):
+            raise HTTPException(status_code=400, detail="AiBot does not belong to the specified workspace")
+
     # Create document
     created_doc = document_repo.create(doc_data)
     # Ensure required fields are present and not SQLAlchemy Column objects
@@ -175,10 +196,11 @@ def create_document(document: DocumentCreate, db: Session = Depends(get_db), cur
         markdown=str(markdown_val),
         uri=get_value(created_doc, 'uri'),
         domain_id=get_value(created_doc, 'domain_id'),
-        vector_id=get_value(created_doc, 'vector_id'),
+        aibot_id=get_value(created_doc, 'aibot_id'),
         created_at=created_at_val,
         updated_at=updated_at_val,
-        domain=DomainInfo(id=int(domain.id), domain=str(domain.domain)) if domain else None
+        domain=DomainInfo(id=int(domain.id), domain=str(domain.domain)) if domain else None,
+        aibot=AiBotInfo(id=int(aibot.id), name=str(aibot.name)) if aibot else None
     )
 
 # Get manual documents with pagination
@@ -206,17 +228,23 @@ def get_manual_documents(
     offset = (page - 1) * size
     documents = base_query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(size).all()
     
-    # Create response with domain info
+    # Create response with domain and aibot info
     items = []
     for doc in documents:
         domain = domain_repo.get(doc.domain_id) if doc.domain_id else None
+        aibot = None
+        if doc.aibot_id:
+            from database.models import AiBot
+            aibot = db.query(AiBot).filter(AiBot.id == doc.aibot_id).first()
+        
         items.append(DocumentListResponse(
             id=doc.id,
             title=doc.title,
             uri=doc.uri,
             domain_id=doc.domain_id,
             domain=domain,
-            vector_id=doc.vector_id,
+            aibot_id=doc.aibot_id,
+            aibot=AiBotInfo(id=aibot.id, name=aibot.name) if aibot else None,
             created_at=doc.created_at,
             updated_at=doc.updated_at
         ))
@@ -240,6 +268,11 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Document not found")
     
     domain = domain_repo.get(document.domain_id)
+    aibot = None
+    if document.aibot_id:
+        from database.models import AiBot
+        aibot = db.query(AiBot).filter(AiBot.id == document.aibot_id).first()
+    
     return DocumentResponse(
         id=document.id,
         title=document.title,
@@ -247,10 +280,11 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
         markdown=document.markdown,
         uri=document.uri,
         domain_id=document.domain_id,
-        vector_id = document.vector_id,
+        aibot_id=document.aibot_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
+        aibot=AiBotInfo(id=aibot.id, name=aibot.name) if aibot else None
     )
 
 # Update a document
@@ -274,6 +308,17 @@ async def update_document(
         domain = domain_repo.get(document.domain_id)
         if not domain:
             raise HTTPException(status_code=400, detail="Domain not found")
+
+    # Verify AiBot exists if being updated
+    aibot = None
+    if document.aibot_id:
+        from database.models import AiBot
+        aibot = db.query(AiBot).filter(AiBot.id == document.aibot_id).first()
+        if not aibot:
+            raise HTTPException(status_code=400, detail="AiBot not found")
+        # Verify AiBot belongs to the same workspace as the document
+        if aibot.workspace_id != current_doc.workspace_id:
+            raise HTTPException(status_code=400, detail="AiBot does not belong to the same workspace as the document")
 
     # If HTML is being updated, convert it to markdown
     update_data = document.model_dump(exclude_unset=True)
@@ -311,10 +356,8 @@ async def update_document(
                 "metadata": metadata
             }
 
-            vector_store.delete_vector(updated_doc.vector_id)
-
             # Add new vector document
-            vector_id = vector_store.add_documents([vector_doc], updated_doc.vector_id)[0]
+            vector_id = vector_store.add_documents([vector_doc])[0]
 
         except Exception as e:
             print(f"Error updating vector store: {str(e)}")
@@ -322,6 +365,11 @@ async def update_document(
             # Don't raise error, just log it since vector update is optional
 
     domain = domain_repo.get(updated_doc.domain_id)
+    aibot = None
+    if updated_doc.aibot_id:
+        from database.models import AiBot
+        aibot = db.query(AiBot).filter(AiBot.id == updated_doc.aibot_id).first()
+    
     return DocumentResponse(
         id=updated_doc.id,
         title=updated_doc.title,
@@ -329,9 +377,11 @@ async def update_document(
         markdown=updated_doc.markdown,
         uri=updated_doc.uri,
         domain_id=updated_doc.domain_id,
+        aibot_id=updated_doc.aibot_id,
         created_at=updated_doc.created_at,
         updated_at=updated_doc.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
+        aibot=AiBotInfo(id=aibot.id, name=aibot.name) if aibot else None
     )
 
 
@@ -388,17 +438,23 @@ def list_documents(
     offset = (page - 1) * size
     documents = query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(size).all()
     
-    # Create response with domain info
+    # Create response with domain and aibot info
     items = []
     for doc in documents:
         domain = domain_repo.get(doc.domain_id)
+        aibot = None
+        if doc.aibot_id:
+            from database.models import AiBot
+            aibot = db.query(AiBot).filter(AiBot.id == doc.aibot_id).first()
+        
         items.append(DocumentListResponse(
             id=doc.id,
             title=doc.title,
             uri=doc.uri,
             domain_id=doc.domain_id,
             domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
-            vector_id=doc.vector_id,
+            aibot_id=doc.aibot_id,
+            aibot=AiBotInfo(id=aibot.id, name=aibot.name) if aibot else None,
             created_at=doc.created_at,
             updated_at=doc.updated_at,            
         ))
@@ -423,6 +479,11 @@ def get_document_by_uri(uri: str, db: Session = Depends(get_db)):
     
     doc = documents[0]  # Return first document if multiple exist
     domain = domain_repo.get(doc.domain_id)
+    aibot = None
+    if doc.aibot_id:
+        from database.models import AiBot
+        aibot = db.query(AiBot).filter(AiBot.id == doc.aibot_id).first()
+    
     return DocumentResponse(
         id=doc.id,
         title=doc.title,
@@ -430,9 +491,11 @@ def get_document_by_uri(uri: str, db: Session = Depends(get_db)):
         markdown=doc.markdown,
         uri=doc.uri,
         domain_id=doc.domain_id,
+        aibot_id=doc.aibot_id,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
+        aibot=AiBotInfo(id=aibot.id, name=aibot.name) if aibot else None
     )
 
 # Search documents by title
@@ -452,6 +515,11 @@ def search_documents_by_title(
     response = []
     for doc in documents:
         domain = domain_repo.get(doc.domain_id)
+        aibot = None
+        if doc.aibot_id:
+            from database.models import AiBot
+            aibot = db.query(AiBot).filter(AiBot.id == doc.aibot_id).first()
+        
         response.append(DocumentResponse(
             id=doc.id,
             title=doc.title,
@@ -459,124 +527,15 @@ def search_documents_by_title(
             markdown=doc.markdown,
             uri=doc.uri,
             domain_id=doc.domain_id,
+            aibot_id=doc.aibot_id,
             created_at=doc.created_at,
             updated_at=doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
+            aibot=AiBotInfo(id=aibot.id, name=aibot.name) if aibot else None
         ))
     return response
 
-# Get document by vector_id
-@router.get("/vector/{vector_id}", response_model=DocumentResponse,
-          summary="دریافت سند با استفاده از شناسه برداری",
-          description="این اندپوینت سندی که شناسه برداری آن با مقدار ورودی برابر است را برمی‌گرداند")
-def get_document_by_vector_id(vector_id: str, db: Session = Depends(get_db)):
-    document_repo = DocumentRepository(db)
-    domain_repo = CrawledDomainRepository(db)
-    
-    # Query document with matching vector_id
-    query = document_repo.db.query(document_repo.model_class).filter(
-        document_repo.model_class.vector_id == vector_id
-    )
-    document = query.first()
-    
-    if not document:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No document found with vector_id: {vector_id}"
-        )
-    
-    # Get domain info if domain_id exists
-    domain = None
-    if document.domain_id:
-        domain = domain_repo.get(document.domain_id)
-    
-    return DocumentResponse(
-        id=document.id,
-        title=document.title,
-        html=document.html,
-        markdown=document.markdown,
-        uri=document.uri,
-        vector_id=vector_id,
-        domain_id=document.domain_id,
-        created_at=document.created_at,
-        updated_at=document.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
-    )
 
-@router.post("/{document_id}/toggle-vector", response_model=DocumentResponse,
-          summary="تغییر وضعیت برداری سند",
-          description="این اندپوینت وضعیت برداری سند را تغییر می‌دهد. اگر سند برداری شده باشد، آن را حذف می‌کند و اگر برداری نشده باشد، آن را برداری می‌کند.")
-async def toggle_document_vector_status(
-    document_id: int,
-    db: Session = Depends(get_db)
-):
-    """
-    Toggle vector status of a document
-    
-    - If document has vector_id: Delete vector and set vector_id to null
-    - If document has no vector_id: Create vector and set vector_id
-    """
-    document_repo = DocumentRepository(db)
-    domain_repo = CrawledDomainRepository(db)
-    
-    # Get document
-    document = document_repo.get(document_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-    
-    try:
-        if document.vector_id:
-            # Document is vectorized, so devectorize it
-            vector_store.delete_vector(document.vector_id)
-            
-            # Update document to remove vector_id
-            update_data = {"vector_id": None}
-            updated_doc = document_repo.update(document_id, update_data)
-            
-        else:
-            # Document is not vectorized, so vectorize it
-            # Prepare metadata
-            metadata = {
-                "document_id": str(document_id),
-                "title": document.title,
-                "uri": document.uri or "",
-                "domain_id": str(document.domain_id) if document.domain_id else "0",
-                "created_at": datetime.now().isoformat()
-            }
-            
-            # Create document for vector store
-            vector_doc = {
-                "text": document.markdown,
-                "metadata": metadata
-            }
-            
-            # Add to vector store
-            vector_id = vector_store.add_documents([vector_doc])[0]
-            
-            # Update document with vector_id
-            update_data = {"vector_id": vector_id}
-            updated_doc = document_repo.update(document_id, update_data)
-        
-        # Get domain info for response
-        domain = domain_repo.get(updated_doc.domain_id)
-        
-        return DocumentResponse(
-            id=updated_doc.id,
-            title=updated_doc.title,
-            html=updated_doc.html,
-            markdown=updated_doc.markdown,
-            uri=updated_doc.uri,
-            domain_id=updated_doc.domain_id,
-            vector_id=updated_doc.vector_id,
-            created_at=updated_doc.created_at,
-            updated_at=updated_doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
-        )
-        
-    except Exception as e:
-        print(f"Error toggling vector status: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{document_id}/vectorize", tags=["documents"],
           summary="تبدیل و ذخیره سند در پایگاه داده برداری",
@@ -707,12 +666,12 @@ async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] =
         job.meta['progress'] = {'type' : 'info', 'msg' : "Document added in vector database"}
         job.save_meta()
         
-        # Update document with vector_id
+        # Update document
         update_data = {
-            "vector_id": vector_id,
             "title" : title or document.title,
             "html" : html,
             "markdown" : markdown,
+            "vector_id" : vector_id,
             "ai_markdown" : True,
             "uri": uri  # Update with cleaned URI
         }
@@ -863,16 +822,77 @@ def get_documents_by_domain(
     offset = (page - 1) * size
     documents = base_query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(size).all()
     
-    # Create response with domain info
+    # Create response with domain and aibot info
     items = []
     for doc in documents:
+        aibot = None
+        if doc.aibot_id:
+            from database.models import AiBot
+            aibot = db.query(AiBot).filter(AiBot.id == doc.aibot_id).first()
+        
         items.append(DocumentListResponse(
             id=doc.id,
             title=doc.title,
             uri=doc.uri,
             domain_id=doc.domain_id,
             domain=DomainInfo(id=domain.id, domain=domain.domain),
-            vector_id=doc.vector_id,
+            aibot_id=doc.aibot_id,
+            aibot=AiBotInfo(id=aibot.id, name=aibot.name) if aibot else None,
+            created_at=doc.created_at,
+            updated_at=doc.updated_at
+        ))
+    
+    return PaginatedDocumentListResponse(
+        items=items,
+        total=total,
+        page=page,
+        size=size,
+        pages=pages
+    )
+
+@router.get("/aibot/{aibot_id}", response_model=PaginatedDocumentListResponse,
+          summary="دریافت اسناد یک AiBot",
+          description="این اندپوینت لیست اسناد یک AiBot خاص را با پشتیبانی از صفحه‌بندی برمی‌گرداند")
+def get_documents_by_aibot(
+    aibot_id: int,
+    page: int = Query(1, description="Page number (starting from 1)", ge=1),
+    size: int = Query(10, description="Number of documents per page", ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    document_repo = DocumentRepository(db)
+    domain_repo = CrawledDomainRepository(db)
+    
+    # Verify aibot exists
+    from database.models import AiBot
+    aibot = db.query(AiBot).filter(AiBot.id == aibot_id).first()
+    if not aibot:
+        raise HTTPException(status_code=404, detail="AiBot not found")
+    
+    # Query documents for the aibot with pagination
+    base_query = document_repo.db.query(document_repo.model_class).filter(
+        document_repo.model_class.aibot_id == aibot_id
+    )
+    
+    # Calculate total count and pages
+    total = base_query.count()
+    pages = (total + size - 1) // size  # Ceiling division
+    
+    # Apply pagination
+    offset = (page - 1) * size
+    documents = base_query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(size).all()
+    
+    # Create response with domain and aibot info
+    items = []
+    for doc in documents:
+        domain = domain_repo.get(doc.domain_id) if doc.domain_id else None
+        items.append(DocumentListResponse(
+            id=doc.id,
+            title=doc.title,
+            uri=doc.uri,
+            domain_id=doc.domain_id,
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
+            aibot_id=doc.aibot_id,
+            aibot=AiBotInfo(id=aibot.id, name=aibot.name),
             created_at=doc.created_at,
             updated_at=doc.updated_at
         ))

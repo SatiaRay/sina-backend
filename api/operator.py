@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
-from datetime import datetime
+from datetime import datetime, timezone
 from database.models import get_db, User
 from api.auth import get_current_user, get_password_hash
 
@@ -131,7 +131,7 @@ def update_operator(
         user.last_name = operator_data.last_name
     if operator_data.is_active is not None:
         user.is_active = operator_data.is_active
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(user)
     return user

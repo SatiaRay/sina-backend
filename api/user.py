@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
-from datetime import datetime
+from datetime import datetime, timezone
 
 from database.models import get_db, User, SessionLocal
 from api.auth import get_current_user, verify_password, get_password_hash
@@ -137,7 +137,7 @@ async def update_user_status(
         )
     
     user.is_active = status_data.is_active
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     
     try:
         db.commit()
@@ -200,9 +200,9 @@ async def update_user(
     if user_data.is_verified is not None:
         user.is_verified = user_data.is_verified
         if user_data.is_verified and not user.email_verified_at:
-            user.email_verified_at = datetime.utcnow()
+            user.email_verified_at = datetime.now(timezone.utc)
     
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     
     try:
         db.commit()
@@ -247,7 +247,7 @@ async def update_user_password(
     
     # Update password
     user.password_hash = get_password_hash(password_data.new_password)
-    user.updated_at = datetime.utcnow()
+    user.updated_at = datetime.now(timezone.utc)
     
     try:
         db.commit()
@@ -544,7 +544,7 @@ async def update_my_profile(
             detail="Cannot change verification status"
         )
     
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = datetime.now(timezone.utc)
     
     try:
         db.commit()
