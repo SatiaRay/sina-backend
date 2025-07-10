@@ -96,8 +96,8 @@ class ChatAgentRag(ChatAgentRagInterface):
         self.history = history
         self.websocket = websocket
         self.workflows = workflows
-        
-        self.vector_store = VectorStore()
+        from provider.service_container import container
+        self.vector_store = container.make('vector_store')
         self.client = OpenAI()
         self.called_function = {
             "name": None,

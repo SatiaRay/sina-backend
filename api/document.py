@@ -20,14 +20,12 @@ import httpx
 from database.models import get_db
 from database.repository import DocumentRepository, CrawledDomainRepository
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
-from database.vector_store import VectorStore
+from provider.service_container import container
 from api.auth import get_current_user
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-# Initialize the HTML to Markdown agent and vector store
 html_to_markdown_agent = HTMLToMarkdownAgent()
-vector_store = VectorStore()
 
 # Pydantic models for request/response
 class DocumentBase(BaseModel):
@@ -357,7 +355,7 @@ async def update_document(
             }
 
             # Add new vector document
-            vector_id = vector_store.add_documents([vector_doc])[0]
+            vector_id = container.make('vector_store').add_documents([vector_doc])[0]
 
         except Exception as e:
             print(f"Error updating vector store: {str(e)}")

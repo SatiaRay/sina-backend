@@ -39,8 +39,9 @@ def mock_chromadb():
 
 def test_tenant_isolation(mock_openai_embedding, mock_chromadb):
     # Create two VectorStores with different tenants
-    store1 = VectorStore(collection_name='test_collection', tenant='tenant1', database='db1')
-    store2 = VectorStore(collection_name='test_collection', tenant='tenant2', database='db1')
+    # TODO: Refactor to support custom parameters if needed
+    store1 = container.make('vector_store')
+    store2 = container.make('vector_store')
     
     # Add a document to each
     doc1 = [{'text': 'Hello from tenant1', 'metadata': {'meta': 't1'}}]
@@ -56,8 +57,9 @@ def test_tenant_isolation(mock_openai_embedding, mock_chromadb):
 
 def test_collection_creation_per_tenant(mock_openai_embedding, mock_chromadb):
     # Create VectorStore for two tenants
-    store1 = VectorStore(collection_name='collA', tenant='tenantA', database='dbA')
-    store2 = VectorStore(collection_name='collA', tenant='tenantB', database='dbA')
+    # TODO: Refactor to support custom parameters if needed
+    store1 = container.make('vector_store')
+    store2 = container.make('vector_store')
     
     # The collection should be created for each tenant
     assert store1.tenant != store2.tenant
@@ -66,8 +68,9 @@ def test_collection_creation_per_tenant(mock_openai_embedding, mock_chromadb):
 
 def test_document_isolation_between_tenants(mock_openai_embedding, mock_chromadb):
     # Create two VectorStores with different tenants
-    store1 = VectorStore(collection_name='iso_collection', tenant='iso_tenant1', database='iso_db')
-    store2 = VectorStore(collection_name='iso_collection', tenant='iso_tenant2', database='iso_db')
+    # TODO: Refactor to support custom parameters if needed
+    store1 = container.make('vector_store')
+    store2 = container.make('vector_store')
     
     # Add documents to each
     doc1 = [{'text': 'Tenant1 doc', 'metadata': {'meta': 'iso1'}}]

@@ -33,6 +33,8 @@ from database.models import get_db, User
 from models.tools.functions.app_satia_co import AppSatiaCo
 from api.auth import verify_token, SECRET_KEY, ALGORITHM
 from fastapi.security.utils import get_authorization_scheme_param
+from database.models import AiBot, get_db, Workspace
+from database.vector_store import VectorStore
 
 # Routes
 from api.about import router as about_router
@@ -66,7 +68,7 @@ ServiceContainer.set_base_path(str(root_dir))
 # Initialize service container bindings
 def init_service_container():
     # Bind VectorStore as singleton
-    container.singleton('vector_store', VectorStore)
+    container.singleton('vector_store', VectorStore())
     
     # Bind ChatAgentRagProxy as singleton
     container.singleton('chat_agent', ChatAgentRagProxy)
@@ -263,6 +265,43 @@ async def auth_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
+@app.middleware("http")
+async def bot_vectorstore_middleware(request: Request, call_next):
+    """
+    Middleware to bind a per-request VectorStore based on X-BOT-TOKEN header.
+    If the header is missing or invalid, bind a default VectorStore.
+    """
+    bot_token = request.headers.get("X-BOT-TOKEN")
+    db = None
+    try:
+        if bot_token:
+            db_gen = get_db()
+            db = next(db_gen)
+            aibot = db.query(AiBot).filter(AiBot.token == bot_token).first()
+            if aibot and aibot.workspace and getattr(aibot.workspace, 'name', None):
+                # Ensure we get the actual string values
+                tenant = str(aibot.workspace.name)
+                database_name = str(aibot.name)
+                vector_store = VectorStore(
+                    tenant=tenant,
+                    database=database_name
+                )
+                container.instance('vector_store', vector_store)
+            else:
+                vector_store = VectorStore()
+                container.instance('vector_store', vector_store)
+        else:
+            vector_store = VectorStore()
+            container.instance('vector_store', vector_store)
+    except Exception as e:
+        vector_store = VectorStore()
+        container.instance('vector_store', vector_store)
+    finally:
+        if db:
+            db.close()
+    response = await call_next(request)
+    return response
+
 # مدل‌های درخواست و پاسخ
 class QuestionRequest(BaseModel):
     question: str
@@ -283,7 +322,6 @@ class DocumentUpdateRequest(BaseModel):
     metadata: Optional[dict] = None
 
 # نمونه‌های کلاس‌ها
-vector_store = VectorStore()
 agent_rag = ChatAgentRagProxy()
 
 @app.get("/")
@@ -760,7 +798,7 @@ async def store_vector(
         cleaned_text = str(soup)
         
         # Initialize vector store
-        vector_store = VectorStore()
+        vector_store = container.make('vector_store')
         
         # Create document structure with cleaned text
         document = {
@@ -819,7 +857,7 @@ async def add_manually_knowledge(
         markdown_text = markdown_result if isinstance(markdown_result, str) else str(markdown_result)
 
         # Initialize vector store
-        vector_store = VectorStore()
+        vector_store = container.make('vector_store')
 
         # Store in database
         repo = DocumentRepository(db)
@@ -879,7 +917,7 @@ async def delete_data_source(vector_id: str):
     ```
     """
     try:
-        vector = VectorStore()
+        vector = container.make('vector_store')
 
         vector.delete_vector(vector_id)
         

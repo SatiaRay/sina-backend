@@ -30,7 +30,7 @@ async def search_vectors(request: VectorSearchRequest):
     - **limit**: Maximum number of results to return
     """
     try:
-        vector_store = VectorStore()
+        vector_store = container.make('vector_store')
         results = vector_store.search(request.query, request.limit)
         return {
             "query": request.query,
@@ -50,7 +50,7 @@ async def store_vectors(request: VectorStoreRequest):
     - **documents**: List of documents to store, each containing text and metadata
     """
     try:
-        vector_store = VectorStore()
+        vector_store = container.make('vector_store')
         documents = [{"text": doc.text, "metadata": doc.metadata} for doc in request.documents]
         
         print(request.documents)

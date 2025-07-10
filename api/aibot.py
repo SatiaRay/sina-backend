@@ -65,7 +65,8 @@ def create_aibot(aibot: AiBotCreate, db: Session = Depends(get_db), user: User =
     
     # Create new Bot's vector database
     try:
-        VectorStore("docs", workspace.name, f"{aibot.name}_db")
+        # TODO: Refactor to support custom parameters if needed
+        container.make('vector_store')
     except:
         raise HTTPException(status_code=500, detail="Init database for new Ai Bot failed.")
     
