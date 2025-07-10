@@ -128,6 +128,7 @@ class Wizard(WorkspaceScopedModel):
     context = Column(Text, nullable=True)
     parent_id = Column(Integer, ForeignKey("wizards.id"), nullable=True)
     enabled = Column(Boolean, default=True, nullable=False)
+    aibot_id = Column(Integer, ForeignKey("aibots.id"), nullable=True)
     
     # Relationship for self-referential hierarchy
     parent = relationship(
@@ -135,6 +136,7 @@ class Wizard(WorkspaceScopedModel):
         remote_side=lambda: [Wizard.id],
         backref="children"
     )
+    aibot = relationship("AiBot", back_populates="wizards")
     
     def __repr__(self):
         return f"<Wizard(id={self.id}, title='{self.title}', workspace_id={self.workspace_id})>"
@@ -279,6 +281,7 @@ class AiBot(BaseModel):
     name = Column(String(255), nullable=False)
     workspace_id = Column(Integer, ForeignKey('workspaces.id'), nullable=False, index=True)
     owner_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    token = Column(String(64), unique=True, nullable=False, default=lambda: AiBot.generate_token())
 
     # Relationships
     workspace = relationship('Workspace', back_populates='aibots')
@@ -287,6 +290,17 @@ class AiBot(BaseModel):
     chats = relationship('Chat', back_populates='aibot', cascade="all, delete-orphan")
     workflows = relationship('Workflow', back_populates='aibot', cascade="all, delete-orphan")
     instructions = relationship('Instruction', back_populates='aibot', cascade="all, delete-orphan")
+    wizards = relationship('Wizard', back_populates='aibot', cascade="all, delete-orphan")
+
+    @staticmethod
+    def generate_token():
+        import secrets
+        return secrets.token_hex(32)
+
+    def __init__(self, **kwargs):
+        if 'token' not in kwargs or not kwargs.get('token'):
+            kwargs['token'] = self.generate_token()
+        super().__init__(**kwargs)
 
     def __repr__(self):
         return f"<AiBot(id={self.id}, name='{self.name}', workspace_id={self.workspace_id}, owner_id={self.owner_id})>"

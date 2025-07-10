@@ -15,6 +15,7 @@ class WizardBase(BaseModel):
     context: Optional[str] = None
     parent_id: Optional[int] = None
     enabled: bool = True
+    aibot_id: Optional[int] = None
 
 class WizardCreate(WizardBase):
     pass
@@ -22,6 +23,7 @@ class WizardCreate(WizardBase):
 class WizardUpdate(WizardBase):
     title: Optional[str] = None
     enabled: Optional[bool] = None
+    aibot_id: Optional[int] = None
 
 class WizardResponse(WizardBase):
     id: int
@@ -65,6 +67,46 @@ def get_disabled_wizards(db: Session = Depends(get_db)):
     wizard_repo = WizardRepository(db)
     return wizard_repo.get_disabled_wizards()
 
+# Get wizards by AiBot
+@router.get("/aibot/{aibot_id}", response_model=List[WizardResponse])
+def get_wizards_by_aibot(
+    aibot_id: int,
+    enable_only: bool = Query(False, description="Only return enabled wizards"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all wizards for a specific AiBot
+    
+    - **aibot_id**: The ID of the AiBot
+    - **enable_only**: If True, only return enabled wizards
+    """
+    try:
+        repo = WizardRepository(db)
+        wizards = repo.get_by_aibot(aibot_id, enable_only=enable_only)
+        return wizards
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Get root wizards by AiBot
+@router.get("/aibot/{aibot_id}/roots", response_model=List[WizardResponse])
+def get_root_wizards_by_aibot(
+    aibot_id: int,
+    enable_only: bool = Query(True, description="Only return enabled wizards"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get root wizards (wizards without parents) for a specific AiBot
+    
+    - **aibot_id**: The ID of the AiBot
+    - **enable_only**: If True, only return enabled wizards
+    """
+    try:
+        repo = WizardRepository(db)
+        wizards = repo.get_heads_by_aibot(aibot_id, enable_only=enable_only)
+        return wizards
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Create a new wizard
 @router.post("/", response_model=WizardResponse)
 def create_wizard(wizard: WizardCreate, db: Session = Depends(get_db)):
@@ -82,21 +124,31 @@ def create_wizard_no_slash(wizard: WizardCreate, db: Session = Depends(get_db)):
 def list_wizards_no_slash(
     enable_only: bool = Query(False, description="Only return enabled wizards"),
     parent_id: Optional[int] = Query(None, description="Filter by parent ID"),
+    aibot_id: Optional[int] = Query(None, description="Filter by AiBot ID"),
     db: Session = Depends(get_db)
 ):
-    return list_wizards(enable_only, parent_id, db)
+    return list_wizards(enable_only, parent_id, aibot_id, db)
 
 # Original route with trailing slash
 @router.get("/", response_model=List[WizardResponse])
 def list_wizards(
     enable_only: bool = Query(False, description="Only return enabled wizards"),
     parent_id: Optional[int] = Query(None, description="Filter by parent ID"),
+    aibot_id: Optional[int] = Query(None, description="Filter by AiBot ID"),
     db: Session = Depends(get_db)
 ):
     wizard_repo = WizardRepository(db)
-    if parent_id is not None:
+    if aibot_id is not None:
+        if parent_id is not None:
+            # Filter by both aibot_id and parent_id
+            wizards = wizard_repo.get_by_aibot(aibot_id, enable_only)
+            return [w for w in wizards if w.parent_id == parent_id]
+        else:
+            return wizard_repo.get_heads_by_aibot(aibot_id, enable_only)
+    elif parent_id is not None:
         return wizard_repo.get_by_parent(parent_id, enable_only)
-    return wizard_repo.get_heads(enable_only=enable_only)
+    else:
+        return wizard_repo.get_heads(enable_only=enable_only)
 
 # Get a wizard by ID - This must come AFTER all specific paths
 @router.get("/{wizard_id}", response_model=WizardResponse)

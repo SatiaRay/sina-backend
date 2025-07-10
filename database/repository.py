@@ -25,6 +25,23 @@ class WizardRepository(TenancyRepository):
             query = query.filter(Wizard.enabled == True)
         return query.all()
 
+    def get_by_aibot(self, aibot_id: int, enable_only: bool = False) -> List[Wizard]:
+        """Get all wizards for a specific AiBot"""
+        query = self.db.query(Wizard).filter(Wizard.aibot_id == aibot_id)
+        if enable_only:
+            query = query.filter(Wizard.enabled == True)
+        return query.all()
+
+    def get_heads_by_aibot(self, aibot_id: int, enable_only: bool = False) -> List[Wizard]:
+        """Get root wizards (no parent) for a specific AiBot"""
+        query = self.db.query(Wizard).filter(
+            Wizard.parent_id.is_(None),
+            Wizard.aibot_id == aibot_id
+        )
+        if enable_only:
+            query = query.filter(Wizard.enabled == True)
+        return query.all()
+
     def get(self, id: int, enable_only: bool = False) -> Optional[T]:
         query = self.db.query(self.model_class).filter(self.model_class.id == id)
         

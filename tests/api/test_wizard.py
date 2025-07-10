@@ -16,6 +16,7 @@ MOCK_WIZARD = {
     "context": "Test Context",
     "parent_id": None,
     "enabled": True,
+    "aibot_id": 1,
     "created_at": datetime.now(),
     "updated_at": datetime.now(),
     "children": []
@@ -197,3 +198,75 @@ def test_disable_wizard(client, mock_wizard_repo):
     # Assert
     assert response.status_code == 200
     assert response.json()["enabled"] is False 
+
+def test_get_wizards_by_aibot(client, mock_wizard_repo):
+    # Arrange
+    mock_wizard_repo.return_value.get_by_aibot.return_value = [MOCK_WIZARD]
+    
+    # Act
+    response = client.get("/wizards/aibot/1")
+    
+    # Assert
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["aibot_id"] == 1
+
+def test_get_root_wizards_by_aibot(client, mock_wizard_repo):
+    # Arrange
+    mock_wizard_repo.return_value.get_heads_by_aibot.return_value = [MOCK_WIZARD]
+    
+    # Act
+    response = client.get("/wizards/aibot/1/roots")
+    
+    # Assert
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["aibot_id"] == 1
+
+def test_list_wizards_with_aibot_filter(client, mock_wizard_repo):
+    # Arrange
+    mock_wizard_repo.return_value.get_heads_by_aibot.return_value = [MOCK_WIZARD]
+    
+    # Act
+    response = client.get("/wizards/?aibot_id=1")
+    
+    # Assert
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["aibot_id"] == 1
+
+def test_create_wizard_with_aibot_id(client, mock_wizard_repo):
+    # Arrange
+    new_wizard = {
+        "title": "New Wizard",
+        "context": "New Context",
+        "parent_id": None,
+        "enabled": True,
+        "aibot_id": 1
+    }
+    mock_wizard_repo.return_value.create.return_value = {**MOCK_WIZARD, **new_wizard}
+    
+    # Act
+    response = client.post("/wizards/", json=new_wizard)
+    
+    # Assert
+    assert response.status_code == 200
+    assert response.json()["title"] == "New Wizard"
+    assert response.json()["aibot_id"] == 1
+
+def test_update_wizard_with_aibot_id(client, mock_wizard_repo):
+    # Arrange
+    update_data = {
+        "title": "Updated Wizard",
+        "aibot_id": 2
+    }
+    updated_wizard = {**MOCK_WIZARD, **update_data}
+    mock_wizard_repo.return_value.update.return_value = updated_wizard
+    
+    # Act
+    response = client.put("/wizards/1", json=update_data)
+    
+    # Assert
+    assert response.status_code == 200
+    assert response.json()["title"] == "Updated Wizard"
+    assert response.json()["aibot_id"] == 2 

@@ -127,7 +127,6 @@ class TestAiBotAPI:
     
     def test_create_aibot_success(self, auth_user):
         auth_headers, user = auth_user
-        
         """Test successful AiBot creation"""
         aibot_data = {
             "name": "New AiBot",
@@ -143,6 +142,10 @@ class TestAiBotAPI:
             assert "id" in data
             assert "created_at" in data
             assert "updated_at" in data
+            # New: Token should be present and non-empty
+            assert "token" in data
+            assert isinstance(data["token"], str)
+            assert len(data["token"]) >= 32
  
     def test_create_aibot_workspace_not_found(self, auth_user):
         """Test AiBot creation with non-existent workspace"""
@@ -178,13 +181,16 @@ class TestAiBotAPI:
 
         response = client.get("/aibots/", headers=auth_headers)
         assert response.status_code == 200
-        
         data = response.json()
         assert data["total"] == 1
         assert data["page"] == 1
         assert data["per_page"] == 10
         assert len(data["aibots"]) == 1
         assert data["aibots"][0]["name"] == "Test AiBot"
+        # New: Token should be present in listing
+        assert "token" in data["aibots"][0]
+        assert isinstance(data["aibots"][0]["token"], str)
+        assert len(data["aibots"][0]["token"]) >= 32
 
     def test_list_aibots_with_filters(self, test_aibot, test_workspace, auth_user):
         """Test AiBot listing with filters"""
@@ -211,10 +217,13 @@ class TestAiBotAPI:
 
         response = client.get(f"/aibots/{test_aibot.id}", headers=auth_headers)
         assert response.status_code == 200
-        
         data = response.json()
         assert data["id"] == test_aibot.id
         assert data["name"] == "Test AiBot"
+        # New: Token should be present in get
+        assert "token" in data
+        assert isinstance(data["token"], str)
+        assert len(data["token"]) >= 32
 
     def test_get_aibot_not_found(self, auth_user):
         """Test AiBot retrieval with non-existent ID"""
@@ -434,3 +443,19 @@ class TestAiBotAPI:
         assert data["has_next"] == False
         assert data["has_prev"] == True
         assert len(data["aibots"]) == 5 
+
+    def test_aibot_token_is_unique(self, db, test_workspace, auth_user):
+        """Test that each AiBot gets a unique token"""
+        auth_headers, user = auth_user
+        aibot1 = AiBot(name="Bot1", workspace_id=test_workspace.id, owner_id=user.id)
+        aibot2 = AiBot(name="Bot2", workspace_id=test_workspace.id, owner_id=user.id)
+        db.add(aibot1)
+        db.add(aibot2)
+        db.commit()
+        db.refresh(aibot1)
+        db.refresh(aibot2)
+        assert aibot1.token != aibot2.token
+        assert isinstance(aibot1.token, str)
+        assert isinstance(aibot2.token, str)
+        assert len(aibot1.token) >= 32
+        assert len(aibot2.token) >= 32 

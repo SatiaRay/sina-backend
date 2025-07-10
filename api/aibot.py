@@ -35,6 +35,7 @@ class AiBotOut(BaseModel):
     name: str
     workspace_id: int
     owner_id: int
+    token: str  # Add this line
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
     class Config:
