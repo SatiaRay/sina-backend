@@ -278,6 +278,9 @@ async def bot_vectorstore_middleware(request: Request, call_next):
             db_gen = get_db()
             db = next(db_gen)
             aibot = db.query(AiBot).filter(AiBot.token == bot_token).first()
+            
+            container.instance('current_bot', aibot)
+            
             if aibot and aibot.workspace and getattr(aibot.workspace, 'name', None):
                 # Ensure we get the actual string values
                 tenant = str(aibot.workspace.name)
