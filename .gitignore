@@ -11,3 +11,5 @@ temp/
 test.db
 mysql_data/
 *.db
+/chroma_data/*
+/chroma_data/*

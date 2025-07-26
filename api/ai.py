@@ -68,28 +68,41 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("WebSocket connected")
 
-    data = await websocket.receive_bytes()
-
-    filename = f"received_{uuid.uuid4().hex}.webm"
-    filepath = os.path.join('temp', filename)
-
-    # Ensure the directory exists
-    os.makedirs('temp', exist_ok=True)
-
     try:
-        with open(filepath, "wb") as f:
-            f.write(data)
+        while True:
+            try:
+                data = await websocket.receive_bytes()
+            except WebSocketDisconnect:
+                print("WebSocket disconnected")
+                break
 
-        await websocket.send_json({"event": "transcribing", "msg": "در حال تبدیل صدا به متن."})
+            filename = f"received_{uuid.uuid4().hex}.webm"
+            filepath = os.path.join('temp', filename)
 
-        # Transcribe using Whisper
-        trans = speech_to_text_model.transcribe(filepath)
+            # Ensure the directory exists
+            os.makedirs('temp', exist_ok=True)
 
-        await websocket.send_text(trans)
+            try:
+                with open(filepath, "wb") as f:
+                    f.write(data)
 
+                await websocket.send_json({"event": "transcribing", "msg": "در حال تبدیل صدا به متن."})
+
+                # Transcribe using Whisper
+                trans = speech_to_text_model.transcribe(filepath)
+
+                await websocket.send_text(trans)
+
+            except Exception as e:
+                print(f"Error: {e}")
+                await websocket.send_text(f"Error: {e}")
+
+            finally:
+                try:
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                except Exception as cleanup_error:
+                    print(f"Cleanup error: {cleanup_error}")
     except Exception as e:
-        print(f"Error: {e}")
-
-    finally:
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        print(f"Outer error: {e}")
+        await websocket.send_text(f"Error: {e}")
