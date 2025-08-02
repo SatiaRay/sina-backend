@@ -14,19 +14,24 @@ class InstructionBase(BaseModel):
     label: str = Field(..., min_length=1, max_length=255)
     text: str = Field(..., min_length=1)
     status: bool = True
-    agent_type: Literal['voice_agent', 'text_agent', 'both'] = Field('text_agent', description='Agent type')
+    agent_type: Literal["voice_agent", "text_agent", "both"] = Field(
+        "text_agent", description="Agent type"
+    )
 
-    @validator('label', 'text')
+    @validator("label", "text")
     def validate_not_empty(cls, v):
         if not v or not v.strip():
-            raise ValueError('Field cannot be empty')
+            raise ValueError("Field cannot be empty")
         return v.strip()
+
 
 class InstructionCreate(InstructionBase):
     pass
 
+
 class InstructionUpdate(InstructionBase):
     pass
+
 
 class InstructionResponse(InstructionBase):
     id: int
@@ -36,6 +41,7 @@ class InstructionResponse(InstructionBase):
     class Config:
         from_attributes = True
 
+
 class PaginatedResponse(BaseModel):
     items: List[InstructionResponse]
     total: int
@@ -43,34 +49,35 @@ class PaginatedResponse(BaseModel):
     size: int
     pages: int
 
+
 @router.post("/instructions/", response_model=InstructionResponse)
 def create_instruction(instruction: InstructionCreate, db: Session = Depends(get_db)):
     repo = InstructionRepository(db)
     return repo.create(instruction.dict())
 
+
 @router.get("/instructions/", response_model=PaginatedResponse)
 def get_instructions(
     active_only: bool = False,
-    agent_type: str = Query('text_agent', description="Agent type", regex="^(voice_agent|text_agent|both)$"),
+    agent_type: str = Query("None", description="Agent type"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(10, ge=1, le=100, description="Items per page"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     repo = InstructionRepository(db)
     if active_only:
-        items, total = repo.get_active_instructions_paginated(page, size, agent_type=agent_type)
+        items, total = repo.get_active_instructions_paginated(
+            page, size, agent_type=agent_type
+        )
     else:
         items, total = repo.get_all_paginated(page, size, agent_type=agent_type)
-    
+
     pages = (total + size - 1) // size  # Ceiling division
-    
+
     return PaginatedResponse(
-        items=items,
-        total=total,
-        page=page,
-        size=size,
-        pages=pages
+        items=items, total=total, page=page, size=size, pages=pages
     )
+
 
 @router.get("/instructions/{instruction_id}", response_model=InstructionResponse)
 def get_instruction(instruction_id: int, db: Session = Depends(get_db)):
@@ -80,17 +87,17 @@ def get_instruction(instruction_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Instruction not found")
     return instruction
 
+
 @router.put("/instructions/{instruction_id}", response_model=InstructionResponse)
 def update_instruction(
-    instruction_id: int,
-    instruction: InstructionUpdate,
-    db: Session = Depends(get_db)
+    instruction_id: int, instruction: InstructionUpdate, db: Session = Depends(get_db)
 ):
     repo = InstructionRepository(db)
     updated_instruction = repo.update(instruction_id, instruction.dict())
     if not updated_instruction:
         raise HTTPException(status_code=404, detail="Instruction not found")
     return updated_instruction
+
 
 @router.delete("/instructions/{instruction_id}")
 def delete_instruction(instruction_id: int, db: Session = Depends(get_db)):
@@ -99,7 +106,10 @@ def delete_instruction(instruction_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Instruction not found")
     return {"message": "Instruction deleted successfully"}
 
-@router.patch("/instructions/{instruction_id}/enable", response_model=InstructionResponse)
+
+@router.patch(
+    "/instructions/{instruction_id}/enable", response_model=InstructionResponse
+)
 def enable_instruction(instruction_id: int, db: Session = Depends(get_db)):
     repo = InstructionRepository(db)
     instruction = repo.enable_instruction(instruction_id)
@@ -107,10 +117,13 @@ def enable_instruction(instruction_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Instruction not found")
     return instruction
 
-@router.patch("/instructions/{instruction_id}/disable", response_model=InstructionResponse)
+
+@router.patch(
+    "/instructions/{instruction_id}/disable", response_model=InstructionResponse
+)
 def disable_instruction(instruction_id: int, db: Session = Depends(get_db)):
     repo = InstructionRepository(db)
     instruction = repo.disable_instruction(instruction_id)
     if not instruction:
         raise HTTPException(status_code=404, detail="Instruction not found")
-    return instruction 
+    return instruction

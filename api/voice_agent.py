@@ -7,6 +7,7 @@ from fastapi import (
     HTTPException,
 )
 from typing import Optional, List, Dict
+from enum import Enum
 import json
 from pydantic import BaseModel, Field
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
@@ -16,6 +17,7 @@ import os
 from models.models.speech_to_text_model import SpeechToTextModel
 import matplotlib.pyplot as plt
 import io
+import httpx
 
 from sqlalchemy.orm import Session
 from database.models import get_db
@@ -34,6 +36,10 @@ router = APIRouter(prefix="/voice_agent", tags=["Voice Agent"])
 
 class InstructionResponse(BaseModel):
     instruction: str
+
+class OpenAIModel(str, Enum):
+    GPT4_REALTIME_2025 = "gpt-4o-realtime-preview-2025-06-03"
+    GPT4_REALTIME_2024 = "gpt-4o-realtime-preview-2024-12-17"
 
 
 # get voice agent instruction
@@ -181,3 +187,36 @@ def get_instruction(db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=500, detail="Failed to generate voice agent instruction"
         )
+
+OPENAI_API_URL = "https://api.openai.com/v1/realtime/sessions"
+
+# Use query parameters instead of a body for GET
+@router.get("/client_key")
+async def get_client_key(model: OpenAIModel = OpenAIModel.GPT4_REALTIME_2025):
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            # Forward model as a query param to OpenAI
+            response = await client.post(
+                OPENAI_API_URL,
+                headers=headers,
+                json={"model": model.value}
+            )
+            response.raise_for_status()
+            data = response.json()
+            if 'client_secret' not in data:
+                raise HTTPException(status_code=500, detail="OpenAI response missing client_secret")
+            return data['client_secret']
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=e.response.status_code,
+                detail=e.response.json()
+            )
