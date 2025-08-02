@@ -1,5 +1,5 @@
-from pydantic import BaseModel, HttpUrl
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, HttpUrl, Field
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 
 class Chunk(BaseModel):
@@ -162,6 +162,7 @@ class StoreVectorRequest(BaseModel):
     - metadata: متادیتای مربوط به متن
     """
     text: str
+    agent_type: Literal['voice_agent', 'text_agent', 'both'] = Field('text_agent', description='Agent type')
     metadata: Dict[str, Any]
     
     class Config:

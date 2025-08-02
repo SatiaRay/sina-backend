@@ -803,6 +803,7 @@ async def add_manually_knowledge(
         ...,
         example={
             "text": "<p class='content'>ساتیا یک پلتفرم مدیریت منابع سازمانی است که...</p>",
+            "agent_type": "voice_agent",
             "metadata": {
                 "source": "دستی",
                 "title": "درباره ساتیا",
@@ -836,6 +837,7 @@ async def add_manually_knowledge(
                 "markdown": markdown_text,
                 "title": request.metadata["title"],
                 "type": "manual",
+                "agent_type": request.agent_type
             }
         )
 
