@@ -4,14 +4,17 @@ from typing import List
 from database.repository import InstructionRepository
 from database.models import get_db
 from pydantic import BaseModel, Field, validator
+from typing import Literal
 from datetime import datetime
 
 router = APIRouter()
+
 
 class InstructionBase(BaseModel):
     label: str = Field(..., min_length=1, max_length=255)
     text: str = Field(..., min_length=1)
     status: bool = True
+    agent_type: Literal['voice_agent', 'text_agent', 'both'] = Field('text_agent', description='Agent type')
 
     @validator('label', 'text')
     def validate_not_empty(cls, v):
@@ -48,15 +51,16 @@ def create_instruction(instruction: InstructionCreate, db: Session = Depends(get
 @router.get("/instructions/", response_model=PaginatedResponse)
 def get_instructions(
     active_only: bool = False,
+    agent_type: str = Query('text_agent', description="Agent type", regex="^(voice_agent|text_agent|both)$"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db)
 ):
     repo = InstructionRepository(db)
     if active_only:
-        items, total = repo.get_active_instructions_paginated(page, size)
+        items, total = repo.get_active_instructions_paginated(page, size, agent_type=agent_type)
     else:
-        items, total = repo.get_all_paginated(page, size)
+        items, total = repo.get_all_paginated(page, size, agent_type=agent_type)
     
     pages = (total + size - 1) // size  # Ceiling division
     

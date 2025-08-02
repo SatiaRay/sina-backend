@@ -158,14 +158,23 @@ class DocumentRepository(Repository[Document]):
     def __init__(self, db: Session):
         super().__init__(db, Document)
 
-    def get_by_uri(self, uri: str) -> List[Document]:
-        return self.db.query(Document).filter(Document.uri == uri).all()
+    def get_by_uri(self, uri: str, agent_type: str = None) -> List[Document]:
+        q = self.db.query(Document).filter(Document.uri == uri)
+        if agent_type:
+            q = q.filter(Document.agent_type == agent_type)
+        return q.all()
 
-    def get_by_domain(self, domain_id: int) -> List[Document]:
-        return self.db.query(Document).filter(Document.domain_id == domain_id).all()
+    def get_by_domain(self, domain_id: int, agent_type: str = None) -> List[Document]:
+        q = self.db.query(Document).filter(Document.domain_id == domain_id)
+        if agent_type:
+            q = q.filter(Document.agent_type == agent_type)
+        return q.all()
 
-    def search_by_title(self, query: str) -> List[Document]:
-        return self.db.query(Document).filter(Document.title.ilike(f"%{query}%")).all()
+    def search_by_title(self, query: str, agent_type: str = None) -> List[Document]:
+        q = self.db.query(Document).filter(Document.title.ilike(f"%{query}%"))
+        if agent_type:
+            q = q.filter(Document.agent_type == agent_type)
+        return q.all()
 
 class CrawlJobsRepository(Repository[CrawlJobs]):
     def __init__(self, db: Session):
@@ -227,23 +236,26 @@ class InstructionRepository(Repository[Instruction]):
     def __init__(self, db: Session):
         super().__init__(db, Instruction)
 
-    def get_all_paginated(self, page: int = 1, size: int = 10) -> tuple[List[Instruction], int]:
-        """Get paginated instructions with non-empty label and text"""
+    def get_all_paginated(self, page: int = 1, size: int = 10, agent_type: str = None) -> tuple[list[Instruction], int]:
         query = self.db.query(Instruction).filter(
             Instruction.label != '',
             Instruction.text != ''
         )
+        if agent_type:
+            query = query.filter((Instruction.agent_type == agent_type) | (Instruction.agent_type == 'both'))
         total = query.count()
         items = query.offset((page - 1) * size).limit(size).all()
         return items, total
 
-    def get_active_instructions_paginated(self, page: int = 1, size: int = 10) -> tuple[List[Instruction], int]:
+    def get_active_instructions_paginated(self, page: int = 1, size: int = 10, agent_type: str = None) -> tuple[list[Instruction], int]:
         """Get paginated active instructions with non-empty label and text"""
         query = self.db.query(Instruction).filter(
             Instruction.status == True,
             Instruction.label != '',
             Instruction.text != ''
         )
+        if agent_type:
+            query = query.filter((Instruction.agent_type == agent_type) | (Instruction.agent_type == 'both'))
         total = query.count()
         items = query.offset((page - 1) * size).limit(size).all()
         return items, total

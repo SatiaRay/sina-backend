@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from redis import Redis
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 import traceback
 from fastapi.responses import JSONResponse
@@ -29,6 +29,8 @@ html_to_markdown_agent = HTMLToMarkdownAgent()
 vector_store = VectorStore()
 
 # Pydantic models for request/response
+from typing import Literal
+
 class DocumentBase(BaseModel):
     title: str
     html: str
@@ -36,6 +38,7 @@ class DocumentBase(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     vector_id: Optional[str] = None
+    agent_type: Literal['voice_agent', 'text_agent', 'both'] = Field('text_agent', description='Agent type')
 
 class DocumentCreate(DocumentBase):
     pass
@@ -46,6 +49,7 @@ class DocumentUpdate(BaseModel):
     markdown: Optional[str] = None
     uri: Optional[str] = None
     domain_id: Optional[int] = None
+    agent_type: Optional[Literal['voice_agent', 'text_agent', 'both']] = None
 
 class VectorizeDocumentRequest(BaseModel):
     title: Optional[str] = None
@@ -79,6 +83,7 @@ class DocumentListResponse(BaseModel):
     domain_id: Optional[int] = None
     domain: Optional[DomainInfo] = None
     vector_id: Optional[str] = None
+    agent_type: Literal['voice_agent', 'text_agent', 'both']
     created_at: datetime
     updated_at: datetime
 
@@ -159,6 +164,7 @@ def create_document(document: DocumentCreate, db: Session = Depends(get_db)):
 def get_manual_documents(
     page: int = Query(1, description="Page number (starting from 1)", ge=1),
     size: int = Query(10, description="Number of documents per page", ge=1, le=100),
+    agent_type: str = Query('text_agent', description="Agent type", regex="^(voice_agent|text_agent|both)$"),
     db: Session = Depends(get_db)
 ):
     document_repo = DocumentRepository(db)
@@ -166,7 +172,8 @@ def get_manual_documents(
     
     # Query manual documents with pagination
     base_query = document_repo.db.query(document_repo.model_class).filter(
-        document_repo.model_class.type == 'manual'
+        document_repo.model_class.type == 'manual',
+        document_repo.model_class.agent_type == agent_type
     )
     
     # Calculate total count and pages
@@ -188,6 +195,7 @@ def get_manual_documents(
             domain_id=doc.domain_id,
             domain=domain,
             vector_id=doc.vector_id,
+            agent_type=doc.agent_type,
             created_at=doc.created_at,
             updated_at=doc.updated_at
         ))
@@ -331,6 +339,7 @@ def list_documents_no_slash(
 def list_documents(
     domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
     uri: Optional[str] = Query(None, description="Filter by URI"),
+    agent_type: str = Query('text_agent', description="Agent type", regex="^(voice_agent|text_agent|both)$"),
     page: int = Query(1, description="Page number (starting from 1)", ge=1),
     size: int = Query(10, description="Number of documents per page", ge=1, le=100),
     db: Session = Depends(get_db)
@@ -340,7 +349,8 @@ def list_documents(
     
     # Base query with domain_id not null filter
     base_query = document_repo.db.query(document_repo.model_class).filter(
-        document_repo.model_class.domain_id.isnot(None)
+        document_repo.model_class.domain_id.isnot(None),
+        document_repo.model_class.agent_type == agent_type
     )
     
     # Get documents based on filters with pagination

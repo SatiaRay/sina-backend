@@ -109,6 +109,7 @@ class Document(BaseModel):
     domain_id = Column(Integer, ForeignKey("crawled_domains.id"), nullable=True)
     vector_id = Column(String(255), nullable=True)
     type = Column(Enum('manual', 'crawl'), default="crawl")
+    agent_type = Column(Enum('voice_agent', 'text_agent', 'both', name='agent_type_enum'), default='text_agent', nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -178,6 +179,7 @@ class Workflow(BaseModel):
     name = Column(String(255), unique=True, nullable=False)
     flow = Column(JSON)
     status = Column(Boolean, default=True)
+    agent_type = Column(Enum('voice_agent', 'text_agent', 'both', name='agent_type_enum'), default='text_agent', nullable=False)
 
 class Instruction(BaseModel):
     __tablename__ = 'instructions'
@@ -186,6 +188,7 @@ class Instruction(BaseModel):
     label = Column(String(255), nullable=False)
     text = Column(Text, nullable=False)
     status = Column(Boolean, default=True)
+    agent_type = Column(Enum('voice_agent', 'text_agent', 'both', name='agent_type_enum'), default='text_agent', nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -1,10 +1,11 @@
-from typing import List, Optional
+
+from typing import List, Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.models import Workflow
 from database.repositories.workflow_repository import WorkflowRepository
 from database.models import get_db
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -23,6 +24,7 @@ class WorkflowBase(BaseModel):
     name: str
     flow: List[WorkflowNode]
     status: bool = True
+    agent_type: Literal['voice_agent', 'text_agent', 'both'] = Field('text_agent', description='Agent type')
 
 class WorkflowCreate(WorkflowBase):
     pass
@@ -42,20 +44,19 @@ def create_workflow(workflow: WorkflowCreate, db: Session = Depends(get_db)):
     # Check if workflow with same name exists
     if repo.get_by_name(workflow.name):
         raise HTTPException(status_code=400, detail="Workflow with this name already exists")
-    
     db_workflow = Workflow(**workflow.model_dump())
     return repo.create(db_workflow)
 
 @router.get("", response_model=List[WorkflowResponse])
-def get_workflows(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_workflows(skip: int = 0, limit: int = 100, agent_type: str = 'text_agent', db: Session = Depends(get_db)):
     repo = WorkflowRepository(db)
-    workflows = repo.get_all()
+    workflows = repo.get_all(agent_type=agent_type)
     return workflows[skip : skip + limit]
 
 @router.get("/active", response_model=List[WorkflowResponse])
-def get_active_workflows(db: Session = Depends(get_db)):
+def get_active_workflows(agent_type: str = 'text_agent', db: Session = Depends(get_db)):
     repo = WorkflowRepository(db)
-    return repo.get_active_workflows()
+    return repo.get_active_workflows(agent_type=agent_type)
 
 @router.get("/{workflow_id}", response_model=WorkflowResponse)
 def get_workflow(workflow_id: int, db: Session = Depends(get_db)):
@@ -67,7 +68,6 @@ def get_workflow(workflow_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{workflow_id}", response_model=WorkflowResponse)
 def update_workflow(workflow_id: int, workflow: WorkflowUpdate, db: Session = Depends(get_db)):
-    print(workflow)
     repo = WorkflowRepository(db)
     updated_workflow = repo.update(workflow_id, workflow.model_dump())
     if updated_workflow is None:
