@@ -7,7 +7,10 @@ from redis.exceptions import RedisError
 
 
 class Neshan:
-    def __init__(self) -> None:
+    def __init__(self, api_key, city_lat, city_long) -> None:
+        self.api_key = api_key
+        self.city_lat = city_lat
+        self.city_long = city_long
         self.redis_host = os.getenv('REDIS_HOST', '127.0.0.1')
         self.redis_port = int(os.getenv('REDIS_PORT', 6379))
         self.redis_db = int(os.getenv('REDIS_DB', 0))
@@ -59,48 +62,46 @@ class Neshan:
         except RedisError as e:
             print(f"Error writing to cache: {e}")
 
-    def _make_api_request(self, endpoint: str, extra_params: Dict[str, Any] = None) -> Optional[Dict]:
-        """Make API request to Satia.co endpoints with Redis caching"""
-        # Base payload with common parameters
-        payload = {
-            "token": self.access_token,
-            "customer": self.customer
-        }
-        
-        # Add any extra parameters
-        if extra_params:
-            payload = {**payload, **extra_params}
-            
-        cache_key = self._get_cache_key(endpoint, payload)
-        
+    def _make_api_request(self, endpoint: str, data: Dict[str, Any] = None, method: str = "POST") -> Optional[Dict]:
+        """Make API request to Neshan endpoints with Redis caching and dynamic HTTP method"""
+       
+        cache_key = self._get_cache_key(endpoint, data)
         # Try to get from cache first
         cached_data = self._get_from_cache(cache_key)
         if cached_data:
             return cached_data
-                
-        base_url = os.getenv('APP_SATIA_CO_API_BASE_URL', 'https://app.satia.co')
+        
+        base_url = "https://api.neshan.org/v1"
+        headers = {
+            'Api-Key': self.api_key
+        }
         try:
-            response = requests.post(f"{base_url}/{endpoint}", data=payload)
+            url = f"{base_url}/{endpoint}"
+            method = method.upper()
+            if method == "POST":
+                response = requests.post(url, data=data, headers=headers)
+            elif method == "GET":
+                # For GET, send only non-None values as query params
+                params = {k: v for k, v in (data or {}).items() if v is not None}
+                response = requests.get(url, params=params, headers=headers)
+            elif method == "DELETE":
+                response = requests.delete(url, data=data, headers=headers)
+            elif method == "PUT":
+                response = requests.put(url, data=data, headers=headers)
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
             response.raise_for_status()
             data = response.json()
-            
             # Cache the successful response
             self._set_cache(cache_key, data)
             return data
         except requests.exceptions.RequestException as e:
+            print(f"Response text: {response.text}")
             print(f"Error fetching data from {endpoint}: {e}")
             return None
 
     def search_address(self, searchTerm: str) -> Optional[Dict[str, Any]]:
-        # extra_params = {
-        #     "searchTerm": searchTerm,
-        # }
+        resData = self._make_api_request("search", {"term": searchTerm, "lat": self.city_lat, "lng": self.city_long}, method="GET")
         
-        # data = self._make_api_request("ibs/getConnectionLogs", extra_params)
-        # if not data:
-        #     return None
-
-        return {
-            "searchTerm": searchTerm,
-        }
+        return resData
         

@@ -93,7 +93,13 @@ def init_service_container():
         ),
     )
 
-    container.singleton('Neshan', Neshan)
+    container.singleton(
+        'Neshan', 
+        lambda: Neshan(
+            api_key=os.getenv("NESHNA_API_KEY", ""),
+            city_lat=float(os.getenv("NESHAN_CITY_LATITUDE", 34.0873)),
+            city_long=float(os.getenv("NESHAN_CITY_LONG", 49.7022)),
+    ))
 
     container.singleton('Mayoral', lambda: Mayoral(
             bearer_token=os.getenv("MAYORAL_API_BEARER_TOKEN", ""),
