@@ -40,6 +40,7 @@ class InstructionResponse(BaseModel):
 class OpenAIModel(str, Enum):
     GPT4_REALTIME_2025 = "gpt-4o-realtime-preview-2025-06-03"
     GPT4_REALTIME_2024 = "gpt-4o-realtime-preview-2024-12-17"
+    GPT4_MINI_REALTIME_2024 = "gpt-4o-mini-realtime-preview-2024-12-17"
 
 
 # get voice agent instruction
