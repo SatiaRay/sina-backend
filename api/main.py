@@ -39,6 +39,7 @@ from database.repositories.workflow_repository import WorkflowRepository
 from database.models import get_db
 import uuid
 from models.tools.functions.app_satia_co import AppSatiaCo
+from models.tools.functions.neshan import Neshan
 
 # Routes
 from api.about import router as about_router
@@ -90,6 +91,8 @@ def init_service_container():
             customer=os.getenv("SATIA_CUSTOMER", ""),
         ),
     )
+
+    container.singleton('Neshan', Neshan)
 
     # Create and bind instances
     vector_store = container.make("vector_store")

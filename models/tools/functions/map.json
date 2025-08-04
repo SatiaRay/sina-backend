@@ -66,6 +66,22 @@
                 },
                 "required": [],
                 "additionalProperties": false
+
+        },
+        {
+            "type": "function",
+            "name": "Neshan-search_address",
+            "description": "جستجوی آدرس در سامانه نقشه و مسیریابی نشان که آدرس را به طور ناقص دریافت می کند و آدرس کامل به همراه موقعیت جغرافیایی باز می گرداند. مثلا اراک کوچه واعظ زاده -> ",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "searchTerm": {
+                        "type": "string",
+                        "description": "متن جستجو. مثلا خیابان ملک , 17 متری سعادت, خیابان جنت کوچه واعظ زاده"
+                    }
+                },
+                "required": ["searchTerm"],
+                "additionalProperties": false
             }
         }
     ]
