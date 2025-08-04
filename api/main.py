@@ -40,6 +40,7 @@ from database.models import get_db
 import uuid
 from models.tools.functions.app_satia_co import AppSatiaCo
 from models.tools.functions.neshan import Neshan
+from models.tools.functions.mayoral import Mayoral
 
 # Routes
 from api.about import router as about_router
@@ -93,6 +94,10 @@ def init_service_container():
     )
 
     container.singleton('Neshan', Neshan)
+
+    container.singleton('Mayoral', lambda: Mayoral(
+            bearer_token=os.getenv("MAYORAL_API_BEARER_TOKEN", ""),
+        ))
 
     # Create and bind instances
     vector_store = container.make("vector_store")
