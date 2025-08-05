@@ -47,7 +47,7 @@ class WorkflowRepository:
             q = q.filter(Workflow.agent_type == agent_type)
         return q.all()
 
-    def get_active_workflows_flows(self) -> List[Dict[str, Any]]:
+    def get_active_workflows_flows(self, agent_type: str = None) -> List[Dict[str, Any]]:
         """
         Retrieve flows of all active workflows from the database.
             
@@ -56,7 +56,12 @@ class WorkflowRepository:
         """
         try:
             # Query active workflows and extract only their flows
-            workflows = self.db.query(Workflow.flow).filter(Workflow.status == True).all()
+            query = self.db.query(Workflow.flow).filter(Workflow.status == True)
+
+            if(agent_type):
+                query = query.filter(Workflow.agent_type == agent_type)
+
+            workflows = query.all()
                 
             # Extract flows from the query results
             return [workflow[0] for workflow in workflows]
