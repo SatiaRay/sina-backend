@@ -100,11 +100,11 @@
             "description": "آدرس محل گزارش"
           },
           "lat": {
-            "type": "float",
+            "type": "string",
             "description": "عرض مختصات جغرافیای آدرس"
           },
           "long": {
-            "type": "float",
+            "type": "string",
             "description": "طول مختصات جغرافیای آدرس"
           },
           "subject_id": {
