@@ -122,6 +122,24 @@
         ],
         "additionalProperties": false
       }
+    },
+    {
+      "type": "function",
+      "name": "Mayoral-searchSubject",
+      "description": "جستجوی موضوعات سامانه 137 شهرداری",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "کلیدواژه برای جستجو"
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "additionalProperties": false
+      }
     }
   ]
 }
