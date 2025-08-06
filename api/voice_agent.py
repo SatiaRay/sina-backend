@@ -63,7 +63,18 @@ def get_instruction(db: Session = Depends(get_db)):
         voice_documents = document_repo.get_by_agent_type(voice_agent_type)
 
         # Get workflows for voice agent
-        voice_workflows = workflow_repo.get_active_workflows(voice_agent_type)
+        raw_voice_workflows = workflow_repo.get_active_workflows(voice_agent_type)
+
+        # Clean workflow steps: remove null keys and 'position'
+        def clean_step(step):
+            return {k: v for k, v in step.items() if v is not None and k != 'position'}
+
+        voice_workflows = []
+        for wf in raw_voice_workflows:
+            wf_dict = wf.__dict__.copy() if hasattr(wf, "__dict__") else dict(wf)
+            if "flow" in wf_dict and isinstance(wf_dict["flow"], list):
+                wf_dict["flow"] = [clean_step(step) for step in wf_dict["flow"]]
+            voice_workflows.append(wf_dict)
 
         # Get instructions for voice agent
         voice_instructions = instruction_repo.get_by_agent_type(voice_agent_type)
@@ -116,9 +127,10 @@ def get_instruction(db: Session = Depends(get_db)):
             instruction_parts.append("You can execute the following workflows:")
             for workflow in voice_workflows:
                 try:
-                    name = getattr(workflow, "name", "Unknown Workflow")
+                    # Use dict access since workflows are now dicts
+                    name = workflow.get("name", "Unknown Workflow")
                     instruction_parts.append(f"- {name}")
-                    flow = getattr(workflow, "flow", None)
+                    flow = workflow.get("flow", None)
                     if flow:
                         instruction_parts.append(f"  Flow: {str(flow)}")
                 except Exception:
