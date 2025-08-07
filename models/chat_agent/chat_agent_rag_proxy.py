@@ -57,7 +57,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 for msg in chat_history
             ]
 
-            workflows = self.workflow_repository.get_active_workflows_flows()
+            workflows = self.workflow_repository.get_active_workflows_flows('text_agent')
 
             # Initialize agent with all required parameters
             agent = ChatAgentRag(

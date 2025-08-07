@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from redis import Redis
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 import traceback
 from fastapi.responses import JSONResponse
@@ -29,6 +29,9 @@ html_to_markdown_agent = HTMLToMarkdownAgent()
 vector_store = VectorStore()
 
 # Pydantic models for request/response
+from typing import Literal
+
+
 class DocumentBase(BaseModel):
     title: str
     html: str
@@ -36,9 +39,12 @@ class DocumentBase(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     vector_id: Optional[str] = None
+    agent_type: Optional[Literal["voice_agent", "text_agent", "both"]] = None
+
 
 class DocumentCreate(DocumentBase):
     pass
+
 
 class DocumentUpdate(BaseModel):
     title: Optional[str] = None
@@ -46,15 +52,19 @@ class DocumentUpdate(BaseModel):
     markdown: Optional[str] = None
     uri: Optional[str] = None
     domain_id: Optional[int] = None
+    agent_type: Optional[Literal["voice_agent", "text_agent", "both"]] = None
+
 
 class VectorizeDocumentRequest(BaseModel):
     title: Optional[str] = None
     html: str
     metadata: Optional[dict] = None
 
+
 class VectorizeDocumentResponse(BaseModel):
     message: str
     job_id: str
+
 
 class DomainInfo(BaseModel):
     id: int
@@ -62,6 +72,7 @@ class DomainInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 class DocumentResponse(DocumentBase):
     id: int
@@ -72,6 +83,7 @@ class DocumentResponse(DocumentBase):
     class Config:
         from_attributes = True
 
+
 class DocumentListResponse(BaseModel):
     id: int
     title: str
@@ -79,11 +91,13 @@ class DocumentListResponse(BaseModel):
     domain_id: Optional[int] = None
     domain: Optional[DomainInfo] = None
     vector_id: Optional[str] = None
+    agent_type: Literal["voice_agent", "text_agent", "both"]
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
 
 class PaginatedDocumentListResponse(BaseModel):
     items: List[DocumentListResponse]
@@ -95,49 +109,53 @@ class PaginatedDocumentListResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 def clean_domain(url: str) -> str:
     """
     Clean domain name by removing www. and ensuring proper URL structure
-    
+
     Args:
         url: The URL to clean
-        
+
     Returns:
         Cleaned URL with proper domain structure
     """
     try:
         # Parse the URL
         parsed = urlparse(url)
-        
+
         # Remove www. from netloc using regex
-        netloc = re.sub(r'^www\.', '', parsed.netloc)
-        
+        netloc = re.sub(r"^www\.", "", parsed.netloc)
+
         # Reconstruct the URL with cleaned netloc
-        cleaned = urlunparse((
-            parsed.scheme,
-            netloc,
-            parsed.path,
-            parsed.params,
-            parsed.query,
-            parsed.fragment
-        ))
-        
+        cleaned = urlunparse(
+            (
+                parsed.scheme,
+                netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
+
         return cleaned
     except Exception as e:
         print(f"Error cleaning domain: {str(e)}")
         return url
 
+
 # Create a new document
-@router.post("/", response_model=DocumentResponse)
+@router.get("/", response_model=DocumentResponse)
 def create_document(document: DocumentCreate, db: Session = Depends(get_db)):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
+
     # Verify domain exists
     domain = domain_repo.get(document.domain_id)
     if not domain:
         raise HTTPException(status_code=400, detail="Domain not found")
-    
+
     # Create document
     created_doc = document_repo.create(document.model_dump())
     return DocumentResponse(
@@ -146,70 +164,96 @@ def create_document(document: DocumentCreate, db: Session = Depends(get_db)):
         html=created_doc.html,
         markdown=created_doc.markdown,
         uri=created_doc.uri,
+        agent_type=created_doc.agent_type,
         domain_id=created_doc.domain_id,
         created_at=created_doc.created_at,
         updated_at=created_doc.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
     )
 
+
 # Get manual documents with pagination
-@router.get("/manual", response_model=PaginatedDocumentListResponse,
-          summary="دریافت اسناد دستی",
-          description="این اندپوینت لیست اسناد با نوع دستی را با پشتیبانی از صفحه‌بندی برمی‌گرداند")
+@router.get(
+    "/manual",
+    response_model=PaginatedDocumentListResponse,
+    summary="دریافت اسناد دستی",
+    description="این اندپوینت لیست اسناد با نوع دستی را با پشتیبانی از صفحه‌بندی برمی‌گرداند",
+)
 def get_manual_documents(
     page: int = Query(1, description="Page number (starting from 1)", ge=1),
     size: int = Query(10, description="Number of documents per page", ge=1, le=100),
-    db: Session = Depends(get_db)
+    agent_type: Optional[str] = Query(None, description="Agent type"),
+    db: Session = Depends(get_db),
 ):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
+
     # Query manual documents with pagination
-    base_query = document_repo.db.query(document_repo.model_class).filter(
-        document_repo.model_class.type == 'manual'
-    )
-    
+    base_query = document_repo.db.query(document_repo.model_class)
+
+    print("###############################################################")
+    print(agent_type)
+    print("###############################################################")
+
+    if agent_type:
+        print(
+            "############################### Condition ###################################"
+        )
+        base_query = base_query.filter(
+            document_repo.model_class.type == "manual",
+            document_repo.model_class.agent_type == agent_type,
+        )
+    else:
+        base_query = base_query.filter(
+            document_repo.model_class.type == "manual",
+        )
+
     # Calculate total count and pages
     total = base_query.count()
     pages = (total + size - 1) // size  # Ceiling division
-    
+
     # Apply pagination
     offset = (page - 1) * size
-    documents = base_query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(size).all()
-    
+    documents = (
+        base_query.order_by(document_repo.model_class.created_at.desc())
+        .offset(offset)
+        .limit(size)
+        .all()
+    )
+
     # Create response with domain info
     items = []
     for doc in documents:
         domain = domain_repo.get(doc.domain_id) if doc.domain_id else None
-        items.append(DocumentListResponse(
-            id=doc.id,
-            title=doc.title,
-            uri=doc.uri,
-            domain_id=doc.domain_id,
-            domain=domain,
-            vector_id=doc.vector_id,
-            created_at=doc.created_at,
-            updated_at=doc.updated_at
-        ))
-    
+        items.append(
+            DocumentListResponse(
+                id=doc.id,
+                title=doc.title,
+                uri=doc.uri,
+                domain_id=doc.domain_id,
+                domain=domain,
+                vector_id=doc.vector_id,
+                agent_type=doc.agent_type,
+                created_at=doc.created_at,
+                updated_at=doc.updated_at,
+            )
+        )
+
     return PaginatedDocumentListResponse(
-        items=items,
-        total=total,
-        page=page,
-        size=size,
-        pages=pages
+        items=items, total=total, page=page, size=size, pages=pages
     )
+
 
 # Get a document by ID
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(document_id: int, db: Session = Depends(get_db)):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
+
     document = document_repo.get(document_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     domain = domain_repo.get(document.domain_id)
     return DocumentResponse(
         id=document.id,
@@ -217,20 +261,24 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
         html=document.html,
         markdown=document.markdown,
         uri=document.uri,
+        agent_type=document.agent_type,
         domain_id=document.domain_id,
-        vector_id = document.vector_id,
+        vector_id=document.vector_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
     )
+
 
 # Update a document
 @router.put("/{document_id}", response_model=DocumentResponse)
 async def update_document(
-    document_id: int, 
-    document: DocumentUpdate, 
-    update_vector: bool = Query(False, description="Whether to update the vector store with the new content"),
-    db: Session = Depends(get_db)
+    document_id: int,
+    document: DocumentUpdate,
+    update_vector: bool = Query(
+        False, description="Whether to update the vector store with the new content"
+    ),
+    db: Session = Depends(get_db),
 ):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
@@ -248,7 +296,7 @@ async def update_document(
 
     # If HTML is being updated, convert it to markdown
     update_data = document.model_dump(exclude_unset=True)
-  
+
     # Update document
     updated_doc = document_repo.update(document_id, update_data)
     if not updated_doc:
@@ -263,29 +311,29 @@ async def update_document(
                 markdown = await html_to_markdown_agent.convert(document.html)
                 if markdown is None:
                     raise HTTPException(
-                        status_code=500,
-                        detail="Failed to convert HTML to Markdown"
+                        status_code=500, detail="Failed to convert HTML to Markdown"
                     )
-            
+
             # Prepare metadata with proper type handling
             metadata = {
                 "document_id": str(document_id),  # Convert to string
                 "title": updated_doc.title or "",  # Use empty string if None
                 "uri": updated_doc.uri or "",  # Use empty string if None
-                "domain_id": str(updated_doc.domain_id) if updated_doc.domain_id else "0",  # Convert to string, use "0" if None
-                "updated_at": datetime.now().isoformat()
+                "domain_id": (
+                    str(updated_doc.domain_id) if updated_doc.domain_id else "0"
+                ),  # Convert to string, use "0" if None
+                "updated_at": datetime.now().isoformat(),
             }
-            
+
             # Create document for vector store
-            vector_doc = {
-                "text": markdown,
-                "metadata": metadata
-            }
+            vector_doc = {"text": markdown, "metadata": metadata}
 
             vector_store.delete_vector(updated_doc.vector_id)
 
             # Add new vector document
-            vector_id = vector_store.add_documents([vector_doc], updated_doc.vector_id)[0]
+            vector_id = vector_store.add_documents([vector_doc], updated_doc.vector_id)[
+                0
+            ]
 
         except Exception as e:
             print(f"Error updating vector store: {str(e)}")
@@ -299,10 +347,11 @@ async def update_document(
         html=updated_doc.html,
         markdown=updated_doc.markdown,
         uri=updated_doc.uri,
+        agent_type=updated_doc.agent_type,
         domain_id=updated_doc.domain_id,
         created_at=updated_doc.created_at,
         updated_at=updated_doc.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
     )
 
 
@@ -316,6 +365,7 @@ def delete_document(document_id: int, db: Session = Depends(get_db)):
     document_repo.delete(document_id)
     return {"message": "Document deleted successfully"}
 
+
 # List all documents
 @router.get("", response_model=PaginatedDocumentListResponse)
 def list_documents_no_slash(
@@ -323,26 +373,29 @@ def list_documents_no_slash(
     uri: Optional[str] = Query(None, description="Filter by URI"),
     page: int = Query(1, description="Page number (starting from 1)", ge=1),
     size: int = Query(10, description="Number of documents per page", ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     return list_documents(domain_id, uri, page, size, db)
+
 
 @router.get("/", response_model=PaginatedDocumentListResponse)
 def list_documents(
     domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
     uri: Optional[str] = Query(None, description="Filter by URI"),
+    agent_type: Optional[str] = Query(None, description="Agent type"),
     page: int = Query(1, description="Page number (starting from 1)", ge=1),
     size: int = Query(10, description="Number of documents per page", ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
+
     # Base query with domain_id not null filter
     base_query = document_repo.db.query(document_repo.model_class).filter(
-        document_repo.model_class.domain_id.isnot(None)
+        document_repo.model_class.domain_id.isnot(None),
+        document_repo.model_class.agent_type == agent_type,
     )
-    
+
     # Get documents based on filters with pagination
     if domain_id:
         query = base_query.filter(document_repo.model_class.domain_id == domain_id)
@@ -350,48 +403,55 @@ def list_documents(
         query = base_query.filter(document_repo.model_class.uri == uri)
     else:
         query = base_query
-    
+
     # Calculate total count and pages
     total = query.count()
     pages = (total + size - 1) // size  # Ceiling division
-    
+
     # Apply pagination
     offset = (page - 1) * size
-    documents = query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(size).all()
-    
+    documents = (
+        query.order_by(document_repo.model_class.created_at.desc())
+        .offset(offset)
+        .limit(size)
+        .all()
+    )
+
     # Create response with domain info
     items = []
     for doc in documents:
         domain = domain_repo.get(doc.domain_id)
-        items.append(DocumentListResponse(
-            id=doc.id,
-            title=doc.title,
-            uri=doc.uri,
-            domain_id=doc.domain_id,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
-            vector_id=doc.vector_id,
-            created_at=doc.created_at,
-            updated_at=doc.updated_at,            
-        ))
-    
+        items.append(
+            DocumentListResponse(
+                id=doc.id,
+                title=doc.title,
+                uri=doc.uri,
+                agent_type=doc.agent_type,
+                domain_id=doc.domain_id,
+                domain=(
+                    DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+                ),
+                vector_id=doc.vector_id,
+                created_at=doc.created_at,
+                updated_at=doc.updated_at,
+            )
+        )
+
     return PaginatedDocumentListResponse(
-        items=items,
-        total=total,
-        page=page,
-        size=size,
-        pages=pages
+        items=items, total=total, page=page, size=size, pages=pages
     )
+
 
 # Get document by URI
 @router.get("/uri/{uri}", response_model=DocumentResponse)
 def get_document_by_uri(uri: str, db: Session = Depends(get_db)):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
+
     documents = document_repo.get_by_uri(uri)
     if not documents:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     doc = documents[0]  # Return first document if multiple exist
     domain = domain_repo.get(doc.domain_id)
     return DocumentResponse(
@@ -400,110 +460,124 @@ def get_document_by_uri(uri: str, db: Session = Depends(get_db)):
         html=doc.html,
         markdown=doc.markdown,
         uri=doc.uri,
+        agent_type=doc.agent_type,
         domain_id=doc.domain_id,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
     )
+
 
 # Search documents by title
 @router.get("/search/title", response_model=List[DocumentResponse])
 def search_documents_by_title(
     query: str = Query(..., description="Search query"),
     domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
+
     documents = document_repo.search_by_title(query)
     if domain_id:
         documents = [doc for doc in documents if doc.domain_id == domain_id]
-    
+
     response = []
     for doc in documents:
         domain = domain_repo.get(doc.domain_id)
-        response.append(DocumentResponse(
-            id=doc.id,
-            title=doc.title,
-            html=doc.html,
-            markdown=doc.markdown,
-            uri=doc.uri,
-            domain_id=doc.domain_id,
-            created_at=doc.created_at,
-            updated_at=doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
-        ))
+        response.append(
+            DocumentResponse(
+                id=doc.id,
+                title=doc.title,
+                html=doc.html,
+                markdown=doc.markdown,
+                uri=doc.uri,
+                agent_type=doc.agent_type,
+                domain_id=doc.domain_id,
+                created_at=doc.created_at,
+                updated_at=doc.updated_at,
+                domain=(
+                    DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+                ),
+            )
+        )
     return response
 
+
 # Get document by vector_id
-@router.get("/vector/{vector_id}", response_model=DocumentResponse,
-          summary="دریافت سند با استفاده از شناسه برداری",
-          description="این اندپوینت سندی که شناسه برداری آن با مقدار ورودی برابر است را برمی‌گرداند")
+@router.get(
+    "/vector/{vector_id}",
+    response_model=DocumentResponse,
+    summary="دریافت سند با استفاده از شناسه برداری",
+    description="این اندپوینت سندی که شناسه برداری آن با مقدار ورودی برابر است را برمی‌گرداند",
+)
 def get_document_by_vector_id(vector_id: str, db: Session = Depends(get_db)):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
+
     # Query document with matching vector_id
     query = document_repo.db.query(document_repo.model_class).filter(
         document_repo.model_class.vector_id == vector_id
     )
     document = query.first()
-    
+
     if not document:
         raise HTTPException(
-            status_code=404,
-            detail=f"No document found with vector_id: {vector_id}"
+            status_code=404, detail=f"No document found with vector_id: {vector_id}"
         )
-    
+
     # Get domain info if domain_id exists
     domain = None
     if document.domain_id:
         domain = domain_repo.get(document.domain_id)
-    
+
     return DocumentResponse(
         id=document.id,
         title=document.title,
         html=document.html,
         markdown=document.markdown,
         uri=document.uri,
+        agent_type=document.agent_type,
         vector_id=vector_id,
         domain_id=document.domain_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
     )
 
-@router.post("/{document_id}/toggle-vector", response_model=DocumentResponse,
-          summary="تغییر وضعیت برداری سند",
-          description="این اندپوینت وضعیت برداری سند را تغییر می‌دهد. اگر سند برداری شده باشد، آن را حذف می‌کند و اگر برداری نشده باشد، آن را برداری می‌کند.")
+
+@router.post(
+    "/{document_id}/toggle-vector",
+    response_model=DocumentResponse,
+    summary="تغییر وضعیت برداری سند",
+    description="این اندپوینت وضعیت برداری سند را تغییر می‌دهد. اگر سند برداری شده باشد، آن را حذف می‌کند و اگر برداری نشده باشد، آن را برداری می‌کند.",
+)
 async def toggle_document_vector_status(
-    document_id: int,
-    db: Session = Depends(get_db)
+    document_id: int, db: Session = Depends(get_db)
 ):
     """
     Toggle vector status of a document
-    
+
     - If document has vector_id: Delete vector and set vector_id to null
     - If document has no vector_id: Create vector and set vector_id
     """
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
+
     # Get document
     document = document_repo.get(document_id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     try:
         if document.vector_id:
             # Document is vectorized, so devectorize it
             vector_store.delete_vector(document.vector_id)
-            
+
             # Update document to remove vector_id
             update_data = {"vector_id": None}
             updated_doc = document_repo.update(document_id, update_data)
-            
+
         else:
             # Document is not vectorized, so vectorize it
             # Prepare metadata
@@ -512,58 +586,57 @@ async def toggle_document_vector_status(
                 "title": document.title,
                 "uri": document.uri or "",
                 "domain_id": str(document.domain_id) if document.domain_id else "0",
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now().isoformat(),
             }
-            
+
             # Create document for vector store
-            vector_doc = {
-                "text": document.markdown,
-                "metadata": metadata
-            }
-            
+            vector_doc = {"text": document.markdown, "metadata": metadata}
+
             # Add to vector store
             vector_id = vector_store.add_documents([vector_doc])[0]
-            
+
             # Update document with vector_id
             update_data = {"vector_id": vector_id}
             updated_doc = document_repo.update(document_id, update_data)
-        
+
         # Get domain info for response
         domain = domain_repo.get(updated_doc.domain_id)
-        
+
         return DocumentResponse(
             id=updated_doc.id,
             title=updated_doc.title,
             html=updated_doc.html,
             markdown=updated_doc.markdown,
             uri=updated_doc.uri,
+            agent_type=updated_doc.agent_type,
             domain_id=updated_doc.domain_id,
             vector_id=updated_doc.vector_id,
             created_at=updated_doc.created_at,
             updated_at=updated_doc.updated_at,
-            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None
+            domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
         )
-        
+
     except Exception as e:
         print(f"Error toggling vector status: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/{document_id}/vectorize", tags=["documents"],
-          summary="تبدیل و ذخیره سند در پایگاه داده برداری",
-          description="این اندپوینت HTML را به Markdown تبدیل کرده و در پایگاه داده برداری ذخیره می‌کند")
-async def vectorize_document(
-    document_id: int,
-    request: VectorizeDocumentRequest
-):
+
+@router.post(
+    "/{document_id}/vectorize",
+    tags=["documents"],
+    summary="تبدیل و ذخیره سند در پایگاه داده برداری",
+    description="این اندپوینت HTML را به Markdown تبدیل کرده و در پایگاه داده برداری ذخیره می‌کند",
+)
+async def vectorize_document(document_id: int, request: VectorizeDocumentRequest):
     """
     تبدیل HTML به Markdown و ذخیره در پایگاه داده برداری
-    
+
     - **document_id**: شناسه سند
     - **title**: عنوان سند (اختیاری)
     - **html**: محتوای HTML سند
     - **metadata**: متادیتای سند (اختیاری)
-    
+
     **نمونه درخواست:**
     ```json
     {
@@ -573,7 +646,7 @@ async def vectorize_document(
       }
     }
     ```
-    
+
     **نمونه خروجی:**
     ```json
     {
@@ -586,29 +659,40 @@ async def vectorize_document(
     """
     try:
         # Add vectorize task to queue
-        redis_con = Redis(host=os.getenv('REDIS_HOST'))
+        redis_con = Redis(host=os.getenv("REDIS_HOST"))
         q = Queue(connection=redis_con)
         job_id = str(uuid.uuid4())
-        q.enqueue(vectorize_task, document_id, request.html, request.metadata, request.title, job_id = job_id)
+        q.enqueue(
+            vectorize_task,
+            document_id,
+            request.html,
+            request.metadata,
+            request.title,
+            job_id=job_id,
+        )
 
-         # Prepare response
+        # Prepare response
         response = VectorizeDocumentResponse(
             message="سند برای انتقال به پایگاه دانش هوش مصنوعی در صف پردازش قرار گرفت.",
-            job_id=job_id
+            job_id=job_id,
         )
-        
+
         return JSONResponse(
-            content=response.dict(),
-            media_type="application/json; charset=utf-8"
+            content=response.dict(), media_type="application/json; charset=utf-8"
         )
-        
-        
+
     except Exception as e:
         print(f"Error in vectorize_document: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] = None, title: Optional[str] = None):
+
+async def vectorize_task(
+    document_id: int,
+    html: str,
+    metadata: Optional[dict] = None,
+    title: Optional[str] = None,
+):
     try:
         from database.models import SessionLocal
         from rq import get_current_job
@@ -620,7 +704,7 @@ async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] =
             pass
 
         # Update progress metadata
-        job.meta['progress'] = {'type' : 'info', 'msg' : "Start vectorizing ..."}
+        job.meta["progress"] = {"type": "info", "msg": "Start vectorizing ..."}
         job.save_meta()
 
         db = SessionLocal()
@@ -628,28 +712,30 @@ async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] =
         # Get document from database to verify it exists
         document_repo = DocumentRepository(db)
         document = document_repo.get(document_id)
-        
+
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
 
         # Update progress metadata
-        job.meta['progress'] = {'type' : 'info', 'msg' : "Start html to markdown ..."}
+        job.meta["progress"] = {"type": "info", "msg": "Start html to markdown ..."}
         job.save_meta()
-        
+
         # Set markdown from document.markdown database value if html not changed or generate markdown by AI agent
-        if(document.ai_markdown and document.html == html and document.markdown):
+        if document.ai_markdown and document.html == html and document.markdown:
             markdown = document.markdown
         else:
             markdown = await html_to_markdown_agent.convert(html)
-            
+
             if markdown is None:
                 raise HTTPException(
-                    status_code=500,
-                    detail="Failed to convert HTML to Markdown"
+                    status_code=500, detail="Failed to convert HTML to Markdown"
                 )
-        
+
         # Update progress metadata
-        job.meta['progress'] = {'type' : 'info', 'msg' : "Markdown generated. Storing data ..."}
+        job.meta["progress"] = {
+            "type": "info",
+            "msg": "Markdown generated. Storing data ...",
+        }
         job.save_meta()
 
         # Clean the URI if it exists
@@ -657,35 +743,37 @@ async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] =
 
         # Prepare metadata
         metadata = metadata or {}
-        metadata.update({
-            "document_id": document_id,
-            "title": title or document.title,
-            "uri": uri,
-            "domain_id": document.domain_id,
-            "created_at": datetime.now().isoformat()
-        })
-        
+        metadata.update(
+            {
+                "document_id": document_id,
+                "title": title or document.title,
+                "uri": uri,
+                "domain_id": document.domain_id,
+                "created_at": datetime.now().isoformat(),
+            }
+        )
+
         # Create document for vector store
-        vector_doc = {
-            "text": markdown,
-            "metadata": metadata
-        }
-        
+        vector_doc = {"text": markdown, "metadata": metadata}
+
         # Add to vector store
         vector_id = await store_vector_document(vector_doc)
 
         # Update progress metadata
-        job.meta['progress'] = {'type' : 'info', 'msg' : "Document added in vector database"}
+        job.meta["progress"] = {
+            "type": "info",
+            "msg": "Document added in vector database",
+        }
         job.save_meta()
-        
+
         # Update document with vector_id
         update_data = {
             "vector_id": vector_id,
-            "title" : title or document.title,
-            "html" : html,
-            "markdown" : markdown,
-            "ai_markdown" : True,
-            "uri": uri  # Update with cleaned URI
+            "title": title or document.title,
+            "html": html,
+            "markdown": markdown,
+            "ai_markdown": True,
+            "uri": uri,  # Update with cleaned URI
         }
         document_repo.update(document_id, update_data)
 
@@ -693,40 +781,42 @@ async def vectorize_task(document_id: int, html: str, metadata: Optional[dict] =
         vector_data = await get_vector_document(vector_id)
         if not vector_data:
             raise HTTPException(
-                status_code=500,
-                detail="Failed to retrieve vector data after storage"
+                status_code=500, detail="Failed to retrieve vector data after storage"
             )
 
         # Update progress metadata
-        job.meta['progress'] = {'type' : 'info', 'msg' : "Finished"}
+        job.meta["progress"] = {"type": "info", "msg": "Finished"}
         job.save_meta()
-        
+
     except Exception as e:
         # Update progress metadata
-        job.meta['progress'] = {'type' : 'error', 'msg' : f"Error in vectorize_document: {str(e)}"}
+        job.meta["progress"] = {
+            "type": "error",
+            "msg": f"Error in vectorize_document: {str(e)}",
+        }
         job.save_meta()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+
 async def store_vector_document(vector_doc: Dict[str, Any]) -> str:
     """
     Store a document in the vector store using the vector API endpoint
-    
+
     Args:
         vector_doc: Document to store with text and metadata
-        
+
     Returns:
         str: Vector ID of the stored document
     """
     try:
-        host = os.getenv('HOST', 'http://localhost:8000')
-        if not host.startswith(('http://', 'https://')):
-            host = f'http://{host}'
+        host = os.getenv("HOST", "http://localhost:8000")
+        if not host.startswith(("http://", "https://")):
+            host = f"http://{host}"
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{host}/vector/store",
-                json={"documents": [vector_doc]}
+                f"{host}/vector/store", json={"documents": [vector_doc]}
             )
             response.raise_for_status()
             result = response.json()
@@ -734,31 +824,32 @@ async def store_vector_document(vector_doc: Dict[str, Any]) -> str:
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 async def get_vector_document(vector_id: str) -> Dict[str, Any]:
     """
     Get a document from the vector store using the vector API endpoint
-    
+
     Args:
         vector_id: ID of the vector document to retrieve
-        
+
     Returns:
         Dict containing the vector document data
     """
     try:
-        host = os.getenv('HOST', 'http://localhost:8000')
-        if not host.startswith(('http://', 'https://')):
-            host = f'http://{host}'
+        host = os.getenv("HOST", "http://localhost:8000")
+        if not host.startswith(("http://", "https://")):
+            host = f"http://{host}"
 
         async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{host}/vector/{vector_id}"
-            )
+            response = await client.get(f"{host}/vector/{vector_id}")
             response.raise_for_status()
             return response.json()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 document_websocket_router = APIRouter()
+
 
 @document_websocket_router.websocket("/ws/documents/vectorize/{job_id}")
 async def websocket_vectorize_status(websocket: WebSocket, job_id: str):
@@ -768,28 +859,32 @@ async def websocket_vectorize_status(websocket: WebSocket, job_id: str):
 
     try:
         # Use the existing redis connection
-        redis_conn = Redis(host=os.getenv('REDIS_HOST'))
+        redis_conn = Redis(host=os.getenv("REDIS_HOST"))
         while True:
             job = Job.fetch(job_id, connection=redis_conn)
 
-            progress = job.meta.get('progress', {'type': 'info', 'msg': 'Queued'})
+            progress = job.meta.get("progress", {"type": "info", "msg": "Queued"})
             print(progress)
             if progress != last_progress:
                 last_progress = progress
 
-                await websocket.send_json({
-                    'event': 'change_progress',
-                    'progress': progress,
-                    'status': job.get_status()
-                })
+                await websocket.send_json(
+                    {
+                        "event": "change_progress",
+                        "progress": progress,
+                        "status": job.get_status(),
+                    }
+                )
 
             if job.is_finished or job.is_failed:
                 # Send final status
-                await websocket.send_json({
-                    'event': 'finished',
-                    'status': job.get_status(),
-                    'progress': progress
-                })
+                await websocket.send_json(
+                    {
+                        "event": "finished",
+                        "status": job.get_status(),
+                        "progress": progress,
+                    }
+                )
                 break
 
             await asyncio.sleep(1)  # Poll every second
@@ -797,63 +892,71 @@ async def websocket_vectorize_status(websocket: WebSocket, job_id: str):
     except WebSocketDisconnect:
         print("Client disconnected")
     except Exception as e:
-        await websocket.send_json({
-                    'event': 'error',
-                    'msg' : f"Error in websocket for vectorize job {job_id}: {e}"
-                })
+        await websocket.send_json(
+            {
+                "event": "error",
+                "msg": f"Error in websocket for vectorize job {job_id}: {e}",
+            }
+        )
         traceback.print_exc()
         await websocket.close(code=1011)  # Close with an error code
 
-@router.get("/domain/{domain_id}", response_model=PaginatedDocumentListResponse,
-          summary="دریافت اسناد یک دامنه",
-          description="این اندپوینت لیست اسناد یک دامنه خاص را با پشتیبانی از صفحه‌بندی برمی‌گرداند")
+
+@router.get(
+    "/domain/{domain_id}",
+    response_model=PaginatedDocumentListResponse,
+    summary="دریافت اسناد یک دامنه",
+    description="این اندپوینت لیست اسناد یک دامنه خاص را با پشتیبانی از صفحه‌بندی برمی‌گرداند",
+)
 def get_documents_by_domain(
     domain_id: int,
     page: int = Query(1, description="Page number (starting from 1)", ge=1),
     size: int = Query(10, description="Number of documents per page", ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
-    
+
     # Verify domain exists
     domain = domain_repo.get(domain_id)
     if not domain:
         raise HTTPException(status_code=404, detail="Domain not found")
-    
+
     # Query documents for the domain with pagination
     base_query = document_repo.db.query(document_repo.model_class).filter(
         document_repo.model_class.domain_id == domain_id
     )
-    
+
     # Calculate total count and pages
     total = base_query.count()
     pages = (total + size - 1) // size  # Ceiling division
-    
+
     # Apply pagination
     offset = (page - 1) * size
-    documents = base_query.order_by(document_repo.model_class.created_at.desc()).offset(offset).limit(size).all()
-    
+    documents = (
+        base_query.order_by(document_repo.model_class.created_at.desc())
+        .offset(offset)
+        .limit(size)
+        .all()
+    )
+
     # Create response with domain info
     items = []
     for doc in documents:
-        items.append(DocumentListResponse(
-            id=doc.id,
-            title=doc.title,
-            uri=doc.uri,
-            domain_id=doc.domain_id,
-            domain=DomainInfo(id=domain.id, domain=domain.domain),
-            vector_id=doc.vector_id,
-            created_at=doc.created_at,
-            updated_at=doc.updated_at
-        ))
-    
+        items.append(
+            DocumentListResponse(
+                id=doc.id,
+                title=doc.title,
+                uri=doc.uri,
+                agent_type=doc.agent_type,
+                domain_id=doc.domain_id,
+                domain=DomainInfo(id=domain.id, domain=domain.domain),
+                vector_id=doc.vector_id,
+                created_at=doc.created_at,
+                updated_at=doc.updated_at,
+            )
+        )
+
     return PaginatedDocumentListResponse(
-        items=items,
-        total=total,
-        page=page,
-        size=size,
-        pages=pages
+        items=items, total=total, page=page, size=size, pages=pages
     )
-
-
