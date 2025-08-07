@@ -1,72 +1,145 @@
 {
-    "functions" : [
-        {
-            "type": "function",
-            "name": "AppSatiaCo-get_connection_logs",
-            "description": "جزئیات مصرف اینترنت اشتراک را باز می گرداند. اینکه کاربر چه مقدار به چه صورت اینترنت خود را مصرف کرده است.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "serial": {
-                        "type": "string",
-                        "description": "سریال سرویس مورد نظر"
-                    },
-                    "beginDate": {
-                        "type": "string",
-                        "description": "تاریخ شروع برای فیلتر کردن"
-                    },
-                    "endDate": {
-                        "type": "string",
-                        "description": "تاریخ پایان برای فیلتر کردن"
-                    }
-                },
-                "required": [],
-                "additionalProperties": false
-            }
+  "functions": [
+    {
+      "type": "function",
+      "name": "AppSatiaCo-get_connection_logs",
+      "description": "جزئیات مصرف اینترنت اشتراک را باز می گرداند. اینکه کاربر چه مقدار به چه صورت اینترنت خود را مصرف کرده است.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "description": "سریال سرویس مورد نظر"
+          },
+          "beginDate": {
+            "type": "string",
+            "description": "تاریخ شروع برای فیلتر کردن"
+          },
+          "endDate": {
+            "type": "string",
+            "description": "تاریخ پایان برای فیلتر کردن"
+          }
         },
-        {
-            "type": "function",
-            "name": "AppSatiaCo-get_service_info",
-            "description": "جزئیات اشتراک کاربر مثل نوع اشتراک, حجم باقی مانده, مدت زمان باقی مانده و ... را باز میگرداند",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "serial": {
-                        "type": "string",
-                        "description": "سریال سرویس مورد نظر"
-                    },
-                    "beginDate": {
-                        "type": "string",
-                        "description": "تاریخ شروع برای فیلتر کردن"
-                    },
-                    "endDate": {
-                        "type": "string",
-                        "description": "تاریخ پایان برای فیلتر کردن"
-                    }
-                },
-                "required": [],
-                "additionalProperties": false
-            }
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "AppSatiaCo-get_service_info",
+      "description": "جزئیات اشتراک کاربر مثل نوع اشتراک, حجم باقی مانده, مدت زمان باقی مانده و ... را باز میگرداند",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "description": "سریال سرویس مورد نظر"
+          },
+          "beginDate": {
+            "type": "string",
+            "description": "تاریخ شروع برای فیلتر کردن"
+          },
+          "endDate": {
+            "type": "string",
+            "description": "تاریخ پایان برای فیلتر کردن"
+          }
         },
-        {
-            "type": "function",
-            "name": "AppSatiaCo-get_accounts_list",
-            "description": "فهرست تمامی اشتراک های اینترنت کاربر را باز میگرداند به همراه اطلاعاتی نظیر:سریال, وضعیت, شماره خط, وضعیت و نوع آن",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "beginDate": {
-                        "type": "string",
-                        "description": "تاریخ شروع برای فیلتر کردن"
-                    },
-                    "endDate": {
-                        "type": "string",
-                        "description": "تاریخ پایان برای فیلتر کردن"
-                    }
-                },
-                "required": [],
-                "additionalProperties": false
-            }
-        }
-    ]
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "AppSatiaCo-get_accounts_list",
+      "description": "فهرست تمامی اشتراک های اینترنت کاربر را باز میگرداند به همراه اطلاعاتی نظیر:سریال, وضعیت, شماره خط, وضعیت و نوع آن",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "beginDate": {
+            "type": "string",
+            "description": "تاریخ شروع برای فیلتر کردن"
+          },
+          "endDate": {
+            "type": "string",
+            "description": "تاریخ پایان برای فیلتر کردن"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "Neshan-search_address",
+      "description": "جستجوی آدرس در سامانه نقشه و مسیریابی نشان که آدرس را به طور ناقص دریافت می کند و آدرس کامل به همراه موقعیت جغرافیایی باز می گرداند. مثلا اراک کوچه واعظ زاده -> ",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "searchTerm": {
+            "type": "string",
+            "description": "متن جستجو. مثلا خیابان ملک , 17 متری سعادت, خیابان جنت کوچه واعظ زاده"
+          }
+        },
+        "required": ["searchTerm"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "Mayoral-submitRequest",
+      "description": "ثبت پیام سامانه 137 شهرداری (ثبت گزارش توسط شهروند)",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mobile": {
+            "type": "string",
+            "description": "شماره تلفن گزارش دهنده"
+          },
+          "address": {
+            "type": "string",
+            "description": "آدرس محل گزارش"
+          },
+          "lat": {
+            "type": "string",
+            "description": "عرض مختصات جغرافیای آدرس"
+          },
+          "long": {
+            "type": "string",
+            "description": "طول مختصات جغرافیای آدرس"
+          },
+          "subject_id": {
+            "type": "integer",
+            "description": "شناسه موضوع گزارش"
+          }
+        },
+        "required": [
+          "reporterFullname",
+          "reporterGender",
+          "address",
+          "coordinates",
+          "category_id",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "Mayoral-searchSubject",
+      "description": "جستجوی موضوعات سامانه 137 شهرداری",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "کلیدواژه برای جستجو"
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
 }

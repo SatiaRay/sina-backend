@@ -32,7 +32,7 @@ class SpeechToTextModel(OpenAI):
 
         transcription  = self.audio.transcriptions.create(
             file=file,
-            model="whisper-1",
+            model="gpt-4o-transcribe",
             prompt="فایل صوتی کاربر راه به متن پارسی تبدیل کن.",
         )
         return transcription.text
