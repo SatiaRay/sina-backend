@@ -2,12 +2,16 @@ import os
 import json
 import requests
 import logging
+import urllib3
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin, urlunparse
 import re
 import hashlib
 import time
 from dotenv import load_dotenv
+
+# Suppress SSL warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from sqlalchemy.orm import Session
 from database.repository import DocumentRepository, CrawledDomainRepository
@@ -94,6 +98,10 @@ def crawl(url, recursive=False, db: Session = None, job=None):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
     
+    # Create a session with SSL verification disabled to handle websites with invalid certificates
+    session = requests.Session()
+    session.verify = False
+    
     # Initialize progress tracking
     total_urls = 0
     crawled_urls = 0
@@ -113,9 +121,13 @@ def crawl(url, recursive=False, db: Session = None, job=None):
             print(f"Domain {domain} already exists in the database")
         else:
             # Try to access the URL first
-            response = requests.get(cleaned_url, timeout=10)
-            if response.status_code != 200:
-                print(f"Failed to access {cleaned_url}: Status code {response.status_code}")
+            try:
+                response = session.get(cleaned_url, timeout=10)
+                if response.status_code != 200:
+                    print(f"Failed to access {cleaned_url}: Status code {response.status_code}")
+                    return
+            except Exception as e:
+                print(f"Failed to access {cleaned_url}: {str(e)}")
                 return
             
             # Create domain record
@@ -171,7 +183,7 @@ def crawl(url, recursive=False, db: Session = None, job=None):
             
             while retry_count < RATE_LIMIT_MAX_RETRIES:
                 try:
-                    response = requests.get(url, timeout=10)
+                    response = session.get(url, timeout=10)
                     
                     # Check for rate limit status codes
                     if response.status_code in RATE_LIMIT_STATUS_CODES:
