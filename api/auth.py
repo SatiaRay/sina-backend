@@ -29,6 +29,7 @@ class UserRegisterRequest(BaseModel):
     password: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    phone: Optional[str] = None
     user_type: str = "customer"
     
     class Config:
@@ -151,6 +152,7 @@ async def register_user(
     - **password**: User's password (will be hashed)
     - **first_name**: User's first name (optional)
     - **last_name**: User's last name (optional)
+    - **phone**: User's phone (optional)
     - **user_type**: User type (admin, supporter, customer)
     """
     # Check if user already exists
