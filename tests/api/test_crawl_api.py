@@ -240,7 +240,7 @@ def test_create_vectorization_batch(db_session, test_document, mock_redis):
     # Setup test data
     doc_ids = [test_document.id]
     
-    # Mock Redis and Queue
+    # Mock Redis and Queuew
     mock_redis.return_value = MagicMock()
     with patch('api.crawl.Queue') as mock_queue:
         mock_job = MagicMock()
