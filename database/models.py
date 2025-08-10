@@ -64,6 +64,7 @@ class User(BaseModel):
     password_hash = Column(String(255), nullable=False)
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
+    phone = Column(String(20), nullable=True)
     user_type = Column(
         Enum("admin", "supporter", "customer", name="user_type_enum"),
         default="customer",
