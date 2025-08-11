@@ -1,6 +1,8 @@
 import json
 from io import BytesIO
 from typing import List, Literal, Optional
+import re
+import urllib.parse
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from fastapi.responses import StreamingResponse
@@ -89,26 +91,34 @@ def delete_workflow(workflow_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{workflow_id}/export")
 def export_workflow(workflow_id: int, db: Session = Depends(get_db)):
-    """
-    Export a workflow as a downloadable JSON file.
-    """
     repo = WorkflowRepository(db)
     workflow = repo.get_by_id(workflow_id)
     if workflow is None:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    # Serialize to dict
     workflow_dict = WorkflowResponse.model_validate(workflow).model_dump()
     json_data = json.dumps(workflow_dict, ensure_ascii=False, indent=2)
-
-    # In-memory file
     file_stream = BytesIO(json_data.encode("utf-8"))
-    filename = f"workflow_{workflow_id}.json"
+
+    # Sanitize filename (replace spaces and disallowed chars)
+    safe_name = re.sub(r"[^\w\-]+", "_", str(workflow.name))
+    ascii_name = safe_name.encode("ascii", "ignore").decode() or "workflow"
+
+    # URL-encode the UTF-8 filename for filename*
+    quoted_name = urllib.parse.quote(str(workflow.name))
+
+    headers = {
+        # ASCII fallback filename (may be empty after ignoring non-ASCII)
+        "Content-Disposition": (
+            f"attachment; filename=\"{ascii_name}.json\"; "
+            f"filename*=UTF-8''{quoted_name}.json"
+        )
+    }
 
     return StreamingResponse(
         file_stream,
         media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers=headers,
     )
 
 # ------------------ NEW Import API ------------------ #
