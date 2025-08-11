@@ -435,7 +435,7 @@ class DatabaseExportImport:
 db_export_import = DatabaseExportImport()
 
 
-@router.post(
+@router.get(
     "/export",
     summary="Export Database",
     description="Export both MySQL and ChromaDB data to a downloadable zip file"
@@ -444,25 +444,20 @@ async def export_database():
     """
     Export the entire database (MySQL and ChromaDB) to a zip file
     
-    This endpoint exports all data from both MySQL and ChromaDB databases
-    and returns a downloadable zip file containing:
-    - metadata.json: Export information and statistics
-    - mysql_data.json: All MySQL table data
-    - chroma_data.json: All ChromaDB collection data
-    
     Returns:
         FileResponse: Zip file containing the exported database
     """
     try:
-        # Export database
+        # Export database - this generates the file and stores the filename/path internally
         export_path = db_export_import.export_database()
         
-        # Return file response
+        # Return file response for download
         return db_export_import.get_export_file_response()
         
     except Exception as e:
         logger.error(f"Export endpoint error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
 
 
 @router.post(
