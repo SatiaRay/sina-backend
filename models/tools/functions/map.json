@@ -86,6 +86,26 @@
     },
     {
       "type": "function",
+      "name": "Neshan-reverse",
+      "description": "تبدیل مختصات جغرافیای به آدرس دقیق",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "string",
+            "description": "عرض جغرافیایی"
+          },
+          "lng": {
+            "type": "string",
+            "description": "طول جغرافیایی"
+          }
+        },
+        "required": ["lat", "lng"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
       "name": "Mayoral-submitRequest",
       "description": "ثبت پیام سامانه 137 شهرداری (ثبت گزارش توسط شهروند)",
       "parameters": {
@@ -135,9 +155,7 @@
             "description": "کلیدواژه برای جستجو"
           }
         },
-        "required": [
-          "q"
-        ],
+        "required": ["q"],
         "additionalProperties": false
       }
     }

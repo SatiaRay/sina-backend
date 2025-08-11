@@ -11,10 +11,10 @@ class Neshan:
         self.api_key = api_key
         self.city_lat = city_lat
         self.city_long = city_long
-        self.redis_host = os.getenv('REDIS_HOST', '127.0.0.1')
-        self.redis_port = int(os.getenv('REDIS_PORT', 6379))
-        self.redis_db = int(os.getenv('REDIS_DB', 0))
-        self.cache_ttl = int(os.getenv('CACHE_TTL', 3600))  # Default 1 hour TTL
+        self.redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
+        self.redis_port = int(os.getenv("REDIS_PORT", 6379))
+        self.redis_db = int(os.getenv("REDIS_DB", 0))
+        self.cache_ttl = int(os.getenv("CACHE_TTL", 3600))  # Default 1 hour TTL
         self._init_redis()
 
     def _init_redis(self) -> None:
@@ -24,7 +24,7 @@ class Neshan:
                 host=self.redis_host,
                 port=self.redis_port,
                 db=self.redis_db,
-                decode_responses=True
+                decode_responses=True,
             )
             # Test connection
             self.redis.ping()
@@ -40,7 +40,7 @@ class Neshan:
         """Get data from Redis cache"""
         if not self.redis:
             return None
-        
+
         try:
             cached_data = self.redis.get(cache_key)
             return json.loads(cached_data) if cached_data else None
@@ -54,27 +54,23 @@ class Neshan:
             return
 
         try:
-            self.redis.setex(
-                cache_key,
-                self.cache_ttl,
-                json.dumps(data)
-            )
+            self.redis.setex(cache_key, self.cache_ttl, json.dumps(data))
         except RedisError as e:
             print(f"Error writing to cache: {e}")
 
-    def _make_api_request(self, endpoint: str, data: Dict[str, Any] = None, method: str = "POST") -> Optional[Dict]:
+    def _make_api_request(
+        self, endpoint: str, data: Dict[str, Any] = None, method: str = "POST"
+    ) -> Optional[Dict]:
         """Make API request to Neshan endpoints with Redis caching and dynamic HTTP method"""
-       
+
         cache_key = self._get_cache_key(endpoint, data)
         # Try to get from cache first
         cached_data = self._get_from_cache(cache_key)
         if cached_data:
             return cached_data
-        
-        base_url = "https://api.neshan.org/v1"
-        headers = {
-            'Api-Key': self.api_key
-        }
+
+        base_url = "https://api.neshan.org"
+        headers = {"Api-Key": self.api_key}
         try:
             url = f"{base_url}/{endpoint}"
             method = method.upper()
@@ -101,7 +97,19 @@ class Neshan:
             return None
 
     def search_address(self, searchTerm: str) -> Optional[Dict[str, Any]]:
-        resData = self._make_api_request("search", {"term": searchTerm, "lat": self.city_lat, "lng": self.city_long}, method="GET")
-        
+        resData = self._make_api_request(
+            "v1/search",
+            {"term": searchTerm, "lat": self.city_lat, "lng": self.city_long},
+            method="GET",
+        )
+
         return resData
-        
+
+    def reverse(self, lat: str, lng) -> Optional[Dict[str, Any]]:
+        resData = self._make_api_request(
+            "v5/reverse",
+            {"lat": lat, "lng": lng},
+            method="GET",
+        )
+
+        return resData
