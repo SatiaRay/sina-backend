@@ -116,6 +116,13 @@ def init_service_container():
     # Create and bind AppSatiaCo instance
     app_satia_co = container.make("AppSatiaCo")
     container.instance("AppSatiaCo", app_satia_co)
+    
+    # Create and bind Neshan instance
+    neshan = container.make("Neshan")
+    container.instance("Neshan", neshan)
+    
+    mayoral = container.make("Mayoral")
+    container.instance("Mayoral", mayoral)
 
 
 # Initialize the service container
