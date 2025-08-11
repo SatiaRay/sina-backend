@@ -58,6 +58,7 @@ from .ai_functions_tools import router as ai_functions_router
 from .auth import router as auth_router
 from .user import router as user_router
 from .voice_agent import router as voice_agent_router
+from .system import router as system_router
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -182,6 +183,7 @@ app.include_router(ai_functions_router)
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(voice_agent_router)
+app.include_router(system_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
@@ -200,6 +202,10 @@ tags_metadata = [
     {
         "name": "Utilities",
         "description": "اندپوینت‌های متفرقه و ابزارها",
+    },
+    {
+        "name": "System",
+        "description": "اندپوینت‌های مربوط به مدیریت سیستم و پایگاه داده",
     },
 ]
 
