@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, MagicMock
 import json
 import sys
 from pathlib import Path
@@ -48,12 +48,17 @@ def test_get_system_settings(mock_exists, mock_file):
 @patch("api.system.open", new_callable=mock_open)
 @patch("api.system.os.path.exists", return_value=True)
 def test_post_system_settings_valid(mock_exists, mock_file):
-    response = client.post("/system/settings", json=MOCK_SETTINGS)
-    assert response.status_code == 200
-    assert response.json()["message"] == "Settings updated successfully"
-    mock_file.assert_called_with(system_mod.SYSTEM_SETTINGS_PATH, "w", encoding="utf-8")
-    handle = mock_file()
-    handle.write.assert_called()  # Should write JSON
+    with patch.object(
+        system_mod.config, "get", return_value=["mock-model-v1", "other-model"]
+    ):
+        response = client.post("/system/settings", json=MOCK_SETTINGS)
+        assert response.status_code == 200
+        assert response.json()["message"] == "Settings updated successfully"
+        mock_file.assert_called_with(
+            system_mod.SYSTEM_SETTINGS_PATH, "w", encoding="utf-8"
+        )
+        handle = mock_file()
+        handle.write.assert_called()  # Should write JSON
 
 
 @patch("api.system.open", new_callable=mock_open)
@@ -73,3 +78,26 @@ def test_post_system_settings_invalid(mock_file):
     response2 = client.post("/system/settings", json=bad_settings2)
     assert response2.status_code == 400
     assert "Invalid settings" in response2.json()["detail"]
+
+
+@patch("api.system.open", new_callable=mock_open)
+def test_post_system_settings_invalid_model(mock_file):
+    # text_agent_model not in allowed models
+    bad_model_settings = {
+        "site_name": "TestBot",
+        "text_agent_model": "not-allowed-model",
+    }
+    mock_config = MagicMock()
+    mock_config.get.return_value = ["mock-model-v1", "other-model"]
+    with patch("api.system.config", mock_config):
+        response = client.post("/system/settings", json=bad_model_settings)
+        assert response.status_code == 400
+        assert "Invalid text_agent_model" in response.json()["detail"]
+    # Also test with allowed model (should pass)
+    good_model_settings = {"site_name": "TestBot", "text_agent_model": "mock-model-v1"}
+    mock_config2 = MagicMock()
+    mock_config2.get.return_value = ["mock-model-v1", "other-model"]
+    with patch("api.system.config", mock_config2):
+        response = client.post("/system/settings", json=good_model_settings)
+        assert response.status_code == 200
+        assert response.json()["message"] == "Settings updated successfully"

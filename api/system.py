@@ -15,6 +15,7 @@ from fastapi import HTTPException, UploadFile, APIRouter, Depends
 from fastapi.responses import FileResponse
 import logging
 import jsonschema
+from dynaconf import Dynaconf
 
 from database.models import (
     Base,
@@ -34,6 +35,8 @@ logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter(prefix="/system", tags=["System"])
+
+config = Dynaconf(settings_files=["../config/ai.json"])
 
 
 class DatabaseExportImport:
@@ -626,11 +629,20 @@ async def get_system_settings():
 async def update_system_settings(new_settings: dict):
     try:
         jsonschema.validate(instance=new_settings, schema=SYSTEM_SETTINGS_SCHEMA)
+        # Validate text_agent_model is in allowed models
+        allowed_models = config.get("text_models")
+        if not allowed_models or new_settings["text_agent_model"] not in allowed_models:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid text_agent_model: {new_settings['text_agent_model']}. Must be one of: {allowed_models}",
+            )
         save_system_settings(new_settings)
         return {"message": "Settings updated successfully"}
     except jsonschema.ValidationError as ve:
         logger.error(f"Settings validation error: {ve.message}")
         raise HTTPException(status_code=400, detail=f"Invalid settings: {ve.message}")
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logger.error(f"Failed to update system settings: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update system settings")
