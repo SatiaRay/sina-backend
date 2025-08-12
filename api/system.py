@@ -30,6 +30,7 @@ from database.models import (
     Instruction,
 )
 from database.vector_store import VectorStore
+from provider.service_container import container
 
 logger = logging.getLogger(__name__)
 
@@ -637,6 +638,11 @@ async def update_system_settings(new_settings: dict):
                 detail=f"Invalid text_agent_model: {new_settings['text_agent_model']}. Must be one of: {allowed_models}",
             )
         save_system_settings(new_settings)
+        
+        # update settings insteance
+        settings = container.make('settings')
+        settings.reload()
+        
         return {"message": "Settings updated successfully"}
     except jsonschema.ValidationError as ve:
         logger.error(f"Settings validation error: {ve.message}")
