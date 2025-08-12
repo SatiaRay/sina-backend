@@ -17,6 +17,7 @@ from pathlib import Path
 import json
 import re
 from models.tools.functions import call_function
+from provider.service_container import container
 
 load_dotenv()
 main_logger, error_logger, api_logger = configure_logging()
@@ -443,8 +444,10 @@ class ChatAgentRag(ChatAgentRagInterface):
         """Stream response from OpenAI with tools configuration"""
         try:
             tools = self._load_tools_configuration()
+            settings = container.make('settings')
+            model = settings.text_agent_model or os.getenv("GPT_MODEL")
             return self.client.responses.create(
-               model=os.getenv("GPT_MODEL"),
+               model=model,
                input=messages,
                stream=True,
                tools=tools
