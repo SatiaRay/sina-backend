@@ -655,11 +655,11 @@ async def update_system_settings(new_settings: dict):
 
 
 @router.get(
-    "/config-schema",
+    "/settings-schema",
     summary="Get System Settings Schema and Allowed Models",
     description="Fetch the JSON schema for system settings and the allowed text models from config/ai.json",
 )
-async def get_config_schema():
+async def get_settings_schema():
     try:
         allowed_models = config.get("text_models")
         return {
