@@ -101,3 +101,16 @@ def test_post_system_settings_invalid_model(mock_file):
         response = client.post("/system/settings", json=good_model_settings)
         assert response.status_code == 200
         assert response.json()["message"] == "Settings updated successfully"
+
+
+def test_get_config_schema():
+    mock_config = MagicMock()
+    mock_config.get.return_value = ["model-a", "model-b"]
+    with patch("api.system.config", mock_config):
+        response = client.get("/system/config-schema")
+        assert response.status_code == 200
+        data = response.json()
+        assert "schema" in data
+        assert "allowed_text_models" in data
+        assert data["schema"] == system_mod.SYSTEM_SETTINGS_SCHEMA
+        assert data["allowed_text_models"] == ["model-a", "model-b"]

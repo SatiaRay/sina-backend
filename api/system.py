@@ -646,3 +646,20 @@ async def update_system_settings(new_settings: dict):
     except Exception as e:
         logger.error(f"Failed to update system settings: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update system settings")
+
+
+@router.get(
+    "/config-schema",
+    summary="Get System Settings Schema and Allowed Models",
+    description="Fetch the JSON schema for system settings and the allowed text models from config/ai.json",
+)
+async def get_config_schema():
+    try:
+        allowed_models = config.get("text_models")
+        return {
+            "schema": SYSTEM_SETTINGS_SCHEMA,
+            "allowed_text_models": allowed_models,
+        }
+    except Exception as e:
+        logger.error(f"Failed to get config schema: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get config schema")
