@@ -508,18 +508,29 @@ def get_dynamic_settings_schema(include_enum=True):
 SYSTEM_SETTINGS_SCHEMA = get_dynamic_settings_schema()
 
 
+def load_defaults_from_schema() -> dict:
+    """Load default values from the schema JSON file."""
+    schema = get_dynamic_settings_schema()
+
+    defaults = {}
+    for key, prop in schema.get("properties", {}).items():
+        if "default" in prop:
+            defaults[key] = prop["default"]
+
+    return defaults
+
+
 def load_system_settings() -> dict:
+    """Load system settings from file or fall back to schema defaults."""
     if not os.path.exists(SYSTEM_SETTINGS_PATH):
-        # Default settings if file does not exist
-        return {
-            "site_name": "Satya Support Chatbot",
-            "text_agent_model": "gpt-4.1-mini",
-        }
+        return load_defaults_from_schema()
+
     with open(SYSTEM_SETTINGS_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
-
+    
 
 def save_system_settings(settings: dict):
+    """Save system settings to file."""
     with open(SYSTEM_SETTINGS_PATH, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=2, ensure_ascii=False)
 
@@ -625,7 +636,7 @@ async def get_system_settings():
         return settings
     except Exception as e:
         logger.error(f"Failed to load system settings: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to load system settings")
+        raise HTTPException(status_code=500, detail=f"Failed to load system settings")
 
 
 @router.post(
@@ -658,7 +669,7 @@ async def update_system_settings(new_settings: dict):
         raise he
     except Exception as e:
         logger.error(f"Failed to update system settings: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to update system settings")
+        raise HTTPException(status_code=500, detail=f"Failed to update system settings")
 
 
 @router.get(
