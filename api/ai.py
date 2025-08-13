@@ -6,6 +6,7 @@ from util.logging_config import configure_logging, log_error
 import wave
 import os
 from models.models.speech_to_text_model import SpeechToTextModel
+from models.models.google_speech_to_text_model import GoogleSpeechToTextModel
 import matplotlib.pyplot as plt
 import io
 import uuid
@@ -20,7 +21,8 @@ router = APIRouter(prefix="", tags=["AI"])
 agent_rag = ChatAgentRagProxy()
 
 # Initialze the speech to text model
-speech_to_text_model = SpeechToTextModel()
+# speech_to_text_model = SpeechToTextModel()
+speech_to_text_model = GoogleSpeechToTextModel()
 
 @router.websocket("/ws/ask")
 async def ask_question_agent_socket(
