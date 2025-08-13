@@ -59,6 +59,7 @@ from .auth import router as auth_router
 from .user import router as user_router
 from .voice_agent import router as voice_agent_router
 from .system import router as system_router
+from dynaconf import Dynaconf
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -121,8 +122,12 @@ def init_service_container():
     neshan = container.make("Neshan")
     container.instance("Neshan", neshan)
     
+    # Create and bind Mayoral instance
     mayoral = container.make("Mayoral")
     container.instance("Mayoral", mayoral)
+    
+    # Bind app settings
+    container.instance('settings', Dynaconf(settings_files=['../data/system_settings.json']))
 
 
 # Initialize the service container
