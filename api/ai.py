@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import io
 import uuid
 from dynaconf import Dynaconf
+from pathlib import Path
 
 
 # Configure loggers
@@ -30,15 +31,24 @@ speech_to_text_model = None
         
 def get_voice_to_text_model():
     
-    settings = Dynaconf(settings_files=['../data/system_settings.json'])
+    settings_file = Path(__file__).parent.parent / "data" / "system_settings.json"
     
-    match settings.voice_to_text_service:
-        case "openai":
-            return SpeechToTextModel()
-        case "google":
-            return GoogleSpeechToTextModel()
-        case _:
-            return None
+    settings = Dynaconf(settings_files=[str(settings_file)], lowercase_read=True)
+    
+    try:
+        match settings.voice_to_text_service:
+            case "openai":
+                return SpeechToTextModel()
+            case "google":
+                return GoogleSpeechToTextModel()
+            case _:
+                return None    
+    except Exception as e:
+        api_logger.info(f"Get voice to text service error {str(e)}")
+        print(e)
+        return None
+    
+    
 
 
 @router.websocket("/ws/ask")
