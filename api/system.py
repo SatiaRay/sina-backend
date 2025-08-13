@@ -498,21 +498,11 @@ def get_dynamic_settings_schema(include_enum=True):
     # Load schema from file
     schema_path = os.path.join(os.path.dirname(__file__), '../data/settings_schema.json')
     with open(schema_path, 'r', encoding='utf-8') as f:
-        schemas = json.load(f)
-
-    allowed_models = []
-    try:
-        allowed_models = config.get("text_models")
-    except Exception:
-        pass
+        schema = json.load(f)
 
     # Pick schema type
-    if not allowed_models or not include_enum:
-        return schemas["base"]
 
-    schema_with_enum = schemas["with_enum"].copy()
-    schema_with_enum["properties"]["text_agent_model"]["enum"] = allowed_models
-    return schema_with_enum
+    return schema 
 
 
 SYSTEM_SETTINGS_SCHEMA = get_dynamic_settings_schema()
