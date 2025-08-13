@@ -1,7 +1,6 @@
 node_modules
 .qodo
 venv/
-data/
 logs/
 temp/
 *.log
@@ -13,3 +12,8 @@ mysql_data/
 *.db
 /chroma_data/*
 /chroma_data/*
+
+# Handle data folder
+data/*
+!data/
+!data/settings_schema.json

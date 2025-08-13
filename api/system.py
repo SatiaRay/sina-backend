@@ -495,50 +495,42 @@ SYSTEM_SETTINGS_PATH = os.path.join("data", "system_settings.json")
 
 
 def get_dynamic_settings_schema(include_enum=True):
-    allowed_models = []
-    try:
-        allowed_models = config.get("text_models")
-    except Exception:
-        pass
-    if not allowed_models or not include_enum:
-        return {
-            "type": "object",
-            "properties": {
-                "site_name": {"type": "string"},
-                "text_agent_model": {"type": "string"},
-            },
-            "required": ["site_name", "text_agent_model"],
-            "additionalProperties": False,
-        }
-    return {
-        "type": "object",
-        "properties": {
-            "site_name": {"type": "string"},
-            "text_agent_model": {
-                "type": "string",
-                "enum": allowed_models,
-            },
-        },
-        "required": ["site_name", "text_agent_model"],
-        "additionalProperties": False,
-    }
+    # Load schema from file
+    schema_path = os.path.join(os.path.dirname(__file__), '../data/settings_schema.json')
+    with open(schema_path, 'r', encoding='utf-8') as f:
+        schema = json.load(f)
+
+    # Pick schema type
+
+    return schema 
 
 
 SYSTEM_SETTINGS_SCHEMA = get_dynamic_settings_schema()
 
 
+def load_defaults_from_schema() -> dict:
+    """Load default values from the schema JSON file."""
+    schema = get_dynamic_settings_schema()
+
+    defaults = {}
+    for key, prop in schema.get("properties", {}).items():
+        if "default" in prop:
+            defaults[key] = prop["default"]
+
+    return defaults
+
+
 def load_system_settings() -> dict:
+    """Load system settings from file or fall back to schema defaults."""
     if not os.path.exists(SYSTEM_SETTINGS_PATH):
-        # Default settings if file does not exist
-        return {
-            "site_name": "Satya Support Chatbot",
-            "text_agent_model": "gpt-4.1-mini",
-        }
+        return load_defaults_from_schema()
+
     with open(SYSTEM_SETTINGS_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
-
+    
 
 def save_system_settings(settings: dict):
+    """Save system settings to file."""
     with open(SYSTEM_SETTINGS_PATH, "w", encoding="utf-8") as f:
         json.dump(settings, f, indent=2, ensure_ascii=False)
 
@@ -644,7 +636,7 @@ async def get_system_settings():
         return settings
     except Exception as e:
         logger.error(f"Failed to load system settings: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to load system settings")
+        raise HTTPException(status_code=500, detail=f"Failed to load system settings")
 
 
 @router.post(
@@ -677,7 +669,7 @@ async def update_system_settings(new_settings: dict):
         raise he
     except Exception as e:
         logger.error(f"Failed to update system settings: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to update system settings")
+        raise HTTPException(status_code=500, detail=f"Failed to update system settings")
 
 
 @router.get(
