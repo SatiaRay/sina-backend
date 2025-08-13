@@ -1,7 +1,8 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
 from typing import Optional, List, Dict
 import json
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
+from provider.service_container import container
 from util.logging_config import configure_logging, log_error
 import wave
 import os
@@ -10,6 +11,8 @@ from models.models.google_speech_to_text_model import GoogleSpeechToTextModel
 import matplotlib.pyplot as plt
 import io
 import uuid
+from dynaconf import Dynaconf
+
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -21,8 +24,22 @@ router = APIRouter(prefix="", tags=["AI"])
 agent_rag = ChatAgentRagProxy()
 
 # Initialze the speech to text model
-# speech_to_text_model = SpeechToTextModel()
-speech_to_text_model = GoogleSpeechToTextModel()
+speech_to_text_model = None
+
+
+        
+def get_voice_to_text_model():
+    
+    settings = Dynaconf(settings_files=['../data/system_settings.json'])
+    
+    match settings.voice_to_text_service:
+        case "openai":
+            return SpeechToTextModel()
+        case "google":
+            return GoogleSpeechToTextModel()
+        case _:
+            return None
+
 
 @router.websocket("/ws/ask")
 async def ask_question_agent_socket(
@@ -68,8 +85,12 @@ async def ask_question_agent_socket(
 @router.websocket("/ws/voice")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    print("WebSocket connected")
-
+    
+    speech_to_text_model = get_voice_to_text_model()
+    
+    if not speech_to_text_model:
+        raise HTTPException(status_code=500, detail=f"The voice to speech service doesn't defined in the system settings")
+    
     try:
         while True:
             try:
