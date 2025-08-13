@@ -495,33 +495,24 @@ SYSTEM_SETTINGS_PATH = os.path.join("data", "system_settings.json")
 
 
 def get_dynamic_settings_schema(include_enum=True):
+    # Load schema from file
+    schema_path = os.path.join(os.path.dirname(__file__), '../data/settings_schema.json')
+    with open(schema_path, 'r', encoding='utf-8') as f:
+        schemas = json.load(f)
+
     allowed_models = []
     try:
         allowed_models = config.get("text_models")
     except Exception:
         pass
+
+    # Pick schema type
     if not allowed_models or not include_enum:
-        return {
-            "type": "object",
-            "properties": {
-                "site_name": {"type": "string"},
-                "text_agent_model": {"type": "string"},
-            },
-            "required": ["site_name", "text_agent_model"],
-            "additionalProperties": False,
-        }
-    return {
-        "type": "object",
-        "properties": {
-            "site_name": {"type": "string"},
-            "text_agent_model": {
-                "type": "string",
-                "enum": allowed_models,
-            },
-        },
-        "required": ["site_name", "text_agent_model"],
-        "additionalProperties": False,
-    }
+        return schemas["base"]
+
+    schema_with_enum = schemas["with_enum"].copy()
+    schema_with_enum["properties"]["text_agent_model"]["enum"] = allowed_models
+    return schema_with_enum
 
 
 SYSTEM_SETTINGS_SCHEMA = get_dynamic_settings_schema()
