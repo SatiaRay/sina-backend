@@ -382,7 +382,7 @@ def list_documents_no_slash(
 def list_documents(
     domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
     uri: Optional[str] = Query(None, description="Filter by URI"),
-    agent_type: Optional[str] = Query(None, description="Agent type"),
+    agent_type: Optional[str] = Query("null", description="Agent type"),
     page: int = Query(1, description="Page number (starting from 1)", ge=1),
     size: int = Query(10, description="Number of documents per page", ge=1, le=100),
     db: Session = Depends(get_db),
@@ -392,9 +392,11 @@ def list_documents(
 
     # Base query with domain_id not null filter
     base_query = document_repo.db.query(document_repo.model_class).filter(
-        document_repo.model_class.domain_id.isnot(None),
-        document_repo.model_class.agent_type == agent_type,
+        document_repo.model_class.domain_id.isnot(None)
     )
+    
+    if agent_type:
+        base_query.filter(document_repo.model_class.agent_type == agent_type)
 
     # Get documents based on filters with pagination
     if domain_id:
