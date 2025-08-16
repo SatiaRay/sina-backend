@@ -146,7 +146,7 @@ def clean_domain(url: str) -> str:
 
 
 # Create a new document
-@router.get("/", response_model=DocumentResponse)
+@router.post("/", response_model=DocumentResponse)
 def create_document(document: DocumentCreate, db: Session = Depends(get_db)):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
