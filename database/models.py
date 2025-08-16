@@ -130,7 +130,6 @@ class Document(BaseModel):
     )
     uri = Column(String(255), nullable=True)
     domain_id = Column(Integer, ForeignKey("crawled_domains.id"), nullable=True)
-    vector_id = Column(String(255), nullable=True)
     type = Column(Enum("manual", "crawl"), default="crawl")
     agent_type = Column(
         Enum("voice_agent", "text_agent", "both", name="agent_type_enum"),

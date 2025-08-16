@@ -334,7 +334,6 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
         mock_repo.return_value.update.assert_called_once_with(
             test_document.id,
             {
-                "vector_id": "vec_123",
                 "title": title,  # Verify title is updated
                 "html": html,
                 "markdown": "# Test Vector Content",
@@ -345,7 +344,6 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
         
         # Verify document was updated in the database
         db_session.refresh(test_document)
-        assert test_document.vector_id == "vec_123"
         assert test_document.title == title  # Verify title is updated
         assert test_document.html == html
         assert test_document.markdown == "# Test Vector Content"

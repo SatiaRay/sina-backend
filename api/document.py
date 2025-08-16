@@ -38,7 +38,6 @@ class DocumentBase(BaseModel):
     markdown: str
     uri: Optional[str] = None
     domain_id: Optional[int] = None
-    vector_id: Optional[str] = None
     agent_type: Optional[Literal["voice_agent", "text_agent", "both"]] = None
 
 
@@ -90,7 +89,6 @@ class DocumentListResponse(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     domain: Optional[DomainInfo] = None
-    vector_id: Optional[str] = None
     agent_type: Literal["voice_agent", "text_agent", "both"]
     created_at: datetime
     updated_at: datetime
@@ -232,7 +230,6 @@ def get_manual_documents(
                 uri=doc.uri,
                 domain_id=doc.domain_id,
                 domain=domain,
-                vector_id=doc.vector_id,
                 agent_type=doc.agent_type,
                 created_at=doc.created_at,
                 updated_at=doc.updated_at,
@@ -263,7 +260,6 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
         uri=document.uri,
         agent_type=document.agent_type,
         domain_id=document.domain_id,
-        vector_id=document.vector_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
         domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
@@ -433,7 +429,6 @@ def list_documents(
                 domain=(
                     DomainInfo(id=domain.id, domain=domain.domain) if domain else None
                 ),
-                vector_id=doc.vector_id,
                 created_at=doc.created_at,
                 updated_at=doc.updated_at,
             )
@@ -540,7 +535,6 @@ def get_document_by_vector_id(vector_id: str, db: Session = Depends(get_db)):
         markdown=document.markdown,
         uri=document.uri,
         agent_type=document.agent_type,
-        vector_id=vector_id,
         domain_id=document.domain_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
@@ -612,7 +606,6 @@ async def toggle_document_vector_status(
             uri=updated_doc.uri,
             agent_type=updated_doc.agent_type,
             domain_id=updated_doc.domain_id,
-            vector_id=updated_doc.vector_id,
             created_at=updated_doc.created_at,
             updated_at=updated_doc.updated_at,
             domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
@@ -770,7 +763,6 @@ async def vectorize_task(
 
         # Update document with vector_id
         update_data = {
-            "vector_id": vector_id,
             "title": title or document.title,
             "html": html,
             "markdown": markdown,
@@ -953,7 +945,6 @@ def get_documents_by_domain(
                 agent_type=doc.agent_type,
                 domain_id=doc.domain_id,
                 domain=DomainInfo(id=domain.id, domain=domain.domain),
-                vector_id=doc.vector_id,
                 created_at=doc.created_at,
                 updated_at=doc.updated_at,
             )
