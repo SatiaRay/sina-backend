@@ -875,18 +875,14 @@ async def add_manually_knowledge(
 
         request.metadata["document_id"] = doc.id
 
-        # Create document structure with markdown text
-        document = {"text": markdown_text, "metadata": request.metadata}
-
         # Add document to vector store
-        id = vector_store.add_documents([document])[0]
-
-        repo.update(doc.id, {"vector_id": id})
+        ids = vector_store.add_documents([{"text": markdown_text, "metadata": request.metadata}])
 
         return JSONResponse(
             status_code=200,
             content={
                 "message": "متن (مارک‌داون) با موفقیت در پایگاه داده برداری ذخیره شد",
+                'ids': ids,
                 "status": "success",
             },
         )
