@@ -12,6 +12,7 @@ mysql_data/
 *.db
 /chroma_data/*
 /chroma_data/*
+.idea/
 
 # Handle data folder
 data/*

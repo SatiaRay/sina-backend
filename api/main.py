@@ -6,8 +6,6 @@ import json
 from datetime import datetime
 from bs4 import BeautifulSoup
 
-from util.vectore import chunk_text
-
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
@@ -877,21 +875,13 @@ async def add_manually_knowledge(
 
         request.metadata["document_id"] = doc.id
 
-        documents = []
-        
-        chunks = chunk_text(markdown_text)
-        
-        for chunk in chunks:
-            documents.append({"text": chunk, "metadata": request.metadata})
-
         # Add document to vector store
-        ids = vector_store.add_documents(documents)
+        ids = vector_store.add_documents([{"text": markdown_text, "metadata": request.metadata}])
 
         return JSONResponse(
             status_code=200,
             content={
                 "message": "متن (مارک‌داون) با موفقیت در پایگاه داده برداری ذخیره شد",
-                "chunks_length": len(chunks),
                 'ids': ids,
                 "status": "success",
             },
