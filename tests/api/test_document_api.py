@@ -264,28 +264,6 @@ def test_toggle_document_vector_status(db_session, test_document):
         assert data["status"] == 'pending'
         mock_delete.assert_called_once_with(test_document.id)
 
-def test_get_document_by_vector_id(db_session, test_document):
-    # First, add vector_id to document
-    test_document.vector_id = "vec_123"
-    db_session.commit()
-    
-    # Make request
-    response = client.get("/documents/vector/vec_123")
-    
-    # Assertions
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == test_document.id
-    assert data["vector_id"] == "vec_123"
-
-def test_get_document_by_vector_id_not_found(db_session):
-    # Make request with non-existent vector_id
-    response = client.get("/documents/vector/nonexistent")
-    
-    # Assertions
-    assert response.status_code == 404
-    assert "No document found with vector_id" in response.json()["detail"]
-
 def test_search_documents_by_title(db_session, test_document):
     # Make request
     response = client.get("/documents/search/title?query=Test")

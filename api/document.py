@@ -501,48 +501,6 @@ def search_documents_by_title(
         )
     return response
 
-
-# Get document by vector_id
-@router.get(
-    "/vector/{vector_id}",
-    response_model=DocumentResponse,
-    summary="دریافت سند با استفاده از شناسه برداری",
-    description="این اندپوینت سندی که شناسه برداری آن با مقدار ورودی برابر است را برمی‌گرداند",
-)
-def get_document_by_vector_id(vector_id: str, db: Session = Depends(get_db)):
-    document_repo = DocumentRepository(db)
-    domain_repo = CrawledDomainRepository(db)
-
-    # Query document with matching vector_id
-    query = document_repo.db.query(document_repo.model_class).filter(
-        document_repo.model_class.vector_id == vector_id
-    )
-    document = query.first()
-
-    if not document:
-        raise HTTPException(
-            status_code=404, detail=f"No document found with vector_id: {vector_id}"
-        )
-
-    # Get domain info if domain_id exists
-    domain = None
-    if document.domain_id:
-        domain = domain_repo.get(document.domain_id)
-
-    return DocumentResponse(
-        id=document.id,
-        title=document.title,
-        html=document.html,
-        markdown=document.markdown,
-        uri=document.uri,
-        agent_type=document.agent_type,
-        domain_id=document.domain_id,
-        created_at=document.created_at,
-        updated_at=document.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
-    )
-
-
 @router.post(
     "/{document_id}/toggle-vector",
     response_model=DocumentResponse,
