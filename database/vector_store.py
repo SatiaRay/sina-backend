@@ -1,4 +1,5 @@
 import chromadb
+from certifi import where
 from chromadb.config import Settings
 import os
 from dotenv import load_dotenv
@@ -218,6 +219,13 @@ class VectorStore:
 
         # Publish event for document deletion
         event_bus.publish(VectorStoreEvent.DOCUMENT_DELETED, {"id": vector_id})
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
+
+    def delete_document(self, document_id: int):
+        self.collection.delete(where={"document_id": document_id})
+
+        # Publish event for document deletion
+        event_bus.publish(VectorStoreEvent.DOCUMENT_DELETED, {"id": document_id})
         event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
     def get_pending_documents(self, offset: int = 0, limit: int = 50) -> List[Dict]:
