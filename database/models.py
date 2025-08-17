@@ -136,6 +136,7 @@ class Document(BaseModel):
         default="text_agent",
         nullable=False,
     )
+    status = Column(Enum("pending", "vectorized", "error", name="status_enum"), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
