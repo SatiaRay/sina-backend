@@ -254,15 +254,15 @@ def test_toggle_document_vector_status(db_session, test_document):
         response = client.post(f"/documents/{test_document.id}/toggle-vector")
         assert response.status_code == 200
         data = response.json()
-        assert data["vector_id"] == "vec_123"
+        assert data["status"] == "vectorized"
 
     # Then, test removing vector_id
-    with patch('api.document.vector_store.delete_vector') as mock_delete:
+    with patch('api.document.vector_store.delete_document') as mock_delete:
         response = client.post(f"/documents/{test_document.id}/toggle-vector")
         assert response.status_code == 200
         data = response.json()
-        assert data["vector_id"] is None
-        mock_delete.assert_called_once_with("vec_123")
+        assert data["status"] == 'pending'
+        mock_delete.assert_called_once_with(test_document.id)
 
 def test_get_document_by_vector_id(db_session, test_document):
     # First, add vector_id to document

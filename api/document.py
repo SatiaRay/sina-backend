@@ -39,6 +39,7 @@ class DocumentBase(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     agent_type: Optional[Literal["voice_agent", "text_agent", "both"]] = None
+    status: Optional[Literal["pending", "vectorized", "error"]] = None
 
 
 class DocumentCreate(DocumentBase):
@@ -566,12 +567,12 @@ async def toggle_document_vector_status(
         raise HTTPException(status_code=404, detail="Document not found")
 
     try:
-        if document.vector_id:
+        if document.status == 'vectorized':
             # Document is vectorized, so devectorize it
-            vector_store.delete_vector(document.vector_id)
+            vector_store.delete_document(document.id)
 
             # Update document to remove vector_id
-            update_data = {"vector_id": None}
+            update_data = {"status": "pending"}
             updated_doc = document_repo.update(document_id, update_data)
 
         else:
@@ -589,10 +590,10 @@ async def toggle_document_vector_status(
             vector_doc = {"text": document.markdown, "metadata": metadata}
 
             # Add to vector store
-            vector_id = vector_store.add_documents([vector_doc])[0]
+            vector_store.add_documents([vector_doc])
 
             # Update document with vector_id
-            update_data = {"vector_id": vector_id}
+            update_data = {"status": "vectorized"}
             updated_doc = document_repo.update(document_id, update_data)
 
         # Get domain info for response
@@ -606,6 +607,7 @@ async def toggle_document_vector_status(
             uri=updated_doc.uri,
             agent_type=updated_doc.agent_type,
             domain_id=updated_doc.domain_id,
+            status=updated_doc.status,
             created_at=updated_doc.created_at,
             updated_at=updated_doc.updated_at,
             domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
