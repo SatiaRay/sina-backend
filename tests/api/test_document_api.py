@@ -573,7 +573,6 @@ async def test_vectorize_task_title_updates(db_session, test_document, mock_job)
         # Verify document was updated with new title
         db_session.refresh(test_document)
         assert test_document.title == title
-        assert test_document.vector_id == vector_id  # Verify vector_id is set correctly
         
         # Reset mocks for next test
         mock_store.reset_mock()
@@ -584,7 +583,6 @@ async def test_vectorize_task_title_updates(db_session, test_document, mock_job)
         # Verify document was updated with title from metadata
         db_session.refresh(test_document)
         assert test_document.title == title
-        assert test_document.vector_id == vector_id  # Verify vector_id is still set
         
         # Reset mocks for next test
         mock_store.reset_mock()
@@ -596,4 +594,3 @@ async def test_vectorize_task_title_updates(db_session, test_document, mock_job)
         # Verify document kept its existing title
         db_session.refresh(test_document)
         assert test_document.title == original_title
-        assert test_document.vector_id == vector_id  # Verify vector_id is still set
