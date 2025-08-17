@@ -130,13 +130,13 @@ class Document(BaseModel):
     )
     uri = Column(String(255), nullable=True)
     domain_id = Column(Integer, ForeignKey("crawled_domains.id"), nullable=True)
-    vector_id = Column(String(255), nullable=True)
     type = Column(Enum("manual", "crawl"), default="crawl")
     agent_type = Column(
         Enum("voice_agent", "text_agent", "both", name="agent_type_enum"),
         default="text_agent",
         nullable=False,
     )
+    status = Column(Enum("pending", "vectorized", "error", name="status_enum"), default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

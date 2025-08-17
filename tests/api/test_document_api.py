@@ -254,37 +254,15 @@ def test_toggle_document_vector_status(db_session, test_document):
         response = client.post(f"/documents/{test_document.id}/toggle-vector")
         assert response.status_code == 200
         data = response.json()
-        assert data["vector_id"] == "vec_123"
+        assert data["status"] == "vectorized"
 
     # Then, test removing vector_id
-    with patch('api.document.vector_store.delete_vector') as mock_delete:
+    with patch('api.document.vector_store.delete_document') as mock_delete:
         response = client.post(f"/documents/{test_document.id}/toggle-vector")
         assert response.status_code == 200
         data = response.json()
-        assert data["vector_id"] is None
-        mock_delete.assert_called_once_with("vec_123")
-
-def test_get_document_by_vector_id(db_session, test_document):
-    # First, add vector_id to document
-    test_document.vector_id = "vec_123"
-    db_session.commit()
-    
-    # Make request
-    response = client.get("/documents/vector/vec_123")
-    
-    # Assertions
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == test_document.id
-    assert data["vector_id"] == "vec_123"
-
-def test_get_document_by_vector_id_not_found(db_session):
-    # Make request with non-existent vector_id
-    response = client.get("/documents/vector/nonexistent")
-    
-    # Assertions
-    assert response.status_code == 404
-    assert "No document found with vector_id" in response.json()["detail"]
+        assert data["status"] == 'pending'
+        mock_delete.assert_called_once_with(test_document.id)
 
 def test_search_documents_by_title(db_session, test_document):
     # Make request
@@ -334,7 +312,6 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
         mock_repo.return_value.update.assert_called_once_with(
             test_document.id,
             {
-                "vector_id": "vec_123",
                 "title": title,  # Verify title is updated
                 "html": html,
                 "markdown": "# Test Vector Content",
@@ -345,7 +322,6 @@ async def test_vectorize_task_success(db_session, test_document, mock_job):
         
         # Verify document was updated in the database
         db_session.refresh(test_document)
-        assert test_document.vector_id == "vec_123"
         assert test_document.title == title  # Verify title is updated
         assert test_document.html == html
         assert test_document.markdown == "# Test Vector Content"
@@ -597,7 +573,6 @@ async def test_vectorize_task_title_updates(db_session, test_document, mock_job)
         # Verify document was updated with new title
         db_session.refresh(test_document)
         assert test_document.title == title
-        assert test_document.vector_id == vector_id  # Verify vector_id is set correctly
         
         # Reset mocks for next test
         mock_store.reset_mock()
@@ -608,7 +583,6 @@ async def test_vectorize_task_title_updates(db_session, test_document, mock_job)
         # Verify document was updated with title from metadata
         db_session.refresh(test_document)
         assert test_document.title == title
-        assert test_document.vector_id == vector_id  # Verify vector_id is still set
         
         # Reset mocks for next test
         mock_store.reset_mock()
@@ -620,4 +594,3 @@ async def test_vectorize_task_title_updates(db_session, test_document, mock_job)
         # Verify document kept its existing title
         db_session.refresh(test_document)
         assert test_document.title == original_title
-        assert test_document.vector_id == vector_id  # Verify vector_id is still set

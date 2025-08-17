@@ -38,8 +38,8 @@ class DocumentBase(BaseModel):
     markdown: str
     uri: Optional[str] = None
     domain_id: Optional[int] = None
-    vector_id: Optional[str] = None
     agent_type: Optional[Literal["voice_agent", "text_agent", "both"]] = None
+    status: Optional[Literal["pending", "vectorized", "error"]] = None
 
 
 class DocumentCreate(DocumentBase):
@@ -90,7 +90,6 @@ class DocumentListResponse(BaseModel):
     uri: Optional[str] = None
     domain_id: Optional[int] = None
     domain: Optional[DomainInfo] = None
-    vector_id: Optional[str] = None
     agent_type: Literal["voice_agent", "text_agent", "both"]
     created_at: datetime
     updated_at: datetime
@@ -146,7 +145,7 @@ def clean_domain(url: str) -> str:
 
 
 # Create a new document
-@router.get("/", response_model=DocumentResponse)
+@router.post("/", response_model=DocumentResponse)
 def create_document(document: DocumentCreate, db: Session = Depends(get_db)):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
@@ -232,7 +231,6 @@ def get_manual_documents(
                 uri=doc.uri,
                 domain_id=doc.domain_id,
                 domain=domain,
-                vector_id=doc.vector_id,
                 agent_type=doc.agent_type,
                 created_at=doc.created_at,
                 updated_at=doc.updated_at,
@@ -263,7 +261,6 @@ def get_document(document_id: int, db: Session = Depends(get_db)):
         uri=document.uri,
         agent_type=document.agent_type,
         domain_id=document.domain_id,
-        vector_id=document.vector_id,
         created_at=document.created_at,
         updated_at=document.updated_at,
         domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
@@ -382,7 +379,7 @@ def list_documents_no_slash(
 def list_documents(
     domain_id: Optional[int] = Query(None, description="Filter by domain ID"),
     uri: Optional[str] = Query(None, description="Filter by URI"),
-    agent_type: Optional[str] = Query(None, description="Agent type"),
+    agent_type: Optional[str] = Query("null", description="Agent type"),
     page: int = Query(1, description="Page number (starting from 1)", ge=1),
     size: int = Query(10, description="Number of documents per page", ge=1, le=100),
     db: Session = Depends(get_db),
@@ -392,9 +389,11 @@ def list_documents(
 
     # Base query with domain_id not null filter
     base_query = document_repo.db.query(document_repo.model_class).filter(
-        document_repo.model_class.domain_id.isnot(None),
-        document_repo.model_class.agent_type == agent_type,
+        document_repo.model_class.domain_id.isnot(None)
     )
+    
+    if agent_type:
+        base_query.filter(document_repo.model_class.agent_type == agent_type)
 
     # Get documents based on filters with pagination
     if domain_id:
@@ -431,7 +430,6 @@ def list_documents(
                 domain=(
                     DomainInfo(id=domain.id, domain=domain.domain) if domain else None
                 ),
-                vector_id=doc.vector_id,
                 created_at=doc.created_at,
                 updated_at=doc.updated_at,
             )
@@ -503,49 +501,6 @@ def search_documents_by_title(
         )
     return response
 
-
-# Get document by vector_id
-@router.get(
-    "/vector/{vector_id}",
-    response_model=DocumentResponse,
-    summary="دریافت سند با استفاده از شناسه برداری",
-    description="این اندپوینت سندی که شناسه برداری آن با مقدار ورودی برابر است را برمی‌گرداند",
-)
-def get_document_by_vector_id(vector_id: str, db: Session = Depends(get_db)):
-    document_repo = DocumentRepository(db)
-    domain_repo = CrawledDomainRepository(db)
-
-    # Query document with matching vector_id
-    query = document_repo.db.query(document_repo.model_class).filter(
-        document_repo.model_class.vector_id == vector_id
-    )
-    document = query.first()
-
-    if not document:
-        raise HTTPException(
-            status_code=404, detail=f"No document found with vector_id: {vector_id}"
-        )
-
-    # Get domain info if domain_id exists
-    domain = None
-    if document.domain_id:
-        domain = domain_repo.get(document.domain_id)
-
-    return DocumentResponse(
-        id=document.id,
-        title=document.title,
-        html=document.html,
-        markdown=document.markdown,
-        uri=document.uri,
-        agent_type=document.agent_type,
-        vector_id=vector_id,
-        domain_id=document.domain_id,
-        created_at=document.created_at,
-        updated_at=document.updated_at,
-        domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
-    )
-
-
 @router.post(
     "/{document_id}/toggle-vector",
     response_model=DocumentResponse,
@@ -570,12 +525,12 @@ async def toggle_document_vector_status(
         raise HTTPException(status_code=404, detail="Document not found")
 
     try:
-        if document.vector_id:
+        if document.status == 'vectorized':
             # Document is vectorized, so devectorize it
-            vector_store.delete_vector(document.vector_id)
+            vector_store.delete_document(document.id)
 
             # Update document to remove vector_id
-            update_data = {"vector_id": None}
+            update_data = {"status": "pending"}
             updated_doc = document_repo.update(document_id, update_data)
 
         else:
@@ -593,10 +548,10 @@ async def toggle_document_vector_status(
             vector_doc = {"text": document.markdown, "metadata": metadata}
 
             # Add to vector store
-            vector_id = vector_store.add_documents([vector_doc])[0]
+            vector_store.add_documents([vector_doc])
 
             # Update document with vector_id
-            update_data = {"vector_id": vector_id}
+            update_data = {"status": "vectorized"}
             updated_doc = document_repo.update(document_id, update_data)
 
         # Get domain info for response
@@ -610,7 +565,7 @@ async def toggle_document_vector_status(
             uri=updated_doc.uri,
             agent_type=updated_doc.agent_type,
             domain_id=updated_doc.domain_id,
-            vector_id=updated_doc.vector_id,
+            status=updated_doc.status,
             created_at=updated_doc.created_at,
             updated_at=updated_doc.updated_at,
             domain=DomainInfo(id=domain.id, domain=domain.domain) if domain else None,
@@ -768,7 +723,6 @@ async def vectorize_task(
 
         # Update document with vector_id
         update_data = {
-            "vector_id": vector_id,
             "title": title or document.title,
             "html": html,
             "markdown": markdown,
@@ -951,7 +905,6 @@ def get_documents_by_domain(
                 agent_type=doc.agent_type,
                 domain_id=doc.domain_id,
                 domain=DomainInfo(id=domain.id, domain=domain.domain),
-                vector_id=doc.vector_id,
                 created_at=doc.created_at,
                 updated_at=doc.updated_at,
             )
