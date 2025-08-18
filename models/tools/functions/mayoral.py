@@ -4,6 +4,8 @@ import os
 from typing import Dict, Any, Optional
 from redis import Redis
 from redis.exceptions import RedisError
+from models.tools.functions.logging_decorator import FunctionCallLogger
+
 
 
 # 137 app api tool functions
@@ -120,6 +122,7 @@ class Mayoral:
             print(f"Error making {method.upper()} request to {endpoint}: {e}")
             return None
 
+    @FunctionCallLogger()
     def submitRequest(
         self, mobile, address, lat, long, subject_id
     ) -> Optional[Dict[str, Any]]:
@@ -134,7 +137,8 @@ class Mayoral:
         data = self._make_api_request("api/submit/request", method="POST", data=data)
 
         return data
-
+    
+    @FunctionCallLogger()
     def searchSubject(self, q) -> Optional[Dict[str, Any]]:
         params = {
             "q": q,
