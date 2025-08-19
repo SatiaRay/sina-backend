@@ -1,0 +1,197 @@
+import pytest
+from fastapi.testclient import TestClient
+from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
+from sqlalchemy.orm import Session
+import json
+
+# Test data
+MOCK_LOGS = [
+    {
+        "id": 1,
+        "timestamp": (datetime.utcnow() - timedelta(hours=1)).isoformat() + "Z",
+        "tool": "mayoral.searchSubject",
+        "params": {"q": "باغ ملی"},
+        "user_id": "usr_123",
+        "session_id": "sess_456",
+        "duration_ms": 150,
+        "tokens_used": 50
+    },
+    {
+        "id": 2,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "tool": "mayoral.submitRequest",
+        "params": {"mobile": "09123456789"},
+        "user_id": "usr_123",
+        "session_id": "sess_456",
+        "error": "Invalid mobile number",
+        "duration_ms": 200,
+        "tokens_used": 0
+    }
+]
+
+MOCK_TOOL_STATS = [
+    {"tool": "mayoral.searchSubject", "call_count": 100, "avg_duration": 120.5, "total_tokens": 5000, "error_count": 5},
+    {"tool": "mayoral.submitRequest", "call_count": 50, "avg_duration": 200.0, "total_tokens": 2500, "error_count": 10}
+]
+
+MOCK_USER_ACTIVITY = {
+    "total_calls": 150,
+    "avg_duration": 160.25,
+    "total_tokens": 7500,
+    "error_count": 15,
+    "most_used_tools": [
+        {"tool": "mayoral.searchSubject", "call_count": 100},
+        {"tool": "mayoral.submitRequest", "call_count": 50}
+    ]
+}
+
+@pytest.fixture
+def mock_repo():
+    with patch('api.function_calling_log.FunctionCallLogRepository') as mock:
+        # Create a mock instance that will be returned by __enter__
+        mock_instance = MagicMock()
+        mock_instance.get_recent_logs.return_value = []
+        
+        # Configure the mock to return our instance when used as context manager
+        mock.return_value.__enter__.return_value = mock_instance
+        yield mock_instance  # Yield the instance mock for assertions
+
+def test_get_logs(mock_repo, client):
+    # Setup test data
+    test_data = [
+        {
+            "id": 1,
+            "timestamp": datetime.utcnow().isoformat(),
+            "tool": "test_tool",
+            "params": {"key": "value"},
+            "user_id": "user1",
+            "session_id": "session1",
+            "response": None,
+            "error": None,
+            "duration_ms": 100,
+            "tokens_used": 50,
+            "additional_metadata": {}
+        },
+        {
+            "id": 2,
+            "timestamp": datetime.utcnow().isoformat(),
+            "tool": "test_tool2",
+            "params": {"key": "value2"},
+            "user_id": "user2",
+            "session_id": "session2",
+            "response": {"result": "success"},
+            "error": "Some error",
+            "duration_ms": 200,
+            "tokens_used": 0,
+            "additional_metadata": {}
+        }
+    ]
+    
+    # Configure the mock to return our test data
+    mock_repo.get_recent_logs.return_value = test_data
+    
+    # Test with no filters
+    response = client.get("/function-calling-logs/")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["tool"] == "test_tool"
+    
+    # Verify the mock was called with default parameters
+    mock_repo.get_recent_logs.assert_called_with(
+        hours=24, tool_name=None, user_id=None, 
+        min_duration=None, max_duration=None, 
+        has_errors=False, limit=100
+    )
+    
+    # Test with filters
+    response = client.get("/function-calling-logs/?hours=48&tool_name=test_tool&min_duration=100")
+    assert response.status_code == 200
+    mock_repo.get_recent_logs.assert_called_with(
+        hours=48, tool_name="test_tool", user_id=None,
+        min_duration=100, max_duration=None,
+        has_errors=False, limit=100
+    )
+
+def test_get_logs_error(mock_repo, client):
+    # Configure the mock to raise an exception when get_recent_logs is called
+    mock_repo.get_recent_logs.side_effect = Exception("DB error")
+    
+    response = client.get("/function-calling-logs/")
+    assert response.status_code == 500
+    assert "DB error" in response.json()["detail"]
+
+def test_get_tool_usage_stats(mock_repo, client):
+    mock_repo.return_value.get_tool_usage_stats.return_value = MOCK_TOOL_STATS
+    
+    # Test with default params
+    response = client.get("/function-calling-logs/stats/tools")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["tool"] == "mayoral.searchSubject"
+    mock_repo.get_tool_usage_stats.assert_called_with(days=7, top_n=10)
+    
+    # Test with custom params
+    response = client.get("/function-calling-logs/stats/tools?days=30&top_n=5")
+    assert response.status_code == 200
+    mock_repo.get_tool_usage_stats.assert_called_with(days=30, top_n=5)
+
+def test_get_user_activity(mock_repo, client):
+    mock_repo.get_user_activity.return_value = MOCK_USER_ACTIVITY
+    
+    response = client.get("/function-calling-logs/stats/user/usr_123?days=7")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_calls"] == 150
+    assert len(data["most_used_tools"]) == 2
+    mock_repo.get_user_activity.assert_called_with("usr_123", days=7)
+
+def test_search_logs(mock_repo, client):
+    mock_repo.search_logs.return_value = [MOCK_LOGS[0]]
+    
+    response = client.get("/function-calling-logs/search?query=باغ&limit=10")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["tool"] == "mayoral.searchSubject"
+    mock_repo.search_logs.assert_called_with(search_term="باغ", limit=10)
+
+def test_get_log_by_id(mock_repo, client):
+    mock_repo.get_by_id.return_value = MOCK_LOGS[0]
+    
+    response = client.get("/function-calling-logs/1")
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+    
+    # Test not found
+    mock_repo.get_by_id.return_value = None
+    response = client.get("/function-calling-logs/999")
+    assert response.status_code == 404
+    assert "Log not found" in response.json()["detail"]
+
+def test_logs_endpoint_validation(client):
+    # Test invalid parameters
+    response = client.get("/function-calling-logs/?hours=invalid")
+    assert response.status_code == 422
+    
+    response = client.get("/function-calling-logs/stats/tools?days=invalid")
+    assert response.status_code == 422
+    
+    response = client.get("/function-calling-logs/stats/user/usr_123?days=invalid")
+    assert response.status_code == 422
+    
+    response = client.get("/function-calling-logs/search?limit=invalid")
+    assert response.status_code == 422
+
+@pytest.mark.parametrize("endpoint,method", [
+    ("/function-calling-logs/", "GET"),
+    ("/function-calling-logs/stats/tools", "GET"),
+    ("/function-calling-logs/stats/user/usr_123", "GET"),
+    ("/function-calling-logs/search?query=test", "GET"),
+    ("/function-calling-logs/1", "GET")
+])
+def test_endpoints_exist(client, endpoint, method):
+    response = client.request(method, endpoint)
+    assert response.status_code != 404, f"{endpoint} returned 404"

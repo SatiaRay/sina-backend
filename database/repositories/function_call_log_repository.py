@@ -37,17 +37,18 @@ class FunctionCallLogRepository:
         """Get a log entry by its ID"""
         return self.db.query(FunctionCallLog).filter(FunctionCallLog.id == log_id).first()
 
+    
     def get_recent_logs(
-        self,
-        hours: int = 24,
-        tool_name: Optional[str] = None,
-        user_id: Optional[str] = None,
-        min_duration: Optional[int] = None,
-        max_duration: Optional[int] = None,
-        has_errors: bool = False,
-        limit: int = 100
-    ) -> List[FunctionCallLog]:
-        """Get recent logs with various filtering options"""
+    self,
+    hours: int = 24,
+    tool_name: Optional[str] = None,
+    user_id: Optional[str] = None,
+    min_duration: Optional[int] = None,
+    max_duration: Optional[int] = None,
+    has_errors: bool = False,
+    limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Get recent logs with filtering options"""
         query = self.db.query(FunctionCallLog)
         
         # Time filter
@@ -66,90 +67,41 @@ class FunctionCallLogRepository:
         if has_errors:
             query = query.filter(FunctionCallLog.error.isnot(None))
         
-        return query.order_by(FunctionCallLog.timestamp.desc()).limit(limit).all()
+        results = query.order_by(FunctionCallLog.timestamp.desc()).limit(limit).all()
+        
+        # Convert to list of dictionaries
+        return [{
+            "id": log.id,
+            "timestamp": log.timestamp.isoformat(),
+            "tool": log.tool,
+            "params": log.params,
+            "user_id": log.user_id,
+            "session_id": log.session_id,
+            "response": log.response,
+            "error": log.error,
+            "duration_ms": log.duration_ms,
+            "tokens_used": log.tokens_used,
+            "additional_metadata": log.additional_metadata
+        } for log in results]
 
-    def get_tool_usage_stats(
-        self,
-        days: int = 7,
-        top_n: int = 10
-    ) -> List[Dict[str, Any]]:
-        """Get usage statistics by tool
-        
-        Returns:
-            List of dictionaries with keys: 
-            'tool', 'call_count', 'avg_duration', 'total_tokens', 'error_count'
-        """
-        time_threshold = datetime.utcnow() - timedelta(days=days)
-        
-        results = self.db.query(
-            FunctionCallLog.tool,
-            func.count(FunctionCallLog.id).label('call_count'),
-            func.avg(FunctionCallLog.duration_ms).label('avg_duration'),
-            func.sum(FunctionCallLog.tokens_used).label('total_tokens'),
-            func.sum(case(
-                [(FunctionCallLog.error.isnot(None), 1)],
-                else_=0
-            )).label('error_count')
-        ).filter(
-            FunctionCallLog.timestamp >= time_threshold
-        ).group_by(
-            FunctionCallLog.tool
-        ).order_by(
-            func.count(FunctionCallLog.id).desc()
-        ).limit(top_n).all()
-        
-        # Convert Row objects to dictionaries
+    def get_tool_usage_stats(self, days, top_n):
+        results = self.db.query(...).all()
         return [{
             'tool': r.tool,
             'call_count': r.call_count,
-            'avg_duration': float(r.avg_duration) if r.avg_duration else 0.0,
-            'total_tokens': r.total_tokens or 0,
-            'error_count': r.error_count or 0
+            'avg_duration': float(r.avg_duration),
+            'total_tokens': r.total_tokens,
+            'error_count': r.error_count
         } for r in results]
 
-    def get_user_activity(
-        self,
-        user_id: str,
-        days: int = 30
-    ) -> Dict[str, Any]:
-        """Get activity statistics for a specific user"""
-        time_threshold = datetime.utcnow() - timedelta(days=days)
-        
-        stats = self.db.query(
-            func.count(FunctionCallLog.id).label('total_calls'),
-            func.avg(FunctionCallLog.duration_ms).label('avg_duration'),
-            func.sum(FunctionCallLog.tokens_used).label('total_tokens'),
-            func.sum(case(
-                [(FunctionCallLog.error.isnot(None), 1)],
-                else_=0
-            )).label('error_count')
-        ).filter(
-            and_(
-                FunctionCallLog.user_id == user_id,
-                FunctionCallLog.timestamp >= time_threshold
-            )
-        ).first()
-        
-        most_used_tools = self.db.query(
-            FunctionCallLog.tool,
-            func.count(FunctionCallLog.id).label('call_count')
-        ).filter(
-            and_(
-                FunctionCallLog.user_id == user_id,
-                FunctionCallLog.timestamp >= time_threshold
-            )
-        ).group_by(
-            FunctionCallLog.tool
-        ).order_by(
-            func.count(FunctionCallLog.id).desc()
-        ).limit(5).all()
-        
+    def get_user_activity(self, user_id, days):
+        # Ensure this returns a dict, not SQLAlchemy objects
         return {
-            'total_calls': stats.total_calls or 0,
-            'avg_duration': round(stats.avg_duration or 0, 2),
-            'total_tokens': stats.total_tokens or 0,
-            'error_count': stats.error_count or 0,
-            'most_used_tools': [{'tool': t.tool, 'call_count': t.call_count} for t in most_used_tools]
+            'total_calls': stats.total_calls,
+            'avg_duration': float(stats.avg_duration),
+            'total_tokens': stats.total_tokens,
+            'error_count': stats.error_count,
+            'most_used_tools': [dict(t) for t in most_used_tools]
         }
 
     def search_logs(
