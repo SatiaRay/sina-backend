@@ -17,24 +17,33 @@ class FunctionCallLogger:
     def __call__(self, func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapped(*args, **kwargs):
+            # Get the tool name safely
+            tool_name = "unknown"
+            try:
+                if hasattr(func, '__qualname__'):
+                    tool_name = f"{getattr(func, '__module__', 'unknown')}.{func.__qualname__}"
+                elif hasattr(func, '__name__'):
+                    tool_name = func.__name__
+            except:
+                tool_name = "unknown_function"
+            
             # Prepare log structure
             log_entry: Dict[str, Any] = {
                 "timestamp": datetime.utcnow().isoformat() + "Z",
-                "tool": f"{func.__module__}.{func.__qualname__}",
-                "params": self._extract_params(args, kwargs),
+                "tool": tool_name,
+                "params": self._extract_params(func, args, kwargs),
                 "user": {
                     "id": self.user_id,
                     "session": self.session_id
                 },
                 "metadata": {
                     "duration": 0,
-                    "tokens": 0  # Will be updated later if available
+                    "tokens": 0
                 }
             }
             
             start_time = time.time()
             try:
-                # Execute the function
                 result = func(*args, **kwargs)
                 log_entry["response"] = result
                 return result
@@ -42,26 +51,25 @@ class FunctionCallLogger:
                 log_entry["error"] = str(e)
                 raise
             finally:
-                # Calculate duration
                 log_entry["metadata"]["duration"] = int((time.time() - start_time) * 1000)
-                # Write the log
                 self._write_log(log_entry)
         
         return wrapped
     
-    def _extract_params(self, args, kwargs) -> Dict[str, Any]:
+    def _extract_params(self, func: Callable, args, kwargs) -> Dict[str, Any]:
         """Extract and sanitize parameters for logging"""
         params = {}
+        try:
+            if args and len(args) > 1:
+                if hasattr(func, '__name__') and hasattr(args[0], func.__name__):
+                    params["args"] = args[1:]
+                else:
+                    params["args"] = args
+        except:
+            params["args"] = args
+            
+        params.update(kwargs)
         
-        # Handle positional arguments
-        if args and len(args) > 1:  # Skip 'self' for methods
-            params["args"] = args[1:] if hasattr(args[0], func.__name__) else args
-        
-        # Handle keyword arguments
-        if kwargs:
-            params.update(kwargs)
-        
-        # Sanitize sensitive data
         for sensitive in ['password', 'token', 'secret', 'bearer_token']:
             if sensitive in params:
                 params[sensitive] = "***REDACTED***"
