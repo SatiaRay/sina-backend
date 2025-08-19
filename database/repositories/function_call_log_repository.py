@@ -84,15 +84,27 @@ class FunctionCallLogRepository:
             "additional_metadata": log.additional_metadata
         } for log in results]
 
-    def get_tool_usage_stats(self, days, top_n):
-        results = self.db.query(...).all()
-        return [{
-            'tool': r.tool,
-            'call_count': r.call_count,
-            'avg_duration': float(r.avg_duration),
-            'total_tokens': r.total_tokens,
-            'error_count': r.error_count
-        } for r in results]
+    def get_tool_usage_stats(self, days: int, top_n: int) -> List[Dict[str, Any]]:
+        time_threshold = datetime.utcnow() - timedelta(days=days)
+        
+        results = self.db.query(
+            FunctionCallLog.tool,
+            func.count(FunctionCallLog.id).label('call_count'),
+            func.avg(FunctionCallLog.duration_ms).label('avg_duration'),
+            func.sum(FunctionCallLog.tokens_used).label('total_tokens'),
+            func.sum(case(
+                [(FunctionCallLog.error.isnot(None), 1)],
+                else_=0
+            )).label('error_count')
+        ).filter(
+            FunctionCallLog.timestamp >= time_threshold
+        ).group_by(
+            FunctionCallLog.tool
+        ).order_by(
+            func.count(FunctionCallLog.id).desc()
+        ).limit(top_n).all()
+        
+        return results
 
     def get_user_activity(self, user_id, days):
         # Ensure this returns a dict, not SQLAlchemy objects
