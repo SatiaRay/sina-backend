@@ -17,20 +17,10 @@ class FunctionCallLogger:
     def __call__(self, func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapped(*args, **kwargs):
-            # Get the tool name safely
-            tool_name = "unknown"
-            try:
-                if hasattr(func, '__qualname__'):
-                    tool_name = f"{getattr(func, '__module__', 'unknown')}.{func.__qualname__}"
-                elif hasattr(func, '__name__'):
-                    tool_name = func.__name__
-            except:
-                tool_name = "unknown_function"
-            
             # Prepare log structure
             log_entry: Dict[str, Any] = {
                 "timestamp": datetime.utcnow().isoformat() + "Z",
-                "tool": tool_name,
+                "tool": self._get_clean_tool_name(func),
                 "params": self._extract_params(func, args, kwargs),
                 "user": {
                     "id": self.user_id,
@@ -55,6 +45,26 @@ class FunctionCallLogger:
                 self._write_log(log_entry)
         
         return wrapped
+    
+    def _get_clean_tool_name(self, func: Callable) -> str:
+        """Extract a clean tool name in format ClassName.method_name"""
+        try:
+            if hasattr(func, '__qualname__'):
+                # Get the full qualname (e.g., 'models.tools.functions.neshan.Neshan.search_address')
+                qualname = func.__qualname__
+                
+                # Split into parts and get the last two components
+                parts = qualname.split('.')
+                if len(parts) >= 2:
+                    # Join the last two parts (class and method)
+                    return f"{parts[-2]}.{parts[-1]}"
+                else:
+                    # If there's only one part (just function name)
+                    return qualname
+            elif hasattr(func, '__name__'):
+                return func.__name__
+        except:
+            return "unknown_function"
     
     def _extract_params(self, func: Callable, args, kwargs) -> Dict[str, Any]:
         """Extract and sanitize parameters for logging"""
