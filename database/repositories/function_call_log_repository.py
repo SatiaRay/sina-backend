@@ -143,3 +143,73 @@ class FunctionCallLogRepository:
             "tokens_used": log.tokens_used,
             "additional_metadata": log.additional_metadata
         } for log in results]
+        
+    def get_logs_count(
+    self,
+    hours: int,
+    tool_name: Optional[str] = None,
+    user_id: Optional[str] = None,
+    min_duration: Optional[int] = None,
+    max_duration: Optional[int] = None,
+    has_errors: bool = False
+    ) -> int:
+        """Get total count of logs matching filters"""
+        query = self._build_base_query(
+            hours=hours,
+            tool_name=tool_name,
+            user_id=user_id,
+            min_duration=min_duration,
+            max_duration=max_duration,
+            has_errors=has_errors
+        )
+        return query.count()
+    
+    def get_paginated_logs(
+        self,
+        hours: int,
+        tool_name: Optional[str] = None,
+        user_id: Optional[str] = None,
+        min_duration: Optional[int] = None,
+        max_duration: Optional[int] = None,
+        has_errors: bool = False,
+        offset: int = 0,
+        limit: int = 50
+    ) -> List[FunctionCallLog]:
+        """Get paginated logs matching filters"""
+        query = self._build_base_query(
+            hours=hours,
+            tool_name=tool_name,
+            user_id=user_id,
+            min_duration=min_duration,
+            max_duration=max_duration,
+            has_errors=has_errors
+        )
+        return query.offset(offset).limit(limit).all()
+    
+    def _build_base_query(
+        self,
+        hours: int,
+        tool_name: Optional[str] = None,
+        user_id: Optional[str] = None,
+        min_duration: Optional[int] = None,
+        max_duration: Optional[int] = None,
+        has_errors: bool = False
+    ):
+        """Build base query with filters"""
+        time_threshold = datetime.utcnow() - timedelta(hours=hours)
+        query = self.db.query(FunctionCallLog).filter(
+            FunctionCallLog.timestamp >= time_threshold
+        )
+        
+        if tool_name:
+            query = query.filter(FunctionCallLog.tool == tool_name)
+        if user_id:
+            query = query.filter(FunctionCallLog.user_id == user_id)
+        if min_duration:
+            query = query.filter(FunctionCallLog.duration_ms >= min_duration)
+        if max_duration:
+            query = query.filter(FunctionCallLog.duration_ms <= max_duration)
+        if has_errors:
+            query = query.filter(FunctionCallLog.error.isnot(None))
+            
+        return query.order_by(FunctionCallLog.timestamp.desc())

@@ -34,7 +34,14 @@ class UserActivityResponse(BaseModel):
     error_count: int
     most_used_tools: List[Dict[str, Any]]
 
-@router.get("/", response_model=List[Dict[str, Any]])
+class PaginatedLogResponse(BaseModel):
+    items: List[Dict[str, Any]]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+
+@router.get("/", response_model=PaginatedLogResponse)
 async def get_logs(
     hours: int = Query(24, description="Time window in hours"),
     tool_name: Optional[str] = Query(None, description="Filter by tool name"),
@@ -42,24 +49,59 @@ async def get_logs(
     min_duration: Optional[int] = Query(None, description="Minimum duration in ms"),
     max_duration: Optional[int] = Query(None, description="Maximum duration in ms"),
     has_errors: bool = Query(False, description="Only include failed calls"),
-    limit: int = Query(100, description="Maximum results to return")
+    page: int = Query(1, description="Page number", ge=1),
+    per_page: int = Query(50, description="Items per page", ge=1, le=200)
 ):
     """
-    Get function call logs with filtering options
+    Get paginated function call logs with filtering options
+    
+    Returns:
+    {
+        "items": List[LogEntry],
+        "total": int,
+        "page": int,
+        "per_page": int,
+        "total_pages": int
+    }
     """
     try:
         with FunctionCallLogRepository() as repo:
-            logs = repo.get_recent_logs(
+            # Get total count first
+            total = repo.get_logs_count(
+                hours=hours,
+                tool_name=tool_name,
+                user_id=user_id,
+                min_duration=min_duration,
+                max_duration=max_duration,
+                has_errors=has_errors
+            )
+            
+            # Calculate offset
+            offset = (page - 1) * per_page
+            
+            # Get paginated logs
+            logs = repo.get_paginated_logs(
                 hours=hours,
                 tool_name=tool_name,
                 user_id=user_id,
                 min_duration=min_duration,
                 max_duration=max_duration,
                 has_errors=has_errors,
-                limit=limit
+                offset=offset,
+                limit=per_page
             )
-            # Ensure proper serialization
-            return [model_to_dict(log) if hasattr(log, '__table__') else log for log in logs]
+            
+            # Calculate total pages
+            total_pages = (total + per_page - 1) // per_page
+            
+            return {
+                "items": [model_to_dict(log) if hasattr(log, '__table__') else log for log in logs],
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages
+            }
+            
     except Exception as e:
         raise HTTPException(
             status_code=500,

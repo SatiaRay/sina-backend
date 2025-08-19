@@ -89,38 +89,106 @@ def test_get_logs(mock_repo, client):
     ]
     
     # Configure the mock to return our test data
-    mock_repo.get_recent_logs.return_value = test_data
+    mock_repo.get_paginated_logs.return_value = test_data
+    mock_repo.get_logs_count.return_value = len(test_data)
     
-    # Test with no filters
+    # Test with no filters (default pagination)
     response = client.get("/function-calling-logs/")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 2
-    assert data[0]["tool"] == "test_tool"
+    assert len(data["items"]) == 2
+    assert data["items"][0]["tool"] == "test_tool"
+    assert data["total"] == 2
+    assert data["page"] == 1
+    assert data["per_page"] == 50
+    assert data["total_pages"] == 1
     
     # Verify the mock was called with default parameters
-    mock_repo.get_recent_logs.assert_called_with(
+    mock_repo.get_paginated_logs.assert_called_with(
         hours=24, tool_name=None, user_id=None, 
         min_duration=None, max_duration=None, 
-        has_errors=False, limit=100
+        has_errors=False, offset=0, limit=50
+    )
+    mock_repo.get_logs_count.assert_called_with(
+        hours=24, tool_name=None, user_id=None,
+        min_duration=None, max_duration=None,
+        has_errors=False
     )
     
-    # Test with filters
-    response = client.get("/function-calling-logs/?hours=48&tool_name=test_tool&min_duration=100")
+    # Test with filters and custom pagination
+    response = client.get("/function-calling-logs/?hours=48&tool_name=test_tool&min_duration=100&page=2&per_page=10")
     assert response.status_code == 200
-    mock_repo.get_recent_logs.assert_called_with(
+    mock_repo.get_paginated_logs.assert_called_with(
         hours=48, tool_name="test_tool", user_id=None,
         min_duration=100, max_duration=None,
-        has_errors=False, limit=100
+        has_errors=False, offset=10, limit=10
+    )
+    mock_repo.get_logs_count.assert_called_with(
+        hours=48, tool_name="test_tool", user_id=None,
+        min_duration=100, max_duration=None,
+        has_errors=False
     )
 
+def test_get_logs_pagination_edge_cases(mock_repo, client):
+    # Setup test data with 105 items
+    test_data = [{"id": i, "tool": f"tool_{i}"} for i in range(105)]
+    
+    # Configure the mock
+    mock_repo.get_paginated_logs.return_value = test_data[:50]
+    mock_repo.get_logs_count.return_value = 105
+    
+    # Test first page
+    response = client.get("/function-calling-logs/?per_page=50")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 1
+    assert data["per_page"] == 50
+    assert data["total"] == 105
+    assert data["total_pages"] == 3
+    
+    # Test last page
+    mock_repo.get_paginated_logs.return_value = test_data[100:105]
+    response = client.get("/function-calling-logs/?page=3&per_page=50")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["page"] == 3
+    assert len(data["items"]) == 5
+    
+    # Test invalid page number
+    response = client.get("/function-calling-logs/?page=0")
+    assert response.status_code == 422
+    
+    # Test invalid per_page
+    response = client.get("/function-calling-logs/?per_page=201")
+    assert response.status_code == 422
+    response = client.get("/function-calling-logs/?per_page=0")
+    assert response.status_code == 422
+
 def test_get_logs_error(mock_repo, client):
-    # Configure the mock to raise an exception when get_recent_logs is called
-    mock_repo.get_recent_logs.side_effect = Exception("DB error")
+    # Configure the mock to raise an exception when either pagination method is called
+    mock_repo.get_logs_count.side_effect = Exception("DB error")
+    mock_repo.get_paginated_logs.side_effect = Exception("DB error")
     
     response = client.get("/function-calling-logs/")
     assert response.status_code == 500
     assert "DB error" in response.json()["detail"]
+    
+    # Reset the side effects and test with error in get_paginated_logs only
+    mock_repo.get_logs_count.side_effect = None
+    mock_repo.get_logs_count.return_value = 10
+    mock_repo.get_paginated_logs.side_effect = Exception("DB pagination error")
+    
+    response = client.get("/function-calling-logs/")
+    assert response.status_code == 500
+    assert "DB pagination error" in response.json()["detail"]
+    
+    # Test with error in get_logs_count only
+    mock_repo.get_paginated_logs.side_effect = None
+    mock_repo.get_logs_count.side_effect = Exception("DB count error")
+    
+    response = client.get("/function-calling-logs/")
+    assert response.status_code == 500
+    assert "DB count error" in response.json()["detail"]
 
 def test_get_tool_usage_stats(mock_repo, client):
     # Setup mock data
