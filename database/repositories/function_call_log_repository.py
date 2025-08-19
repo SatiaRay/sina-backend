@@ -116,13 +116,9 @@ class FunctionCallLogRepository:
             'most_used_tools': [dict(t) for t in most_used_tools]
         }
 
-    def search_logs(
-        self,
-        search_term: str,
-        limit: int = 50
-    ) -> List[FunctionCallLog]:
-        """Search logs by tool name, error message, or params"""
-        return self.db.query(FunctionCallLog).filter(
+    def search_logs(self, search_term: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Search logs by tool name, error message, or parameters"""
+        query = self.db.query(FunctionCallLog).filter(
             or_(
                 FunctionCallLog.tool.ilike(f"%{search_term}%"),
                 FunctionCallLog.error.ilike(f"%{search_term}%"),
@@ -130,4 +126,20 @@ class FunctionCallLogRepository:
             )
         ).order_by(
             FunctionCallLog.timestamp.desc()
-        ).limit(limit).all()
+        ).limit(limit)
+        
+        # Convert to list of dictionaries immediately
+        results = query.all()
+        return [{
+            "id": log.id,
+            "timestamp": log.timestamp,
+            "tool": log.tool,
+            "params": log.params,
+            "user_id": log.user_id,
+            "session_id": log.session_id,
+            "response": log.response,
+            "error": log.error,
+            "duration_ms": log.duration_ms,
+            "tokens_used": log.tokens_used,
+            "additional_metadata": log.additional_metadata
+        } for log in results]

@@ -103,17 +103,64 @@ async def get_user_activity(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-@router.get("/search")
+@router.get("/search", response_model=List[Dict[str, Any]])
 async def search_logs(
     query: str = Query(..., description="Search term"),
     limit: int = Query(50, description="Maximum results to return")
 ):
+    """
+    Search logs by tool name, error message, or parameters
+    """
     try:
         with FunctionCallLogRepository() as repo:
             results = repo.search_logs(search_term=query, limit=limit)
-            return [model_to_dict(log) for log in results]
+            
+            # Convert results to serializable format
+            serialized_results = []
+            for log in results:
+                if hasattr(log, '__table__'):  # SQLAlchemy model
+                    result = {
+                        "id": log.id,
+                        "timestamp": log.timestamp.isoformat(),
+                        "tool": log.tool,
+                        "params": log.params,
+                        "user_id": log.user_id,
+                        "session_id": log.session_id,
+                        # Clean response data by removing Ellipsis
+                        "response": clean_response_data(log.response),
+                        "error": log.error,
+                        "duration_ms": log.duration_ms,
+                        "tokens_used": log.tokens_used,
+                        "additional_metadata": log.additional_metadata
+                    }
+                else:  # Already a dict
+                    result = {
+                        **log,
+                        "response": clean_response_data(log.get("response"))
+                    }
+                
+                serialized_results.append(result)
+            
+            return serialized_results
+            
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to search logs: {str(e)}"
+        )
+
+def clean_response_data(response_data: Any) -> Any:
+    """Remove any non-serializable elements from response data"""
+    if response_data is None:
+        return None
+    if isinstance(response_data, dict):
+        return {k: clean_response_data(v) for k, v in response_data.items()}
+    if isinstance(response_data, list):
+        return [clean_response_data(item) for item in response_data]
+    if isinstance(response_data, (str, int, float, bool)):
+        return response_data
+    # Remove Ellipsis and other non-serializable objects
+    return None
 
 @router.get("/{log_id}")
 async def get_log_by_id(log_id: int):

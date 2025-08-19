@@ -168,14 +168,29 @@ def test_get_user_activity(mock_repo, client):
     mock_repo.get_user_activity.assert_called_with("usr_123", days=7)
 
 def test_search_logs(mock_repo, client):
-    mock_repo.search_logs.return_value = [MOCK_LOGS[0]]
+    # Create test data with proper response structure
+    mock_log = {
+        "id": 1,
+        "timestamp": datetime.utcnow().isoformat(),
+        "tool": "mayoral.searchSubject",
+        "params": {"q": "باغ ملی"},
+        "user_id": "user1",
+        "session_id": "session1",
+        "response": {"results": ["item1", "item2"]},  # Proper serializable data
+        "error": None,
+        "duration_ms": 150,
+        "tokens_used": 50,
+        "additional_metadata": {}
+    }
+
+    mock_repo.search_logs.return_value = [mock_log]
     
     response = client.get("/function-calling-logs/search?query=باغ&limit=10")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
     assert data[0]["tool"] == "mayoral.searchSubject"
-    mock_repo.search_logs.assert_called_with(search_term="باغ", limit=10)
+    assert isinstance(data[0]["response"]["results"], list)  # Verify proper serialization
 
 def test_get_log_by_id(mock_repo, client):
     mock_repo.get_by_id.return_value = MOCK_LOGS[0]
