@@ -91,6 +91,7 @@ class DocumentListResponse(BaseModel):
     domain_id: Optional[int] = None
     domain: Optional[DomainInfo] = None
     agent_type: Literal["voice_agent", "text_agent", "both"]
+    status: str
     created_at: datetime
     updated_at: datetime
 
@@ -231,6 +232,7 @@ def get_manual_documents(
                 uri=doc.uri,
                 domain_id=doc.domain_id,
                 domain=domain,
+                status=doc.status,
                 agent_type=doc.agent_type,
                 created_at=doc.created_at,
                 updated_at=doc.updated_at,
@@ -391,7 +393,7 @@ def list_documents(
     base_query = document_repo.db.query(document_repo.model_class).filter(
         document_repo.model_class.domain_id.isnot(None)
     )
-    
+
     if agent_type:
         base_query.filter(document_repo.model_class.agent_type == agent_type)
 
@@ -501,6 +503,7 @@ def search_documents_by_title(
         )
     return response
 
+
 @router.post(
     "/{document_id}/toggle-vector",
     response_model=DocumentResponse,
@@ -525,7 +528,7 @@ async def toggle_document_vector_status(
         raise HTTPException(status_code=404, detail="Document not found")
 
     try:
-        if document.status == 'vectorized':
+        if document.status == "vectorized":
             # Document is vectorized, so devectorize it
             vector_store.delete_document(document.id)
 
