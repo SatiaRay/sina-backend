@@ -164,13 +164,38 @@ def clean_response_data(response_data: Any) -> Any:
 
 @router.get("/{log_id}")
 async def get_log_by_id(log_id: int):
+    """
+    Get a specific log entry by ID
+    
+    - **log_id**: ID of the log entry
+    """
     try:
         with FunctionCallLogRepository() as repo:
             log = repo.get_by_id(log_id)
             if not log:
                 raise HTTPException(status_code=404, detail="Log not found")
-            return model_to_dict(log)
+            
+            # Convert to dictionary format
+            log_dict = {
+                "id": log['id'],
+                "timestamp": log['timestamp'].isoformat() if hasattr(log, 'timestamp') else None,
+                "tool": log['tool'],
+                "params": log['params'],
+                "user_id": log['user_id'],
+                "session_id": log['session_id'],
+                "response": log['response'],
+                "error": log['error'],
+                "duration_ms": log['duration_ms'],
+                "tokens_used": log['tokens_used'],
+                "additional_metadata": log['additional_metadata']
+            }
+            
+            return log_dict
+            
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve log: {str(e)}"
+        )

@@ -193,13 +193,31 @@ def test_search_logs(mock_repo, client):
     assert isinstance(data[0]["response"]["results"], list)  # Verify proper serialization
 
 def test_get_log_by_id(mock_repo, client):
-    mock_repo.get_by_id.return_value = MOCK_LOGS[0]
+    # Create proper test data
+    mock_log = {
+        "id": 1,
+        "timestamp": datetime.utcnow().isoformat(),
+        "tool": "test_tool",
+        "params": {"key": "value"},
+        "user_id": "user1",
+        "session_id": "session1",
+        "response": None,
+        "error": None,
+        "duration_ms": 100,
+        "tokens_used": 50,
+        "additional_metadata": {}
+    }
     
+    mock_repo.get_by_id.return_value = mock_log
+    
+    # Test successful case
     response = client.get("/function-calling-logs/1")
     assert response.status_code == 200
-    assert response.json()["id"] == 1
+    data = response.json()
+    assert data["id"] == 1
+    assert data["tool"] == "test_tool"
     
-    # Test not found
+    # Test not found case
     mock_repo.get_by_id.return_value = None
     response = client.get("/function-calling-logs/999")
     assert response.status_code == 404
