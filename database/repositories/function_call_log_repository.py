@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from database.models import FunctionCallLog, SessionLocal
+from sqlalchemy import case, func
 
 class FunctionCallLogRepository:
     def __init__(self, db: Session = None):
@@ -92,10 +93,12 @@ class FunctionCallLogRepository:
             func.count(FunctionCallLog.id).label('call_count'),
             func.avg(FunctionCallLog.duration_ms).label('avg_duration'),
             func.sum(FunctionCallLog.tokens_used).label('total_tokens'),
-            func.sum(case(
-                [(FunctionCallLog.error.isnot(None), 1)],
-                else_=0
-            )).label('error_count')
+            func.sum(
+                case(
+                    (FunctionCallLog.error.isnot(None), 1),
+                    else_=0
+                )
+            ).label('error_count')
         ).filter(
             FunctionCallLog.timestamp >= time_threshold
         ).group_by(
@@ -104,7 +107,14 @@ class FunctionCallLogRepository:
             func.count(FunctionCallLog.id).desc()
         ).limit(top_n).all()
         
-        return results
+        # Convert SQLAlchemy result tuples to dictionaries
+        return [{
+            "tool": r[0],
+            "call_count": r[1],
+            "avg_duration": float(r[2]) if r[2] is not None else 0.0,
+            "total_tokens": int(r[3]) if r[3] is not None else 0,
+            "error_count": int(r[4]) if r[4] is not None else 0
+        } for r in results]
 
     def get_user_activity(self, user_id, days):
         # Ensure this returns a dict, not SQLAlchemy objects

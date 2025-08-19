@@ -116,17 +116,7 @@ async def get_tool_usage_stats(
     try:
         with FunctionCallLogRepository() as repo:
             stats = repo.get_tool_usage_stats(days=days, top_n=top_n)
-            # Ensure proper serialization
-            return [
-                {
-                    "tool": stat['tool'],
-                    "call_count": stat['call_count'],
-                    "avg_duration": float(stat['avg_duration']) if stat['avg_duration'] else 0.0,
-                    "total_tokens": stat['total_tokens'] or 0,
-                    "error_count": stat['error_count'] or 0
-                }
-                for stat in stats
-            ]
+            return stats
     except Exception as e:
         raise HTTPException(
             status_code=500,

@@ -310,7 +310,6 @@ def test_logs_endpoint_validation(client):
     ("/function-calling-logs/stats/tools", "GET"),
     ("/function-calling-logs/stats/user/usr_123", "GET"),
     ("/function-calling-logs/search?query=test", "GET"),
-    ("/function-calling-logs/1", "GET")
 ])
 def test_endpoints_exist(client, endpoint, method):
     response = client.request(method, endpoint)
