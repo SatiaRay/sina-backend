@@ -123,7 +123,26 @@ def test_get_logs_error(mock_repo, client):
     assert "DB error" in response.json()["detail"]
 
 def test_get_tool_usage_stats(mock_repo, client):
-    mock_repo.return_value.get_tool_usage_stats.return_value = MOCK_TOOL_STATS
+    # Setup mock data
+    mock_stats = [
+        {
+            "tool": "mayoral.searchSubject",
+            "call_count": 100,
+            "avg_duration": 120.5,
+            "total_tokens": 5000,
+            "error_count": 5
+        },
+        {
+            "tool": "mayoral.submitRequest",
+            "call_count": 50,
+            "avg_duration": 200.0,
+            "total_tokens": 2500,
+            "error_count": 10
+        }
+    ]
+    
+    # Configure the mock to return our test data
+    mock_repo.get_tool_usage_stats.return_value = mock_stats
     
     # Test with default params
     response = client.get("/function-calling-logs/stats/tools")
