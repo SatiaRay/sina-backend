@@ -74,9 +74,22 @@ async def get_tool_usage_stats(
     try:
         with FunctionCallLogRepository() as repo:
             stats = repo.get_tool_usage_stats(days=days, top_n=top_n)
-            return [dict(stat) for stat in stats]  # Convert Row objects to dicts
+            # Ensure proper serialization
+            return [
+                {
+                    "tool": stat['tool'],
+                    "call_count": stat['call_count'],
+                    "avg_duration": float(stat['avg_duration']) if stat['avg_duration'] else 0.0,
+                    "total_tokens": stat['total_tokens'] or 0,
+                    "error_count": stat['error_count'] or 0
+                }
+                for stat in stats
+            ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve tool statistics: {str(e)}"
+        )
 
 @router.get("/stats/user/{user_id}", response_model=UserActivityResponse)
 async def get_user_activity(
