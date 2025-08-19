@@ -209,17 +209,17 @@ async def get_log_by_id(log_id: int):
             
             # Convert to dictionary format
             log_dict = {
-                "id": log['id'],
-                "timestamp": log['timestamp'].isoformat() if hasattr(log, 'timestamp') else None,
-                "tool": log['tool'],
-                "params": log['params'],
-                "user_id": log['user_id'],
-                "session_id": log['session_id'],
-                "response": log['response'],
-                "error": log['error'],
-                "duration_ms": log['duration_ms'],
-                "tokens_used": log['tokens_used'],
-                "additional_metadata": log['additional_metadata']
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat() if hasattr(log, 'timestamp') else None,
+                "tool": log.tool,
+                "params": log.params,
+                "user_id": log.user_id,
+                "session_id": log.session_id,
+                "response": log.response,
+                "error": log.error,
+                "duration_ms": log.duration_ms,
+                "tokens_used": log.tokens_used,
+                "additional_metadata": log.additional_metadata
             }
             
             return log_dict
