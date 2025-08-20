@@ -62,6 +62,8 @@ from .system import router as system_router
 from .function_calling_log import router as function_calling_log_router
 from dynaconf import Dynaconf
 
+from util.settings import initialize_system_settings
+
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
 
@@ -128,7 +130,7 @@ def init_service_container():
     container.instance("Mayoral", mayoral)
     
     # Bind app settings
-    container.instance('settings', Dynaconf(settings_files=['../data/system_settings.json']))
+    container.instance('settings', Dynaconf(settings_files=[initialize_system_settings()]))
 
 
 # Initialize the service container
