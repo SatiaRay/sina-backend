@@ -881,6 +881,8 @@ async def add_manually_knowledge(
 
         # Add document to vector store
         ids = vector_store.add_documents([{"text": markdown_text, "metadata": request.metadata}])
+        
+        repo.update(doc.id, {'status' : 'vectorized'})
 
         return JSONResponse(
             status_code=200,
