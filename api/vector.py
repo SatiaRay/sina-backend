@@ -20,6 +20,19 @@ class VectorDocument(BaseModel):
 
 class VectorStoreRequest(BaseModel):
     documents: List[VectorDocument]
+    
+@router.get("/")
+async def get_all():
+    """
+        Get list of all documents stored in vector db
+    """
+    try:
+        vector_store = VectorStore()
+        return vector_store.get_all_documents()
+    except Exception as e:
+        # log_error(error_logger, e, f"Vector search failed for query: {request.query}")
+        print(e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/search")
 async def search_vectors(request: VectorSearchRequest):
