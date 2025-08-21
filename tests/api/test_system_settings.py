@@ -45,7 +45,7 @@ def test_get_system_settings(mock_exists, mock_file):
     mock_file.assert_called_with(system_mod.SYSTEM_SETTINGS_PATH, "r", encoding="utf-8")
 
 
-@patch("api.system.open", new_callable=mock_open)
+@patch("api.system.open", new_callable=mock_open, read_data=json.dumps(MOCK_SETTINGS))
 @patch("api.system.os.path.exists", return_value=True)
 def test_post_system_settings_valid(mock_exists, mock_file):
     with patch.object(
@@ -61,7 +61,7 @@ def test_post_system_settings_valid(mock_exists, mock_file):
         handle.write.assert_called()  # Should write JSON
 
 
-@patch("api.system.open", new_callable=mock_open)
+@patch("api.system.open", new_callable=mock_open, read_data=json.dumps(MOCK_SCHEMA))
 def test_post_system_settings_invalid(mock_file):
     # Missing required field
     bad_settings = {"site_name": "TestBot"}
@@ -80,7 +80,7 @@ def test_post_system_settings_invalid(mock_file):
     assert "Invalid settings" in response2.json()["detail"]
 
 
-@patch("api.system.open", new_callable=mock_open)
+@patch("api.system.open", new_callable=mock_open, read_data=json.dumps(MOCK_SETTINGS))
 def test_post_system_settings_invalid_model(mock_file):
     # text_agent_model not in allowed models
     bad_model_settings = {
@@ -107,7 +107,7 @@ def test_get_config_schema():
     mock_config = MagicMock()
     mock_config.get.return_value = ["model-a", "model-b"]
     with patch("api.system.config", mock_config):
-        response = client.get("/system/config-schema")
+        response = client.get("/system/settings-schema")
         assert response.status_code == 200
         data = response.json()
         assert "schema" in data

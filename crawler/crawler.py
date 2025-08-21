@@ -78,6 +78,63 @@ def clean_domain(url: str) -> str:
     except Exception as e:
         logging.error(f"Error cleaning domain: {str(e)}")
         return url
+    
+# Create a session with SSL verification disabled to handle websites with invalid certificates
+session = requests.Session()
+session.verify = False
+
+def update_job_status(job, status, message=None):
+            """Update job status and metadata"""
+            if job:
+                job.meta['status'] = status
+                if message:
+                    job.meta['message'] = message
+                job.save_meta()
+
+def handle_rate_limit(job, retry_count):
+            """Handle rate limit by waiting and updating job status"""
+            wait_minutes = RATE_LIMIT_WAIT_MINUTES
+            update_job_status(job, "rate_limit", f"Rate limit hit. Waiting {wait_minutes} minutes before retry {retry_count}/{RATE_LIMIT_MAX_RETRIES}")
+            time.sleep(wait_minutes * 60)  # Convert minutes to seconds
+    
+def fetch_and_parse_page(url, job=None):
+            """Fetch and parse the webpage content with rate limit handling"""
+            retry_count = 0
+            
+            while retry_count < RATE_LIMIT_MAX_RETRIES:
+                try:
+                    response = session.get(url, timeout=10)
+                    
+                    # Check for rate limit status codes
+                    if response.status_code in RATE_LIMIT_STATUS_CODES:
+                        retry_count += 1
+                        if retry_count >= RATE_LIMIT_MAX_RETRIES:
+                            print(f"Max retries reached for {url} due to rate limiting")
+                            return None, None
+                        
+                        handle_rate_limit(job, retry_count)
+                        continue
+                    
+                    if response.status_code != 200:
+                        print(f"Failed to fetch {url}: Status {response.status_code}")
+                        return None, None
+                    
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    if not soup:
+                        print(f"Failed to parse HTML for {url}")
+                        return None, None
+                    
+                    return response, soup
+                    
+                except requests.exceptions.RequestException as e:
+                    print(f"Network error for {url}: {str(e)}")
+                    return None, None
+                except Exception as e:
+                    print(f"Unexpected error for {url}: {str(e)}")
+                    return None, None
+            
+            return None, None
+
 
 def crawl(url, recursive=False, db: Session = None, job=None):
     """
@@ -98,9 +155,6 @@ def crawl(url, recursive=False, db: Session = None, job=None):
     document_repo = DocumentRepository(db)
     domain_repo = CrawledDomainRepository(db)
     
-    # Create a session with SSL verification disabled to handle websites with invalid certificates
-    session = requests.Session()
-    session.verify = False
     
     # Initialize progress tracking
     total_urls = 0
@@ -163,58 +217,11 @@ def crawl(url, recursive=False, db: Session = None, job=None):
                 return False
             return True
 
-        def update_job_status(job, status, message=None):
-            """Update job status and metadata"""
-            if job:
-                job.meta['status'] = status
-                if message:
-                    job.meta['message'] = message
-                job.save_meta()
+        
 
-        def handle_rate_limit(job, retry_count):
-            """Handle rate limit by waiting and updating job status"""
-            wait_minutes = RATE_LIMIT_WAIT_MINUTES
-            update_job_status(job, "rate_limit", f"Rate limit hit. Waiting {wait_minutes} minutes before retry {retry_count}/{RATE_LIMIT_MAX_RETRIES}")
-            time.sleep(wait_minutes * 60)  # Convert minutes to seconds
+        
 
-        def fetch_and_parse_page(url, job=None):
-            """Fetch and parse the webpage content with rate limit handling"""
-            retry_count = 0
-            
-            while retry_count < RATE_LIMIT_MAX_RETRIES:
-                try:
-                    response = session.get(url, timeout=10)
-                    
-                    # Check for rate limit status codes
-                    if response.status_code in RATE_LIMIT_STATUS_CODES:
-                        retry_count += 1
-                        if retry_count >= RATE_LIMIT_MAX_RETRIES:
-                            print(f"Max retries reached for {url} due to rate limiting")
-                            return None, None
-                        
-                        handle_rate_limit(job, retry_count)
-                        continue
-                    
-                    if response.status_code != 200:
-                        print(f"Failed to fetch {url}: Status {response.status_code}")
-                        return None, None
-                    
-                    soup = BeautifulSoup(response.text, 'html.parser')
-                    if not soup:
-                        print(f"Failed to parse HTML for {url}")
-                        return None, None
-                    
-                    return response, soup
-                    
-                except requests.exceptions.RequestException as e:
-                    print(f"Network error for {url}: {str(e)}")
-                    return None, None
-                except Exception as e:
-                    print(f"Unexpected error for {url}: {str(e)}")
-                    return None, None
-            
-            return None, None
-
+        
         def extract_links(soup, current_url):
             """Extract and clean links from the page"""
             links = []

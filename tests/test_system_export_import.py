@@ -483,7 +483,7 @@ class TestSystemEndpoints:
             mock_file_response.__call__ = Mock(return_value=None)
             mock_response.return_value = mock_file_response
             
-            response = client.post("/system/export")
+            response = client.get("/system/export")
             
             assert response.status_code == 200
             mock_export.assert_called_once()
@@ -494,7 +494,7 @@ class TestSystemEndpoints:
         with patch('api.system.db_export_import.export_database') as mock_export:
             mock_export.side_effect = Exception("Export failed")
             
-            response = client.post("/system/export")
+            response = client.get("/system/export")
             
             assert response.status_code == 500
             assert "Export failed" in response.json()["detail"]
@@ -529,26 +529,20 @@ class TestSystemEndpoints:
         finally:
             os.unlink(tmp_file.name)
     
-    def test_import_database_endpoint_invalid_file(self, client):
-        """Test import database endpoint with invalid file"""
-        with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as tmp_file:
-            tmp_file.write(b"invalid content")
-            tmp_file.flush()
-            
-            try:
-                with open(tmp_file.name, 'rb') as f:
-                    response = client.post(
-                        "/system/import",
-                        files={"file": ("test.txt", f, "text/plain")}
-                    )
-                
-                # The endpoint should return 400 for invalid file type
-                assert response.status_code in [400, 500]  # Allow both 400 and 500 for this test
-                response_data = response.json()
-                assert "detail" in response_data
-                
-            finally:
-                os.unlink(tmp_file.name)
+    def test_import_database_endpoint_invalid_file(self, client, tmp_path):
+        tmp_file = tmp_path / "test.txt"
+        tmp_file.write_text("invalid content")
+
+        with tmp_file.open("rb") as f:
+            response = client.post(
+                "/system/import",
+                files={"file": ("test.txt", f, "text/plain")},
+            )
+
+        assert response.status_code in [400, 500]
+        response_data = response.json()
+        assert "detail" in response_data
+
     
     def test_export_status_endpoint_available(self, client):
         """Test export status endpoint when file is available"""

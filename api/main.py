@@ -59,7 +59,10 @@ from .auth import router as auth_router
 from .user import router as user_router
 from .voice_agent import router as voice_agent_router
 from .system import router as system_router
+from .function_calling_log import router as function_calling_log_router
 from dynaconf import Dynaconf
+
+from util.settings import initialize_system_settings
 
 # Configure loggers
 main_logger, error_logger, api_logger = configure_logging()
@@ -127,7 +130,7 @@ def init_service_container():
     container.instance("Mayoral", mayoral)
     
     # Bind app settings
-    container.instance('settings', Dynaconf(settings_files=['../data/system_settings.json']))
+    container.instance('settings', Dynaconf(settings_files=[initialize_system_settings()]))
 
 
 # Initialize the service container
@@ -196,6 +199,7 @@ app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(voice_agent_router)
 app.include_router(system_router)
+app.include_router(function_calling_log_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
@@ -877,6 +881,8 @@ async def add_manually_knowledge(
 
         # Add document to vector store
         ids = vector_store.add_documents([{"text": markdown_text, "metadata": request.metadata}])
+        
+        repo.update(doc.id, {'status' : 'vectorized'})
 
         return JSONResponse(
             status_code=200,

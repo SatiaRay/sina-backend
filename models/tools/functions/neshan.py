@@ -4,6 +4,7 @@ import os
 from typing import Dict, Any, Optional
 from redis import Redis
 from redis.exceptions import RedisError
+from models.tools.functions.logging_decorator import FunctionCallLogger
 
 
 class Neshan:
@@ -96,6 +97,7 @@ class Neshan:
             print(f"Error fetching data from {endpoint}: {e}")
             return None
 
+    @FunctionCallLogger()
     def search_address(self, searchTerm: str) -> Optional[Dict[str, Any]]:
         resData = self._make_api_request(
             "v1/search",
@@ -105,6 +107,7 @@ class Neshan:
 
         return resData
 
+    @FunctionCallLogger()
     def reverse(self, lat: str, lng) -> Optional[Dict[str, Any]]:
         resData = self._make_api_request(
             "v5/reverse",

@@ -4,6 +4,7 @@ import os
 from typing import Dict, Any, Optional
 from redis import Redis
 from redis.exceptions import RedisError
+from models.tools.functions.logging_decorator import FunctionCallLogger
 
 
 class AppSatiaCo:
@@ -92,7 +93,8 @@ class AppSatiaCo:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching data from {endpoint}: {e}")
             return None
-
+        
+    @FunctionCallLogger()
     def get_connection_logs(self, serial: str = "", beginDate: str = '', endDate: str = '', page: int = 1):
         extra_params = {
             "beginDate": beginDate,
@@ -147,7 +149,8 @@ class AppSatiaCo:
                 'discount': services[4]['CREDITUSED'] - (services[0]['IN'] + services[0]['OUT']),
             }
         }
-
+        
+    @FunctionCallLogger()
     def get_service_info(self, serial: str = "", beginDate: str = '', endDate: str = ''):
         extra_params = {
             "beginDate": beginDate,
@@ -176,6 +179,7 @@ class AppSatiaCo:
             'is_active': services[0]['Active']
         }
         
+    @FunctionCallLogger()
     def find_account(self, serial: str, return_original_value = False):
         accounts = self.get_accounts_list()
         if not accounts:
@@ -209,7 +213,8 @@ class AppSatiaCo:
                 return account
                 
         return None
-        
+    
+    @FunctionCallLogger()
     def get_accounts_list(self, beginDate: str = '', endDate: str = ''):
         extra_params = {
             "beginDate": beginDate,
