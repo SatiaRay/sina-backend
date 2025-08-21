@@ -357,12 +357,16 @@ async def update_document(
 # Delete a document
 @router.delete("/{document_id}")
 def delete_document(document_id: int, db: Session = Depends(get_db)):
-    document_repo = DocumentRepository(db)
-    document = document_repo.get(document_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-    document_repo.delete(document_id)
-    return {"message": "Document deleted successfully"}
+    try:
+        vector_store.delete_document(document_id=document_id)
+        document_repo = DocumentRepository(db)
+        document = document_repo.get(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        document_repo.delete(document_id)
+        return {"message": "Document deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # List all documents
