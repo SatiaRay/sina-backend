@@ -158,6 +158,26 @@
         "required": ["q"],
         "additionalProperties": false
       }
+    },
+    {
+      "type": "function",
+      "name": "Ayan-get_zoning",
+      "description": "دریافت اطلاعات منطقه‌بندی شهری ملک از سامانه عیان بر اساس مختصات جغرافیایی ملک",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "string",
+            "description": "عرض جغرافیایی"
+          },
+          "lng": {
+            "type": "string",
+            "description": "طول جغرافیایی"
+          }
+        },
+        "required": ["lat", "lng"],
+        "additionalProperties": false
+      }
     }
   ]
 }
