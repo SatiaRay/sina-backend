@@ -124,7 +124,7 @@ class Mayoral:
 
     @FunctionCallLogger()
     def submitRequest(
-        self, mobile, address, lat, long, subject_id, description:str = None
+        self, mobile, address, lat, long, subject_id, description: str = None
     ) -> Optional[Dict[str, Any]]:
         data = {
             "mobile": mobile,
@@ -134,11 +134,11 @@ class Mayoral:
             "long": long,
             "subject_id": subject_id,
         }
-        
+
         data = self._make_api_request("api/submit/request", method="POST", data=data)
 
         return data
-    
+
     @FunctionCallLogger()
     def searchSubject(self, q) -> Optional[Dict[str, Any]]:
         params = {
@@ -146,5 +146,14 @@ class Mayoral:
         }
 
         data = self._make_api_request("api/subject/search", method="GET", params=params)
-
-        return data
+        
+        transformed_data = []
+        
+        for item in data['results']:
+            transformed_item = {
+                "subject_id": item['id'],
+                "description": item['name'],
+            }
+            transformed_data.append(transformed_item)
+            
+        return transformed_data
