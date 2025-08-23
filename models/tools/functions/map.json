@@ -130,15 +130,19 @@
           "subject_id": {
             "type": "integer",
             "description": "شناسه موضوع گزارش"
+          },
+          "description": {
+            "type": "string",
+            "description": "توضیحات پیام"
           }
         },
         "required": [
-          "reporterFullname",
-          "reporterGender",
+          "mobile",
           "address",
-          "coordinates",
-          "category_id",
-          "message"
+          "lat",
+          "long",
+          "subject_id",
+          "description"
         ],
         "additionalProperties": false
       }

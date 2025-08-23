@@ -124,11 +124,12 @@ class Mayoral:
 
     @FunctionCallLogger()
     def submitRequest(
-        self, mobile, address, lat, long, subject_id
+        self, mobile, address, lat, long, subject_id, description:str = None
     ) -> Optional[Dict[str, Any]]:
         data = {
             "mobile": mobile,
             "address": address,
+            "description": description,
             "lat": lat,
             "long": long,
             "subject_id": subject_id,
