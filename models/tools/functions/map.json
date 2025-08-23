@@ -178,6 +178,18 @@
         "required": ["lat", "lng"],
         "additionalProperties": false
       }
+    },
+    {
+      "type": "function",
+      "name": "Ayan-get_conditions",
+      "description": "ضوابط و جداول فورمولی محاسبه تعداد طبقات مجاز برای ساختمان سازی را باز می گرداند",
+      "parameters": {
+        "type": "object",
+        "properties": {
+        },
+        "required": [],
+        "additionalProperties": false
+      }
     }
   ]
 }
