@@ -20,16 +20,21 @@ def mock_container():
 
 def test_call_function_success(mock_container):
     """Test successful function call"""
-    # Setup
-    mock_instance = MockClass()
+    # Setup mock instance with MagicMock method
+    mock_instance = MagicMock()
+    # Configure the mock method to return our expected result
+    mock_instance.test_method.return_value = "Mock result with args: ('arg1', 'arg2')"
     mock_container.make.return_value = mock_instance
     
-    # Execute
-    result = call_function('MockClass-test_method', 'arg1', 'arg2')
-    
-    # Assert
-    assert result == "Mock result with args: ('arg1', 'arg2')"
-    mock_container.make.assert_called_once_with('MockClass')
+    # Patch the logger to avoid attribute errors
+    with patch('models.tools.functions.logging_decorator.FunctionCallLogger._write_log'):
+        # Execute
+        result = call_function('MockClass-test_method', 'arg1', 'arg2')
+        
+        # Assert
+        assert result == "Mock result with args: ('arg1', 'arg2')"
+        mock_container.make.assert_called_once_with('MockClass')
+        mock_instance.test_method.assert_called_once_with('arg1', 'arg2')
 
 def test_call_function_class_not_found(mock_container):
     """Test when class is not found in container"""

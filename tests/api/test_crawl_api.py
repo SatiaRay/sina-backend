@@ -11,6 +11,7 @@ import uuid
 import time
 from unittest.mock import AsyncMock
 from sqlalchemy.orm import Session
+from redis import Redis
 
 # Create test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
