@@ -41,6 +41,7 @@ import uuid
 from models.tools.functions.app_satia_co import AppSatiaCo
 from models.tools.functions.neshan import Neshan
 from models.tools.functions.mayoral import Mayoral
+from models.tools.functions.ayan import Ayan
 
 # Routes
 from api.about import router as about_router
@@ -109,7 +110,7 @@ def init_service_container():
     container.singleton('Mayoral', lambda: Mayoral(
             bearer_token=os.getenv("MAYORAL_API_BEARER_TOKEN", ""),
         ))
-
+    
     # Create and bind instances
     vector_store = container.make("vector_store")
     container.instance("vector_store", vector_store)
@@ -128,6 +129,9 @@ def init_service_container():
     # Create and bind Mayoral instance
     mayoral = container.make("Mayoral")
     container.instance("Mayoral", mayoral)
+    
+    # Ayan
+    container.instance("Ayan", Ayan())
     
     # Bind app settings
     container.instance('settings', Dynaconf(settings_files=[initialize_system_settings()]))
