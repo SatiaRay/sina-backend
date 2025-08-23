@@ -1,4 +1,12 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
+from fastapi import (
+    APIRouter,
+    WebSocket,
+    WebSocketDisconnect,
+    Query,
+    HTTPException,
+    UploadFile,
+    File,
+)
 from typing import Optional, List, Dict
 import json
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
@@ -28,13 +36,12 @@ agent_rag = ChatAgentRagProxy()
 speech_to_text_model = None
 
 
-        
 def get_voice_to_text_model():
-    
+
     settings_file = Path(__file__).parent.parent / "data" / "system_settings.json"
-    
+
     settings = Dynaconf(settings_files=[str(settings_file)], lowercase_read=True)
-    
+
     try:
         match settings.voice_to_text_service:
             case "openai":
@@ -42,18 +49,16 @@ def get_voice_to_text_model():
             case "google":
                 return GoogleSpeechToTextModel()
             case _:
-                return None    
+                return None
     except Exception as e:
         api_logger.info(f"Get voice to text service error {str(e)}")
         print(e)
         return None
-    
-    
 
 
 @router.websocket("/ws/ask")
 async def ask_question_agent_socket(
-    websocket: WebSocket, 
+    websocket: WebSocket,
     session_id: str = Query(..., description="Session ID is required"),
 ):
     await websocket.accept()
@@ -71,15 +76,16 @@ async def ask_question_agent_socket(
             api_logger.info(f"Processing question with agent: {question}")
 
             response = await agent_rag.generate_response_socket(
-                question=question,
-                websocket=websocket
+                question=question, websocket=websocket
             )
 
             if response:
-                await websocket.send_json({
-                    "event" : "finished",
-                    "msg" : "Response generated complete",
-                })
+                await websocket.send_json(
+                    {
+                        "event": "finished",
+                        "msg": "Response generated complete",
+                    }
+                )
 
             if isinstance(response, dict) and response.get("status") == "error":
                 await websocket.send_text(f"Error: {response.get('error')}")
@@ -92,15 +98,19 @@ async def ask_question_agent_socket(
     finally:
         await websocket.close()
 
+
 @router.websocket("/ws/voice")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    
+
     speech_to_text_model = get_voice_to_text_model()
-    
+
     if not speech_to_text_model:
-        raise HTTPException(status_code=500, detail=f"The voice to speech service doesn't defined in the system settings")
-    
+        raise HTTPException(
+            status_code=500,
+            detail=f"The voice to speech service doesn't defined in the system settings",
+        )
+
     try:
         while True:
             try:
@@ -110,16 +120,18 @@ async def websocket_endpoint(websocket: WebSocket):
                 break
 
             filename = f"received_{uuid.uuid4().hex}.webm"
-            filepath = os.path.join('temp', filename)
+            filepath = os.path.join("temp", filename)
 
             # Ensure the directory exists
-            os.makedirs('temp', exist_ok=True)
+            os.makedirs("temp", exist_ok=True)
 
             try:
                 with open(filepath, "wb") as f:
                     f.write(data)
 
-                await websocket.send_json({"event": "transcribing", "msg": "در حال تبدیل صدا به متن."})
+                await websocket.send_json(
+                    {"event": "transcribing", "msg": "در حال تبدیل صدا به متن."}
+                )
 
                 # Transcribe using Whisper
                 trans = speech_to_text_model.transcribe(filepath)
@@ -139,3 +151,58 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"Outer error: {e}")
         await websocket.send_text(f"Error: {e}")
+
+
+@router.post("/voice-wav-to-text")
+async def voice_wav_endpoint(file: UploadFile = File(...)):
+    """
+    API endpoint to transcribe WAV audio files
+    """
+    speech_to_text_model = get_voice_to_text_model()
+
+    if not speech_to_text_model:
+        raise HTTPException(
+            status_code=500,
+            detail="The voice to speech service doesn't defined in the system settings",
+        )
+
+    # Check if file is WAV format
+    if not file.content_type or "wav" not in file.content_type.lower():
+        raise HTTPException(
+            status_code=400, detail="Only WAV format files are accepted"
+        )
+
+    filename = f"received_{uuid.uuid4().hex}.wav"
+    filepath = os.path.join("temp", filename)
+
+    try:
+        # Ensure the directory exists
+        os.makedirs("temp", exist_ok=True)
+
+        # Save uploaded file
+        with open(filepath, "wb") as f:
+            content = await file.read()
+            f.write(content)
+
+        # Transcribe using speech-to-text model
+        transcription = speech_to_text_model.transcribe(filepath)
+
+        return {
+            "status": "success",
+            "transcription": transcription,
+            "message": "Audio transcribed successfully",
+        }
+
+    except Exception as e:
+        print(f"Error transcribing WAV file: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Error transcribing audio: {str(e)}"
+        )
+
+    finally:
+        # Clean up temporary file
+        try:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+        except Exception as cleanup_error:
+            print(f"Cleanup error: {cleanup_error}")
