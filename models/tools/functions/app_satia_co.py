@@ -95,7 +95,7 @@ class AppSatiaCo:
             return None
         
     @FunctionCallLogger()
-    def get_connection_logs(self, serial: str = "", beginDate: str = '', endDate: str = '', page: int = 1):
+    async def get_connection_logs(self, serial: str = "", beginDate: str = '', endDate: str = '', page: int = 1):
         extra_params = {
             "beginDate": beginDate,
             "endDate": endDate,
@@ -151,7 +151,7 @@ class AppSatiaCo:
         }
         
     @FunctionCallLogger()
-    def get_service_info(self, serial: str = "", beginDate: str = '', endDate: str = ''):
+    async def get_service_info(self, serial: str = "", beginDate: str = '', endDate: str = ''):
         extra_params = {
             "beginDate": beginDate,
             "endDate": endDate,
@@ -180,7 +180,7 @@ class AppSatiaCo:
         }
         
     @FunctionCallLogger()
-    def find_account(self, serial: str, return_original_value = False):
+    async def find_account(self, serial: str, return_original_value = False):
         accounts = self.get_accounts_list()
         if not accounts:
             return None
@@ -215,7 +215,7 @@ class AppSatiaCo:
         return None
     
     @FunctionCallLogger()
-    def get_accounts_list(self, beginDate: str = '', endDate: str = ''):
+    async def get_accounts_list(self, beginDate: str = '', endDate: str = ''):
         extra_params = {
             "beginDate": beginDate,
             "endDate": endDate,

@@ -43,7 +43,7 @@ async def call_tool_function(request: ToolCallRequest):
     """
     try:
         args = request.args or []
-        result = call_function(request.function_name, *args)
+        result = await call_function(request.function_name, *args)
         return {"result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calling function: {str(e)}")

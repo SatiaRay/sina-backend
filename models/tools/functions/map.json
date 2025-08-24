@@ -129,7 +129,7 @@
           },
           "subject_id": {
             "type": "integer",
-            "description": "شناسه موضوع گزارش"
+            "description": "آیدی موضوع گزارش که میبایست از Mayoral-searchSubject دریافت و انتخاب شود"
           },
           "description": {
             "type": "string",
@@ -150,7 +150,7 @@
     {
       "type": "function",
       "name": "Mayoral-searchSubject",
-      "description": "جستجوی موضوعات سامانه 137 شهرداری",
+      "description": "جستجوی موضوع در فهرست موضاعات تعریف شده سامانه 137",
       "parameters": {
         "type": "object",
         "properties": {

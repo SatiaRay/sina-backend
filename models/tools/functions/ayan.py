@@ -103,7 +103,7 @@ class Ayan:
             return None
 
     @FunctionCallLogger()
-    def get_zoning(self, lat: float, lng: float) -> Optional[Dict[str, Any]]:
+    async def get_zoning(self, lat: float, lng: float) -> Optional[Dict[str, Any]]:
         resData = self._make_api_request(
             "shahrsazi/SetRegion.php",
             {"Latitude": lng, "Longitude": lat},
@@ -113,7 +113,7 @@ class Ayan:
         return resData
     
     @FunctionCallLogger()
-    def get_conditions(self) -> Optional[Dict[str, Any]]:
+    async def get_conditions(self) -> Optional[Dict[str, Any]]:
         return {
             "building_conditions" : """
                 ###  تعداد طبقات و سطح اشغال مجاز برای اراضی120 مترمربع و بیشتر در مناطق تراکمی مختلف

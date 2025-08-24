@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from redis import Redis
 from redis.exceptions import RedisError
 from models.tools.functions.logging_decorator import FunctionCallLogger
+from models.agents.mayoral_subject_selector import MayoralSubjectSelector
 
 
 
@@ -123,7 +124,7 @@ class Mayoral:
             return None
 
     @FunctionCallLogger()
-    def submitRequest(
+    async def submitRequest(
         self, mobile, address, lat, long, subject_id, description: str = None
     ) -> Optional[Dict[str, Any]]:
         data = {
@@ -140,7 +141,7 @@ class Mayoral:
         return data
 
     @FunctionCallLogger()
-    def searchSubject(self, q) -> Optional[Dict[str, Any]]:
+    async def searchSubject(self, q) -> Optional[Dict[str, Any]]:
         params = {
             "q": q,
         }

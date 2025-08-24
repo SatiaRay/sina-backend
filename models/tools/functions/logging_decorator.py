@@ -8,15 +8,16 @@ from sqlalchemy.orm import Session
 from database.models import SessionLocal, FunctionCallLog
 import os
 from database.repositories.function_call_log_repository import FunctionCallLogRepository
+from functools import wraps
 
 class FunctionCallLogger:
     def __init__(self, user_id: str = "system", session_id: str = "system"):
         self.user_id = user_id
         self.session_id = session_id
-    
-    def __call__(self, func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapped(*args, **kwargs):
+
+    def __call__(self, func):
+        @wraps(func)
+        async def wrapped(*args, **kwargs):
             # Prepare log structure
             log_entry: Dict[str, Any] = {
                 "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -34,7 +35,7 @@ class FunctionCallLogger:
             
             start_time = time.time()
             try:
-                result = func(*args, **kwargs)
+                result = await func(*args, **kwargs)
                 log_entry["response"] = result
                 return result
             except Exception as e:
@@ -63,7 +64,9 @@ class FunctionCallLogger:
                     return qualname
             elif hasattr(func, '__name__'):
                 return func.__name__
-        except:
+            else:
+                return "unknown_function"
+        except Exception:
             return "unknown_function"
     
     def _extract_params(self, func: Callable, args, kwargs) -> Dict[str, Any]:
