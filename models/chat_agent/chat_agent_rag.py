@@ -357,13 +357,13 @@ class ChatAgentRag(ChatAgentRagInterface):
             log_error(error_logger, e, error_context)
             raise
         
-    def suplly_called_function(self):
+    async def suplly_called_function(self):
         try:
             # Add function call to history
             self.history.append(self.called_function)
             
             # Call the function and get result
-            result = call_function(self.called_function['name'], json.loads(self.called_function['arguments']))
+            result = await call_function(self.called_function['name'], json.loads(self.called_function['arguments']))
             
             # Add result to chat history
             if self.history is None:
