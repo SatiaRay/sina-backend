@@ -1,10 +1,11 @@
+import asyncio
 from provider.service_container import container
 import traceback
 import sys
 from models.tools.functions.logging_decorator import FunctionCallLogger
 from typing import Union, Dict, Any
 
-def call_function(
+async def call_function(
     function_name: str, 
     *args,
     user_context: Dict[str, str] = None,
@@ -47,12 +48,12 @@ def call_function(
         
         # Handle both legacy (single dict) and new style arguments
         if len(args) == 1 and isinstance(args[0], dict) and not kwargs:
-            return logged_method(**args[0])
+            return await logged_method(**args[0])
         elif not args and kwargs:
-            return logged_method(**kwargs)
+            return await logged_method(**kwargs)
         else:
-            return logged_method(*args)
-            
+            return await logged_method(*args)
+
     except Exception as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         stack_trace = traceback.format_exception(exc_type, exc_value, exc_traceback)

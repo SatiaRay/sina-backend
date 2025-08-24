@@ -1,3 +1,4 @@
+from agents import Runner
 import requests
 import json
 import os
@@ -5,6 +6,7 @@ from typing import Dict, Any, Optional
 from redis import Redis
 from redis.exceptions import RedisError
 from models.tools.functions.logging_decorator import FunctionCallLogger
+from models.agents.mayoral_subject_selector import MayoralSubjectSelector
 
 
 
@@ -123,8 +125,8 @@ class Mayoral:
             return None
 
     @FunctionCallLogger()
-    def submitRequest(
-        self, mobile, address, lat, long, subject_id, description:str = None
+    async def submitRequest(
+        self, mobile, address, lat, long, subject_id, description: str = None
     ) -> Optional[Dict[str, Any]]:
         data = {
             "mobile": mobile,
@@ -134,17 +136,38 @@ class Mayoral:
             "long": long,
             "subject_id": subject_id,
         }
-        
+
         data = self._make_api_request("api/submit/request", method="POST", data=data)
 
         return data
-    
+
     @FunctionCallLogger()
-    def searchSubject(self, q) -> Optional[Dict[str, Any]]:
+    async def searchSubject(self, q, description) -> Optional[Dict[str, Any]]:
         params = {
             "q": q,
         }
 
         data = self._make_api_request("api/subject/search", method="GET", params=params)
-
-        return data
+        
+        transformed_data = []
+        
+        for item in data['results']:
+            transformed_item = {
+                "subject_id": item['id'],
+                "description": item['name'],
+            }
+            transformed_data.append(transformed_item)
+            
+        agent = MayoralSubjectSelector()
+        
+        input = f"""
+            User Request:
+            {description}
+            
+            Found relevant subjects:
+            {transformed_data}
+        """
+        
+        res = await Runner.run(agent, input)
+            
+        return json.loads(res.final_output)

@@ -129,7 +129,7 @@
           },
           "subject_id": {
             "type": "integer",
-            "description": "شناسه موضوع گزارش"
+            "description": "آیدی موضوع گزارش که میبایست از Mayoral-searchSubject دریافت و انتخاب شود"
           },
           "description": {
             "type": "string",
@@ -150,16 +150,20 @@
     {
       "type": "function",
       "name": "Mayoral-searchSubject",
-      "description": "جستجوی موضوعات سامانه 137 شهرداری",
+      "description": "جستجوی موضوع در فهرست موضاعات تعریف شده سامانه 137",
       "parameters": {
         "type": "object",
         "properties": {
           "q": {
             "type": "string",
-            "description": "کلیدواژه برای جستجو"
+            "description": "کلیدواژه برای جستجو. مثلا آسفالت, زباله, سد معبر, نظافت, ساخت و ساز غیر مجاز و ..."
+          },
+          "description": {
+            "type": "string",
+            "description": "توضیحات کاربر در مورد موضوع. مثلا : این آشغال های سر کوچه ما رو کسی نیست جمع کنه ؟"
           }
         },
-        "required": ["q"],
+        "required": ["q", "description"],
         "additionalProperties": false
       }
     },

@@ -98,7 +98,7 @@ class Neshan:
             return None
 
     @FunctionCallLogger()
-    def search_address(self, searchTerm: str) -> Optional[Dict[str, Any]]:
+    async def search_address(self, searchTerm: str) -> Optional[Dict[str, Any]]:
         resData = self._make_api_request(
             "v1/search",
             {"term": searchTerm, "lat": self.city_lat, "lng": self.city_long},
@@ -108,7 +108,7 @@ class Neshan:
         return resData
 
     @FunctionCallLogger()
-    def reverse(self, lat: str, lng) -> Optional[Dict[str, Any]]:
+    async def reverse(self, lat: str, lng) -> Optional[Dict[str, Any]]:
         resData = self._make_api_request(
             "v5/reverse",
             {"lat": lat, "lng": lng},
