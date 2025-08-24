@@ -1,3 +1,4 @@
+from agents import Runner
 import requests
 import json
 import os
@@ -141,7 +142,7 @@ class Mayoral:
         return data
 
     @FunctionCallLogger()
-    async def searchSubject(self, q) -> Optional[Dict[str, Any]]:
+    async def searchSubject(self, q, description) -> Optional[Dict[str, Any]]:
         params = {
             "q": q,
         }
@@ -157,4 +158,16 @@ class Mayoral:
             }
             transformed_data.append(transformed_item)
             
-        return transformed_data
+        agent = MayoralSubjectSelector()
+        
+        input = f"""
+            User Request:
+            {description}
+            
+            Found relevant subjects:
+            {transformed_data}
+        """
+        
+        res = await Runner.run(agent, input)
+            
+        return json.loads(res.final_output)

@@ -156,10 +156,14 @@
         "properties": {
           "q": {
             "type": "string",
-            "description": "کلیدواژه برای جستجو"
+            "description": "کلیدواژه برای جستجو. مثلا آسفالت, زباله, سد معبر, نظافت, ساخت و ساز غیر مجاز و ..."
+          },
+          "description": {
+            "type": "string",
+            "description": "توضیحات کاربر در مورد موضوع. مثلا : این آشغال های سر کوچه ما رو کسی نیست جمع کنه ؟"
           }
         },
-        "required": ["q"],
+        "required": ["q", "description"],
         "additionalProperties": false
       }
     },
