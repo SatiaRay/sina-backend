@@ -18,23 +18,6 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         self.chat_history_repository = ChatHistoryRepository(self.db)
         self.workflow_repository = WorkflowRepository(self.db)  # Initialize workflow repository
 
-    async def generate_response(self, question: str, sources=False, request: Optional[Request] = None) -> Dict[str, Any]:
-        # Store user question message in chat history
-        self.__update_chat_history(question, "user", request)
-
-        try:
-            agent = ChatAgentRag(question=question, db=self.db)
-            res = await agent.generate_response()
-            return {
-                "status": "success",
-                "response": res
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "error": str(e)
-            }
-
     async def generate_response_socket(self, question: str, websocket: WebSocket) -> Dict[str, Any]:
         # Store user question message in chat history
         self.__update_chat_history(question, "user", websocket=websocket)
@@ -152,8 +135,3 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         except Exception as e:
             self.db.rollback()
             raise e
-
-
-
-    
-
