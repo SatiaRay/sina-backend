@@ -335,7 +335,10 @@ class ChatAgentRag(ChatAgentRagInterface):
                 if event.type == 'response.output_text.delta':
                     delta = event.delta
                     full_response += delta
-                    await self.websocket.send_text(delta)
+                    await self.websocket.send_json(data={
+                        'event': 'delta',
+                        'message': delta,
+                    })
                     delay = str(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', "0.0001"))
                     await asyncio.sleep(float(delay))
                     
