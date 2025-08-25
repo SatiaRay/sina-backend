@@ -111,11 +111,6 @@ class FunctionCallLogger:
             with FunctionCallLogRepository() as repo:
                 repo.create(log_data)
                 
-            # Development logging
-            if os.getenv('ENVIRONMENT', 'development') == 'development':
-                import json
-                print(json.dumps(log_entry, indent=2))
-                
         except Exception as e:
             print(f"Failed to write function call log: {str(e)}")
             import json

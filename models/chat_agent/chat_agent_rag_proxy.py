@@ -1,3 +1,4 @@
+import traceback
 from fastapi import Request, WebSocket
 from database.models import get_db
 from database.repositories.workflow_repository import WorkflowRepository
@@ -6,10 +7,10 @@ from .chat_agent_rag import ChatAgentRag
 from database.repository import ChatRepository, ChatHistoryRepository
 from database.models import Chat
 from typing import List, Dict, Any, Optional, Union
-import json
-import asyncio
-from provider.service_container import ServiceContainer, container
+import logging
 
+
+logger = logging.getLogger('satya.error')
 
 class ChatAgentRagProxy(ChatAgentRagInterface):
     def __init__(self):
@@ -18,28 +19,9 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         self.chat_history_repository = ChatHistoryRepository(self.db)
         self.workflow_repository = WorkflowRepository(self.db)  # Initialize workflow repository
 
-    async def generate_response(self, question: str, sources=False, request: Optional[Request] = None) -> Dict[str, Any]:
-        # Store user question message in chat history
-        self.__update_chat_history(question, "user", request)
-
-        try:
-            agent = ChatAgentRag(question=question, db=self.db)
-            res = await agent.generate_response()
-            return {
-                "status": "success",
-                "response": res
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "error": str(e)
-            }
-
     async def generate_response_socket(self, question: str, websocket: WebSocket) -> Dict[str, Any]:
         # Store user question message in chat history
         self.__update_chat_history(question, "user", websocket=websocket)
-
-        print("Chat history has been updated !")
 
         try:
             # Get or create chat session
@@ -89,6 +71,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             }
         except Exception as e:
             error_msg = f"Error: {str(e)}"
+            logger.error(error_msg)
             self.__update_chat_history(error_msg, role="assistant", websocket=websocket)
             return {
                 "status": "error",
@@ -151,9 +134,5 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             
         except Exception as e:
             self.db.rollback()
+            logger.error(f"Error in update chat history: {str(e)} Message is {messages} :\n%s", traceback.format_exc())
             raise e
-
-
-
-    
-
