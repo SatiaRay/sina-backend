@@ -18,9 +18,12 @@ import json
 import re
 from models.tools.functions import call_function
 from provider.service_container import container
+import logging
+import inspect
 
 load_dotenv()
-main_logger, error_logger, api_logger = configure_logging()
+error_logger = logging.getLogger('satya.error')
+main_logger = logging.getLogger('satya')
 
 # Define the instructions from the original RAG system
 SATIA_INSTRUCTIONS = """
@@ -401,7 +404,7 @@ class ChatAgentRag(ChatAgentRagInterface):
                 "arguments": []
             }
             # Re-call generate_response_socket with updated history
-            return asyncio.create_task(self.generate_response_socket(call_function_output=True))
+            return await self.generate_response_socket(call_function_output=True)
 
     def _load_tools_configuration(self) -> List[Dict]:
         """
