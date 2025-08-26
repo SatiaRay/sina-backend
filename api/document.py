@@ -196,9 +196,6 @@ def get_manual_documents(
     print("###############################################################")
 
     if agent_type:
-        print(
-            "############################### Condition ###################################"
-        )
         base_query = base_query.filter(
             document_repo.model_class.type == "manual",
             document_repo.model_class.agent_type == agent_type,
