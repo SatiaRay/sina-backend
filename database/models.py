@@ -92,6 +92,11 @@ class Wizard(BaseModel):
     context = Column(Text, nullable=True)
     parent_id = Column(Integer, ForeignKey("wizards.id"), nullable=True)
     enabled = Column(Boolean, default=True, nullable=False)
+    wizard_type = Column(
+        Enum("answer", "question", name="wizard_type_enum"),
+        default="answer",
+        nullable=False,
+    )
 
     # Relationship for self-referential hierarchy
     parent = relationship("Wizard", remote_side=lambda: [Wizard.id], backref="children")
