@@ -333,17 +333,17 @@ class VectorStore:
             print(f"Error getting curation stats: {str(e)}")
             return {"total_documents": 0, "approved": 0, "rejected": 0, "pending": 0}
 
-    def get_document_by_id(self, document_id: str) -> Optional[Dict]:
+    def get_documents_by_id(self, document_id: int) -> Optional[Dict]:
         """دریافت جزئیات یک سند با شناسه"""
         try:
-            result = self.collection.get(ids=[document_id])
+            result = self.collection.get(where={"document_id": document_id})
             if not result["ids"]:
                 return None
 
             return {
-                "document_id": result["ids"][0],
-                "text": result["documents"][0],
-                "metadata": result["metadatas"][0],
+                "vector_ids": result["ids"],
+                "texts": result["documents"],
+                "metadatas": result["metadatas"],
             }
         except Exception as e:
             print(f"Error getting document: {str(e)}")

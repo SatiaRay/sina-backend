@@ -22,8 +22,7 @@ import logging
 import inspect
 
 load_dotenv()
-error_logger = logging.getLogger('satya.error')
-main_logger = logging.getLogger('satya')
+main_logger, error_logger, _, debug_logger = configure_logging()
 
 # Define the instructions from the original RAG system
 SATIA_INSTRUCTIONS = """
@@ -335,7 +334,10 @@ class ChatAgentRag(ChatAgentRagInterface):
                 if event.type == 'response.output_text.delta':
                     delta = event.delta
                     full_response += delta
-                    await self.websocket.send_text(delta)
+                    await self.websocket.send_json(data={
+                        'event': 'delta',
+                        'message': delta,
+                    })
                     delay = str(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', "0.0001"))
                     await asyncio.sleep(float(delay))
                     
@@ -347,11 +349,8 @@ class ChatAgentRag(ChatAgentRagInterface):
                 
                 # If a function was called, handle it and get the new response
                 subResponse = await self.suplly_called_function()
-
-                if(isinstance(subResponse, list)):
-                    full_response = [full_response] + subResponse
-                else:
-                    full_response = [full_response, subResponse]
+                
+                full_response += subResponse
             
             return full_response
             

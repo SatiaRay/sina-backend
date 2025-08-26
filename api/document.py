@@ -191,14 +191,7 @@ def get_manual_documents(
     # Query manual documents with pagination
     base_query = document_repo.db.query(document_repo.model_class)
 
-    print("###############################################################")
-    print(agent_type)
-    print("###############################################################")
-
     if agent_type:
-        print(
-            "############################### Condition ###################################"
-        )
         base_query = base_query.filter(
             document_repo.model_class.type == "manual",
             document_repo.model_class.agent_type == agent_type,
@@ -534,7 +527,10 @@ async def toggle_document_vector_status(
     try:
         if document.status == "vectorized":
             # Document is vectorized, so devectorize it
-            vector_store.delete_document(document.id)
+            vector_store.delete_document(document_id)
+            
+            if vector_store.get_documents_by_id(document_id):
+                raise HTTPException(status_code=500, detail="Delete document from vector db fails for change document status to disabled")
 
             # Update document to remove vector_id
             update_data = {"status": "pending"}
@@ -544,12 +540,17 @@ async def toggle_document_vector_status(
             # Document is not vectorized, so vectorize it
             # Prepare metadata
             metadata = {
-                "document_id": str(document_id),
+                "document_id": document_id,
                 "title": document.title,
-                "uri": document.uri or "",
-                "domain_id": str(document.domain_id) if document.domain_id else "0",
-                "created_at": datetime.now().isoformat(),
             }
+            
+            if document.type == "crawl":
+                metadata['uri'] = document.uri or ""
+                metadata['domain_id'] = document.domain_id if document.domain_id else "0"
+                metadata['source'] = 'crawl'
+                
+            elif document.type == 'manual':
+                metadata['source'] = 'manual'
 
             # Create document for vector store
             vector_doc = {"text": document.markdown, "metadata": metadata}
