@@ -28,7 +28,7 @@ from database.repository import (
 )
 
 # Configure loggers
-main_logger, error_logger, api_logger = configure_logging()
+main_logger, error_logger, api_logger, _ = configure_logging()
 
 # Initialize the router
 router = APIRouter(prefix="/voice_agent", tags=["Voice Agent"])
@@ -36,6 +36,7 @@ router = APIRouter(prefix="/voice_agent", tags=["Voice Agent"])
 
 class InstructionResponse(BaseModel):
     instruction: str
+
 
 class OpenAIModel(str, Enum):
     GPT4_REALTIME_2025 = "gpt-4o-realtime-preview-2025-06-03"
@@ -66,7 +67,7 @@ def get_instruction(db: Session = Depends(get_db)):
 
         # Clean workflow steps: remove null keys and 'position'
         def clean_step(step):
-            return {k: v for k, v in step.items() if v is not None and k != 'position'}
+            return {k: v for k, v in step.items() if v is not None and k != "position"}
 
         voice_workflows = []
         for wf in raw_voice_workflows:
@@ -200,7 +201,9 @@ def get_instruction(db: Session = Depends(get_db)):
             status_code=500, detail="Failed to generate voice agent instruction"
         )
 
+
 OPENAI_API_URL = "https://api.openai.com/v1/realtime/sessions"
+
 
 # Use query parameters instead of a body for GET
 @router.get("/client_key")
@@ -209,26 +212,22 @@ async def get_client_key(model: OpenAIModel = OpenAIModel.GPT4_REALTIME_2025):
     if not api_key:
         raise HTTPException(status_code=500, detail="OpenAI API key not configured")
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
     async with httpx.AsyncClient() as client:
         try:
             # Forward model as a query param to OpenAI
             response = await client.post(
-                OPENAI_API_URL,
-                headers=headers,
-                json={"model": model.value}
+                OPENAI_API_URL, headers=headers, json={"model": model.value}
             )
             response.raise_for_status()
             data = response.json()
-            if 'client_secret' not in data:
-                raise HTTPException(status_code=500, detail="OpenAI response missing client_secret")
-            return data['client_secret']
+            if "client_secret" not in data:
+                raise HTTPException(
+                    status_code=500, detail="OpenAI response missing client_secret"
+                )
+            return data["client_secret"]
         except httpx.HTTPStatusError as e:
             raise HTTPException(
-                status_code=e.response.status_code,
-                detail=e.response.json()
+                status_code=e.response.status_code, detail=e.response.json()
             )

@@ -24,7 +24,7 @@ from pathlib import Path
 
 
 # Configure loggers
-main_logger, error_logger, api_logger = configure_logging()
+main_logger, error_logger, api_logger, _ = configure_logging()
 
 # Initialize the router
 router = APIRouter(prefix="", tags=["AI"])
