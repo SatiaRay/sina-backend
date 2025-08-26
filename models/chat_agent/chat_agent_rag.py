@@ -162,47 +162,54 @@ class ChatAgentRag(ChatAgentRagInterface):
 
             main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
             
-            # Create a document title analyzer agent
-            title_analyzer = TitleAnalyzerAgent()
+            filterd_ids = self._filter_found_documents_by_agent(question, relevant_docs)
             
-            # Prepare the input for the agent
-            titles_info = "\n".join([
-                f"ID: {doc['id']} - Title: {doc['metadata'].get('title', 'Untitled')}"
-                for doc in relevant_docs
-            ])
+            main_logger.info(f"Found documetns after filter by AI length is {len(filterd_ids)}")
             
-            agent_input = f"""User Question: {question}
-
-            Available Documents:
-            {titles_info}
-
-            Please return only the IDs of the documents that are most relevant to answering the question, as a comma-separated list."""
+            if len(filterd_ids):
             
-            # Get the agent's response
-            result = await Runner.run(title_analyzer, input=agent_input)
+                # Filter and return the relevant documents
+                filtered_docs = [
+                    doc for doc in relevant_docs 
+                    if doc['id'] in filterd_ids
+                ]
             
-            # Parse the response to get the IDs
-            selected_ids = [id.strip() for id in result.final_output.split(',')]
+                return filtered_docs
             
-            # Filter and return the relevant documents
-            filtered_docs = [
-                doc for doc in relevant_docs 
-                if doc['id'] in selected_ids
-            ]
-
-            # Log the titles of filtered documents
-            if filtered_docs:
-                filtered_titles = [doc['metadata'].get('title', 'Untitled') for doc in filtered_docs]
-                main_logger.info(f"Selected documents after filtering with AI: {', '.join(filtered_titles)}")
-            else:
-                main_logger.info("No documents remained after filtering with AI")
-            
-            return filtered_docs
+            return []
             
         except Exception as e:
             error_context = f"Question: {question}"
             log_error(error_logger, e, error_context)
             raise 
+        
+    async def _filter_found_documents_by_agent(self, question, documents) -> list[int]:
+        """
+        Takes found relevent docs in vector db and filter them according user question using AI model
+        """
+        # Create a document title analyzer agent
+        title_analyzer = TitleAnalyzerAgent()
+        
+        # Prepare the input for the agent
+        titles_info = "\n".join([
+            f"ID: {doc['id']} - Title: {doc['metadata'].get('title', 'Untitled')}"
+            for doc in documents
+        ])
+        
+        agent_input = f"""User Question: {question}
+
+        Available Documents:
+        {titles_info}
+
+        Please return only the IDs of the documents that are most relevant to answering the question, as a comma-separated list."""
+        
+        # Get the agent's response
+        result = await Runner.run(title_analyzer, input=agent_input)
+        
+        # Parse the response to get the IDs
+        selected_ids = [id.strip() for id in result.final_output.split(',')]
+        
+        return selected_ids
 
     def _format_chat_history(self) -> List[Dict[str, str]]:
         """
