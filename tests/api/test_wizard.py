@@ -15,6 +15,7 @@ MOCK_WIZARD = {
     "context": "Test Context",
     "parent_id": None,
     "enabled": True,
+    "wizard_type": "answer",
     "created_at": datetime.now(),
     "updated_at": datetime.now(),
     "children": []
@@ -78,6 +79,7 @@ def test_create_wizard(client, mock_wizard_repo):
     new_wizard = {
         "title": "New Wizard",
         "context": "New Context",
+        "wizard_type": "answer",
         "parent_id": None,
         "enabled": True
     }
@@ -118,7 +120,8 @@ def test_update_wizard(client, mock_wizard_repo):
     # Arrange
     update_data = {
         "title": "Updated Wizard",
-        "context": "Updated Context"
+        "context": "Updated Context",
+        "wizard_type": "answer"
     }
     mock_wizard_repo.return_value.update.return_value = {**MOCK_WIZARD, **update_data}
     
