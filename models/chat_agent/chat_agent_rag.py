@@ -22,8 +22,7 @@ import logging
 import inspect
 
 load_dotenv()
-error_logger = logging.getLogger('satya.error')
-main_logger = logging.getLogger('satya')
+main_logger, error_logger, _, debug_logger = configure_logging()
 
 # Define the instructions from the original RAG system
 SATIA_INSTRUCTIONS = """
@@ -350,11 +349,8 @@ class ChatAgentRag(ChatAgentRagInterface):
                 
                 # If a function was called, handle it and get the new response
                 subResponse = await self.suplly_called_function()
-
-                if(isinstance(subResponse, list)):
-                    full_response = [full_response] + subResponse
-                else:
-                    full_response = [full_response, subResponse]
+                
+                full_response += subResponse
             
             return full_response
             
