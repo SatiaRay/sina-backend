@@ -135,6 +135,18 @@ class ChatAgentRag(ChatAgentRagInterface):
         except Exception as e:
             error_logger.error(f"Error fetching active instructions: {str(e)}")
             return ""
+        
+    def _get_format_context(self, documents)-> str:
+        """
+            Takes documetns and compose them with particular format  
+        """
+        context_parts = []
+        for doc in documents:
+            score = doc.get('score', 1.0)
+            text = doc['text']
+            context_parts.append(f"[Score: {score:.3f}]\n{text}")
+        
+        return "\n\n---\n\n".join(context_parts)
 
     async def get_relevant_docs(self, question: str) -> List[Dict]:
         """
@@ -252,19 +264,12 @@ class ChatAgentRag(ChatAgentRagInterface):
             if not call_function_output:
                 # Search for relevant documents
                 relevant_docs = await self.get_relevant_docs(self.question)
-                print(f"Found {len(relevant_docs)} relevant documents", flush=True)
                 
                 # Sort documents by score
                 relevant_docs = sorted(relevant_docs, key=lambda x: x.get('score', 1.0))
                 
                 # Format context with scores
-                context_parts = []
-                for doc in relevant_docs:
-                    score = doc.get('score', 1.0)
-                    text = doc['text']
-                    context_parts.append(f"[Score: {score:.3f}]\n{text}")
-                
-                context = "\n\n---\n\n".join(context_parts)
+                context = self._get_format_context(relevant_docs)
             else:
                 context = ""
             
