@@ -61,6 +61,9 @@ def configure_logging():
 
     # Setup API logger (file only, no console)
     api_logger = setup_logger("satya.api", api_dir / "api.log", console=False)
+    
+    # Setup Debug logger
+    debug_logger = setup_logger("app.debug", log_dir / "debug.log", level=logging.DEBUG)
 
     # Set specific logger levels
     logging.getLogger("uvicorn").setLevel(logging.INFO)
@@ -69,7 +72,7 @@ def configure_logging():
     # Log startup message
     main_logger.info("Logging system initialized")
 
-    return main_logger, error_logger, api_logger
+    return main_logger, error_logger, api_logger, debug_logger
 
 
 def log_error(error_logger, error, context=None):

@@ -66,7 +66,7 @@ from dynaconf import Dynaconf
 from util.settings import initialize_system_settings
 
 # Configure loggers
-main_logger, error_logger, api_logger = configure_logging()
+main_logger, error_logger, api_logger, _ = configure_logging()
 
 # Force reload environment variables
 print("Loading environment from:", find_dotenv())
@@ -100,17 +100,21 @@ def init_service_container():
     )
 
     container.singleton(
-        'Neshan', 
+        "Neshan",
         lambda: Neshan(
             api_key=os.getenv("NESHNA_API_KEY", ""),
             city_lat=float(os.getenv("NESHAN_CITY_LATITUDE", 34.0873)),
             city_long=float(os.getenv("NESHAN_CITY_LONG", 49.7022)),
-    ))
+        ),
+    )
 
-    container.singleton('Mayoral', lambda: Mayoral(
+    container.singleton(
+        "Mayoral",
+        lambda: Mayoral(
             bearer_token=os.getenv("MAYORAL_API_BEARER_TOKEN", ""),
-        ))
-    
+        ),
+    )
+
     # Create and bind instances
     vector_store = container.make("vector_store")
     container.instance("vector_store", vector_store)
@@ -121,20 +125,22 @@ def init_service_container():
     # Create and bind AppSatiaCo instance
     app_satia_co = container.make("AppSatiaCo")
     container.instance("AppSatiaCo", app_satia_co)
-    
+
     # Create and bind Neshan instance
     neshan = container.make("Neshan")
     container.instance("Neshan", neshan)
-    
+
     # Create and bind Mayoral instance
     mayoral = container.make("Mayoral")
     container.instance("Mayoral", mayoral)
-    
+
     # Ayan
     container.instance("Ayan", Ayan())
-    
+
     # Bind app settings
-    container.instance('settings', Dynaconf(settings_files=[initialize_system_settings()]))
+    container.instance(
+        "settings", Dynaconf(settings_files=[initialize_system_settings()])
+    )
 
 
 # Initialize the service container
@@ -311,8 +317,6 @@ async def root():
     return {"app": APP_NAME, "version": "1.0.0", "status": "running"}
 
 
-
-
 @app.get(
     "/health",
     tags=["Utilities"],
@@ -332,8 +336,6 @@ async def health_check():
     ```
     """
     return {"status": "ok", "version": "1.0.0"}
-
-
 
 
 class AddManuallyKnowledgeRequest:
@@ -387,22 +389,24 @@ async def add_manually_knowledge(
                 "markdown": markdown_text,
                 "title": request.metadata["title"],
                 "type": "manual",
-                "agent_type": request.agent_type
+                "agent_type": request.agent_type,
             }
         )
 
         request.metadata["document_id"] = doc.id
 
         # Add document to vector store
-        ids = vector_store.add_documents([{"text": markdown_text, "metadata": request.metadata}])
-        
-        repo.update(doc.id, {'status' : 'vectorized'})
+        ids = vector_store.add_documents(
+            [{"text": markdown_text, "metadata": request.metadata}]
+        )
+
+        repo.update(doc.id, {"status": "vectorized"})
 
         return JSONResponse(
             status_code=200,
             content={
                 "message": "متن (مارک‌داون) با موفقیت در پایگاه داده برداری ذخیره شد",
-                'ids': ids,
+                "ids": ids,
                 "status": "success",
             },
         )
