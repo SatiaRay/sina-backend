@@ -1,3 +1,4 @@
+from sys import set_coroutine_origin_tracking_depth
 from agents import Runner
 from typing import List, Dict, Optional
 import os
@@ -148,12 +149,13 @@ class ChatAgentRag(ChatAgentRagInterface):
         
         return "\n\n---\n\n".join(context_parts)
 
-    async def get_relevant_docs(self, question: str) -> List[Dict]:
+    async def get_relevant_docs(self, question: str, score: float = 1.0) -> List[Dict]:
         """
         Takes a user question and returns a list of relevant documents.
         
         Args:
             question (str): The user's question
+            score (float): Minimum score required for document similarity to question
             
         Returns:
             List[Dict]: List of relevant documents with their metadata and content
@@ -177,8 +179,8 @@ class ChatAgentRag(ChatAgentRagInterface):
                     doc for doc in relevant_docs 
                     if doc['id'] in filterd_ids
                 ]
-            
-                return filtered_docs
+                
+                return sorted(filtered_docs, key=lambda x: x.get('score', set_coroutine_origin_tracking_depth))
             
             return []
             
@@ -256,121 +258,141 @@ class ChatAgentRag(ChatAgentRagInterface):
                     })
         
         return formatted_messages
+    
+    async def _compose_prompt(self):
+        # Search for relevant documents
+        relevant_docs = await self.get_relevant_docs(self.question, 1.0)
+        
+        # Format context with scores
+        context = self._get_format_context(relevant_docs)
+        
+        # Format chat history
+        formatted_history = self._format_chat_history()
+        
+        workflows_text = f"# Workflows\n\n{self.workflows}\n" if self.workflows else ""
+        
+        # Get active instructions from database
+        active_instructions = self._get_active_instructions()
+        
+        # Prepare the input prompt
+        prompt = [
+            {
+                "role": "developer",
+                "content": f"""# Instructions
 
-    async def generate_response_socket(self, call_function_output: bool = False):
+                {SATIA_INSTRUCTIONS}
+
+                {active_instructions}
+
+                # {workflows_text}
+
+                Context Information:
+                {context}"""
+            }
+        ]
+        
+        # Add chat history messages
+        prompt.extend(formatted_history)
+        
+        # Add the current question
+        prompt.append({
+            "role": "user",
+            "content": self.question
+        })
+        
+        return prompt
+    
+    def _connect_stream(self, messages: List[Dict[str, str]]):
+        """Stream response from OpenAI with tools configuration"""
+        try:
+            tools = self._load_tools_configuration()
+            settings = container.make('settings')
+            model = settings.text_agent_model or os.getenv("GPT_MODEL")
+            return self.client.responses.create(
+               model=model,
+               input=messages,
+               stream=True,
+               tools=tools
+            )
+        except Exception as e:
+            error_logger.error(f"Error in _connect_stream: {str(e)}")
+            raise
+
+    async def generate_response_socket(self):
         try:
             main_logger.info(f"Generating response for question: {self.question}")
 
-            if not call_function_output:
-                # Search for relevant documents
-                relevant_docs = await self.get_relevant_docs(self.question)
-                
-                # Sort documents by score
-                relevant_docs = sorted(relevant_docs, key=lambda x: x.get('score', 1.0))
-                
-                # Format context with scores
-                context = self._get_format_context(relevant_docs)
-            else:
-                context = ""
-            
-            # Format chat history
-            formatted_history = self._format_chat_history()
-            
-            workflows_text = f"# Workflows\n\n{self.workflows}\n" if self.workflows else ""
-            
-            # Get active instructions from database
-            active_instructions = self._get_active_instructions()
-            
-            # Prepare the input messages
-            messages = [
-                {
-                    "role": "developer",
-                    "content": f"""# Instructions
-
-                    {SATIA_INSTRUCTIONS}
-
-                    {active_instructions}
-
-                    # {workflows_text}
-
-                    Context Information:
-                    {context}"""
-                }
-            ]
-            
-            # Add chat history messages
-            messages.extend(formatted_history)
-            
-            # Add the current question
-            messages.append({
-                "role": "user",
-                "content": self.question
-            })
+            prompt = await self._compose_prompt()
             
             # In your async function:
-            stream = await to_thread.run_sync(self.stream_openai_response, messages)
+            stream = await to_thread.run_sync(self._connect_stream, prompt)
 
-            print("Send response in socket ...", flush=True)
+            print("Start to listening to Agent events ...", flush=True)
             
-            full_response = ""
-            
-            # Send events to the client as they are received from OpenAI
-            for event in stream:
-                # Handle function call events
-                if event.type == 'response.output_item.done':
-                    if event.item.type == 'function_call':
-                        print(f"Function called: {event.item.name}")
-                        self.called_function = {
-                            "type": "function_call",
-                            "id" : event.item.id,
-                            "call_id": event.item.id,
-                            "name": event.item.name,
-                            "arguments": event.item.arguments,
-                        }
-                        break
-                
-                # # Handle function call arguments done
-                # if event.type == 'response.function_call_arguments.done':
-                #     print(f"Function arguments completed: {event.arguments}")
-                #     self.called_function['arguments'] = event.arguments
-                #     break;
-                
-                # Handle regular text output
-                if event.type == 'response.output_text.delta':
-                    delta = event.delta
-                    full_response += delta
-                    await self.websocket.send_json(data={
-                        'event': 'delta',
-                        'message': delta,
-                    })
-                    delay = str(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', "0.0001"))
-                    await asyncio.sleep(float(delay))
+            response = await self._stream_event_handler(stream=stream)
                     
-            if self.called_function['name'] is not None:
-                await self.websocket.send_json(data={
-                    'event': 'fetching data',
-                    'message': "در حال واکشی اطلاعات, لطفا صبر کنید."
-                })
-                
+            if response['call_info'] is not None:
                 # If a function was called, handle it and get the new response
-                subResponse = await self.suplly_called_function()
+                subResponse = await self._suplly_called_function(response['call_info'])
                 
-                full_response += subResponse
+                response['text'] += subResponse
             
-            return full_response
+            return response['text']
             
         except Exception as e:
             error_context = f"Question: {self.question}"
             log_error(error_logger, e, error_context)
             raise
         
-    async def suplly_called_function(self):
+    async def _stream_event_handler(self, stream) -> dict:
+        """
+            Listense to stream events and handles them
+        """
+        result = {
+            "call_info": None,
+            "text": ""
+        }
+        
+        for event in stream:
+            # Handle function call events
+            if event.type == 'response.output_item.done':
+                if event.item.type == 'function_call':
+                    result['call_info']  = {
+                        "type": "function_call",
+                        "id" : event.item.id,
+                        "call_id": event.item.id,
+                        "name": event.item.name,
+                        "arguments": event.item.arguments,
+                    }
+                    
+                    # broadcast Agent call function event response to client
+                    await self.websocket.send_json(data={
+                        'event': 'fetching data',
+                        'message': "در حال واکشی اطلاعات, لطفا صبر کنید."
+                    })
+                    break
+            
+            # Handle regular text output
+            if event.type == 'response.output_text.delta':
+                delta = event.delta
+                result['text'] += delta
+                # broadcast Agent delta text response to client
+                await self.websocket.send_json(data={
+                    'event': 'delta',
+                    'message': delta,
+                })
+                delay = str(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', "0.0001"))
+                await asyncio.sleep(float(delay))
+          
+        return result
+        
+    async def _suplly_called_function(self, called_function: dict):
         try:
             # Add function call to history
-            self.history.append(self.called_function)
+            self.history.append(called_function)
             
             # Call the function and get result
-            result = await call_function(self.called_function['name'], json.loads(self.called_function['arguments']))
+            result = await call_function(called_function['name'], json.loads(called_function['arguments']))
             
             # Add result to chat history
             if self.history is None:
@@ -378,7 +400,7 @@ class ChatAgentRag(ChatAgentRagInterface):
             
             self.history.append({
                 "type": "function_call_output",
-                "call_id": self.called_function['call_id'],
+                "call_id": called_function['call_id'],
                 "output": json.dumps(result)
             })
             
@@ -391,24 +413,24 @@ class ChatAgentRag(ChatAgentRagInterface):
             
             error_info = {
                 "status": "error",
-                "function": self.called_function['name'],
+                "function": called_function['name'],
                 "error": str(e)
             }
             
             self.history.append({
                 "type": "function_call_output",
-                "call_id": self.called_function['call_id'],
+                "call_id": called_function['call_id'],
                 "output": json.dumps(error_info)
             })
             
         finally:
             # Reset called_function regardless of success or failure
-            self.called_function = {
+            called_function = {
                 "name": None,
                 "arguments": []
             }
             # Re-call generate_response_socket with updated history
-            return await self.generate_response_socket(call_function_output=True)
+            return await self.generate_response_socket()
 
     def _load_tools_configuration(self) -> List[Dict]:
         """
@@ -449,20 +471,4 @@ class ChatAgentRag(ChatAgentRagInterface):
             raise
         except Exception as e:
             error_logger.error(f"Error loading tools configuration: {str(e)}")
-            raise
-
-    def stream_openai_response(self, messages: List[Dict[str, str]]):
-        """Stream response from OpenAI with tools configuration"""
-        try:
-            tools = self._load_tools_configuration()
-            settings = container.make('settings')
-            model = settings.text_agent_model or os.getenv("GPT_MODEL")
-            return self.client.responses.create(
-               model=model,
-               input=messages,
-               stream=True,
-               tools=tools
-            )
-        except Exception as e:
-            error_logger.error(f"Error in stream_openai_response: {str(e)}")
             raise
