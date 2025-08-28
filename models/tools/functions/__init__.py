@@ -4,10 +4,13 @@ import traceback
 import sys
 from models.tools.functions.logging_decorator import FunctionCallLogger
 from typing import Union, Dict, Any
+from fastapi import WebSocket
+from provider.service_container import container
 
 async def call_function(
-    function_name: str, 
+    function_name: str,
     *args,
+    clinet_websocket_connection: WebSocket,
     user_context: Dict[str, str] = None,
     **kwargs
 ) -> Any:
@@ -17,6 +20,7 @@ async def call_function(
     Args:
         function_name: Format "{class_name}-{method_name}"
         *args: Positional arguments
+        clinet_websocket_connection: websocket connection object
         user_context: Dictionary with 'user_id' and 'session_id'
         **kwargs: Keyword arguments
     
@@ -26,6 +30,9 @@ async def call_function(
     And new style:
         call_function("Mayoral-submitRequest", mobile="...", ...)
     """
+    # bind websocket connection object to service container to make it available for for function tools
+    container.instance('client_websocket_connection', clinet_websocket_connection)
+    
     # Initialize logger with user context
     user_id = (user_context or {}).get('user_id', 'system')
     session_id = (user_context or {}).get('session_id', 'system')

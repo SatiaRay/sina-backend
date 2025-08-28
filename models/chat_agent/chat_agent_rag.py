@@ -392,7 +392,7 @@ class ChatAgentRag(ChatAgentRagInterface):
             self.history.append(called_function)
             
             # Call the function and get result
-            result = await call_function(called_function['name'], json.loads(called_function['arguments']))
+            result = await call_function(called_function['name'], json.loads(called_function['arguments']), clinet_websocket_connection=self.websocket)
             
             # Add result to chat history
             if self.history is None:
