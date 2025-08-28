@@ -198,6 +198,22 @@
         "required": [],
         "additionalProperties": false
       }
+    },
+    {
+      "type": "function",
+      "name": "TriggerHook-trigger_upload_image_event",
+      "description": "ارسال درخواست بارگزاری تصویر به کاربر (این متود قابلیت آپلود تصویر را برای کاربر فعال می کند )",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "caption": {
+            "type": "string",
+            "description": "توضیحات که به همراه پیام درخواست آپلود تصویر به کاربر ارسال می شود"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
     }
   ]
 }

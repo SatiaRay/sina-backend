@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 from bs4 import BeautifulSoup
 
+from models.tools.functions.trigger_hook import TriggerHook
+
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
@@ -114,6 +116,8 @@ def init_service_container():
             bearer_token=os.getenv("MAYORAL_API_BEARER_TOKEN", ""),
         ),
     )
+    
+    container.singleton('TriggerHook', TriggerHook())
 
     # Create and bind instances
     vector_store = container.make("vector_store")
