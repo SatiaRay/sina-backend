@@ -71,6 +71,12 @@ async def ask_question_agent_socket(
                 await websocket.send_text("Error: No event type provided.")
                 continue
             
+            await websocket.send_json(
+                {
+                    "event": "loading",
+                }
+            )
+            
             match data.get('event'):
                 case "message":
 
@@ -87,9 +93,10 @@ async def ask_question_agent_socket(
                                 "msg": "Response generated complete",
                             }
                         )
-
-            if isinstance(response, dict) and response.get("status") == "error":
-                await websocket.send_text(f"Error: {response.get('error')}")
+                        
+                case "upload":
+                    pass
+                
 
     except WebSocketDisconnect:
         api_logger.info("WebSocket disconnected")
