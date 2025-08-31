@@ -66,25 +66,27 @@ async def ask_question_agent_socket(
     try:
         while True:
             data = await websocket.receive_json()
-            question = data.get("question", "")
-
-            if not question:
-                await websocket.send_text("Error: No question provided.")
+            
+            if not data.get('event'):
+                await websocket.send_text("Error: No event type provided.")
                 continue
+            
+            match data.get('event'):
+                case "message":
 
-            api_logger.info(f"Processing question with agent: {question}")
+                    api_logger.info(f"Processing question with agent: {data.get('text')}")
 
-            response = await agent_rag.generate_response_socket(
-                question=question, websocket=websocket
-            )
+                    response = await agent_rag.generate_response_socket(
+                        question=data.get('text'), websocket=websocket
+                    )
 
-            if response:
-                await websocket.send_json(
-                    {
-                        "event": "finished",
-                        "msg": "Response generated complete",
-                    }
-                )
+                    if response:
+                        await websocket.send_json(
+                            {
+                                "event": "finished",
+                                "msg": "Response generated complete",
+                            }
+                        )
 
             if isinstance(response, dict) and response.get("status") == "error":
                 await websocket.send_text(f"Error: {response.get('error')}")
