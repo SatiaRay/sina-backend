@@ -65,9 +65,8 @@ async def ask_question_agent_socket(
 
     try:
         while True:
-            data = await websocket.receive_text()
-            question_data = json.loads(data)
-            question = question_data.get("question", "")
+            data = await websocket.receive_json()
+            question = data.get("question", "")
 
             if not question:
                 await websocket.send_text("Error: No question provided.")
