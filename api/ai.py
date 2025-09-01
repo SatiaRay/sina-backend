@@ -77,25 +77,30 @@ async def ask_question_agent_socket(
                 }
             )
             
+            question = data.get('text')
+            hiddenQuestion = False
+            hiddenAnswer = False
+            
             match data.get('event'):
-                case "message":
-
-                    api_logger.info(f"Processing question with agent: {data.get('text')}")
-
-                    response = await agent_rag.generate_response_socket(
-                        question=data.get('text'), websocket=websocket
-                    )
-
-                    if response:
-                        await websocket.send_json(
-                            {
-                                "event": "finished",
-                                "msg": "Response generated complete",
-                            }
-                        )
+                case "cancel":
+                    question = data.get('desc')
+                    hiddenQuestion = True
                         
                 case "upload":
                     pass
+                    
+            api_logger.info(f"Processing question with agent: {question}")
+                
+            await agent_rag.generate_response_socket(
+                question=question, websocket=websocket, hiddenQuestion=hiddenQuestion, hiddenAnswer=hiddenAnswer
+            )
+
+            await websocket.send_json(
+                {
+                    "event": "finished",
+                    "msg": "Response generated complete",
+                }
+                    )
                 
 
     except WebSocketDisconnect:
