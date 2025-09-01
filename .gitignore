@@ -18,3 +18,4 @@ mysql_data/
 data/*
 !data/
 !data/settings_schema.json
+storage/*
