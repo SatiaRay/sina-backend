@@ -134,6 +134,14 @@
           "description": {
             "type": "string",
             "description": "توضیحات پیام"
+          },
+          "images": {
+            "type": "array",
+            "description": "تصویر های گزارش",
+            "items": {
+              "type": "string",
+              "description": "تصویر گزارش"
+            }
           }
         },
         "required": [

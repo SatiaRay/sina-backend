@@ -126,7 +126,7 @@ class Mayoral:
 
     @FunctionCallLogger()
     async def submitRequest(
-        self, mobile, address, lat, long, subject_id, description: str = None
+        self, mobile, address, lat, long, subject_id, description: str = None, images: list[str] = []
     ) -> Optional[Dict[str, Any]]:
         data = {
             "mobile": mobile,
