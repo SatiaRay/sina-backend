@@ -26,6 +26,8 @@ async def get_chat_history(
     """
     دریافت تاریخچه چت بر اساس شناسه جلسه
     
+    (توجه)پیام های پنهان را باز نمیگرداند
+    
     - **session_id**: شناسه جلسه چت
     - **limit**: تعداد پیام‌های مورد نظر (پیش‌فرض: 20)
     - **offset**: تعداد پیام‌های رد شده (پیش‌فرض: 0)
@@ -66,6 +68,7 @@ async def get_chat_history(
         # Then get the chat history for this chat with offset
         history = db.query(ChatHistory)\
             .filter(ChatHistory.chat_id == chat.id)\
+            .filter(ChatHistory.hidden != True)\
             .order_by(ChatHistory.created_at.desc())\
             .offset(int(offset))\
             .limit(int(limit))\
