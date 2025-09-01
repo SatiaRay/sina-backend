@@ -318,7 +318,7 @@ class ChatAgentRag(ChatAgentRagInterface):
             error_logger.error(f"Error in _connect_stream: {str(e)}")
             raise
 
-    async def generate_response_socket(self):
+    async def generate_response_socket(self, broadcast_response_to_websocket = True):
         try:
             main_logger.info(f"Generating response for question: {self.question}")
 
@@ -329,7 +329,7 @@ class ChatAgentRag(ChatAgentRagInterface):
 
             print("Start to listening to Agent events ...", flush=True)
             
-            response = await self._stream_event_handler(stream=stream)
+            response = await self._stream_event_handler(stream=stream, broadcast_response_to_websocket=broadcast_response_to_websocket)
                     
             if response['call_info'] is not None:
                 # If a function was called, handle it and get the new response
@@ -344,7 +344,7 @@ class ChatAgentRag(ChatAgentRagInterface):
             log_error(error_logger, e, error_context)
             raise
         
-    async def _stream_event_handler(self, stream) -> dict:
+    async def _stream_event_handler(self, stream, broadcast_response_to_websocket) -> dict:
         """
             Listense to stream events and handles them
         """
@@ -365,22 +365,25 @@ class ChatAgentRag(ChatAgentRagInterface):
                         "arguments": event.item.arguments,
                     }
                     
-                    # broadcast Agent call function event response to client
-                    await self.websocket.send_json(data={
-                        'event': 'fetching data',
-                        'message': "در حال واکشی اطلاعات, لطفا صبر کنید."
-                    })
+                    if broadcast_response_to_websocket:
+                        # broadcast Agent call function event response to client
+                        await self.websocket.send_json(data={
+                            'event': 'fetching data',
+                            'message': "در حال واکشی اطلاعات, لطفا صبر کنید."
+                        })
                     break
             
             # Handle regular text output
             if event.type == 'response.output_text.delta':
                 delta = event.delta
                 result['text'] += delta
-                # broadcast Agent delta text response to client
-                await self.websocket.send_json(data={
-                    'event': 'delta',
-                    'message': delta,
-                })
+                
+                if broadcast_response_to_websocket:
+                    # broadcast Agent delta text response to client
+                    await self.websocket.send_json(data={
+                        'event': 'delta',
+                        'message': delta,
+                    })
                 delay = str(os.getenv('GPT_RESPONSE_STREAM_SLEEP_SECOND', "0.0001"))
                 await asyncio.sleep(float(delay))
           
