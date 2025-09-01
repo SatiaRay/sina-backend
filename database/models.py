@@ -193,6 +193,7 @@ class ChatHistory(BaseModel):
     chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
     role = Column(Enum("developer", "assistant", "user", "system", name="role_enum"))
     body = Column(TEXT, nullable=False)
+    hidden = Column(Boolean, default=False, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
