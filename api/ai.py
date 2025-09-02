@@ -77,22 +77,31 @@ async def ask_question_agent_socket(
                 }
             )
             
-            question = data.get('text')
             hiddenQuestion = False
             hiddenAnswer = False
             
             match data.get('event'):
                 case "cancel":
-                    question = data.get('desc')
+                    message = {
+                        "type": "text",
+                        "body": data.get('desc')
+                    }
                     hiddenQuestion = True
-                        
-                case "upload":
-                    pass
                     
-            api_logger.info(f"Processing question with agent: {question}")
-                
+                case "file":
+                    message = {
+                        "type": "file",
+                        "body": json.dumps(data.get('files'))
+                    }
+                    
+                case "text":
+                    message = {
+                        "type": "text",
+                        "body": data.get('text')
+                    }
+                    
             await agent_rag.generate_response_socket(
-                question=question, websocket=websocket, hiddenQuestion=hiddenQuestion, hiddenAnswer=hiddenAnswer
+                message=message, websocket=websocket, hiddenQuestion=hiddenQuestion, hiddenAnswer=hiddenAnswer
             )
 
             await websocket.send_json(

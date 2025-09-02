@@ -1,5 +1,6 @@
 import traceback
 from fastapi import Request, WebSocket
+from pydantic import InstanceOf
 from database.models import get_db
 from database.repositories.workflow_repository import WorkflowRepository
 from .chat_agent_rag_interface import ChatAgentRagInterface
@@ -21,14 +22,14 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
 
     async def generate_response_socket(
         self,
-        question: str,
+        message: dict,
         websocket: WebSocket,
         hiddenQuestion=False,
         hiddenAnswer=False,
     ) -> Dict[str, Any]:
         # Store user question message in chat history
         self.__update_chat_history(
-            question, "user", websocket=websocket, hidden=hiddenQuestion
+            message, "user", websocket=websocket, hidden=hiddenQuestion
         )
 
         try:
@@ -51,7 +52,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
 
             # Initialize agent with all required parameters
             agent = ChatAgentRag(
-                question=question,
+                question=message['body'],
                 history=formatted_history,
                 websocket=websocket,
                 workflows=workflows,
@@ -120,7 +121,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
     # Store new chat history message
     def __update_chat_history(
         self,
-        message: Union[str, List[str]],
+        message: Union[dict, str, list[str]],
         role: str,
         request: Optional[Request] = None,
         websocket: Optional[WebSocket] = None,
@@ -130,7 +131,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             chat = self.__get_chat(request, websocket)  # Retrieve existing chat
             
             # Convert single message to list for consistent handling
-            messages = [message] if isinstance(message, str) else message
+            messages = [message] if isinstance(message, (str, dict)) else message
             
             # Create a chat history entry for each message
             for msg in messages:
@@ -139,9 +140,10 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 
                 chat_history_data = {
                     "chat_id": chat.id,
-                    "body": msg,
+                    "body": message['body'] if isinstance(message, dict) else message,
                     "role": role,
                     "hidden": hidden,
+                    "type": message['type'] if isinstance(message, dict) else "text"
                 }
                 
                 # Add to database
