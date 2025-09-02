@@ -1,3 +1,4 @@
+import enum
 from sqlalchemy import (
     create_engine,
     Column,
@@ -194,6 +195,7 @@ class ChatHistory(BaseModel):
     role = Column(Enum("developer", "assistant", "user", "system", name="role_enum"))
     body = Column(TEXT, nullable=False)
     hidden = Column(Boolean, default=False, nullable=True)
+    type = Column(Enum("text", "file"), default="text", nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
