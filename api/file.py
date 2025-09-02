@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from typing import List
 import os
 from uuid import uuid4
+import mimetypes
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -29,6 +30,14 @@ async def upload_files(files: List[UploadFile] = File(...)):
 @router.get("/{filename}", summary="Serve uploaded file by filename")
 async def get_uploaded_file(filename: str):
     file_path = os.path.join(UPLOAD_DIR, filename)
+
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path)
+
+    # Guess content type; fallback to image/jpeg if unknown
+    media_type, _ = mimetypes.guess_type(file_path)
+    if media_type is None:
+        media_type = "application/octet-stream"
+
+    return FileResponse(path=file_path, media_type=media_type, filename=filename)
+
