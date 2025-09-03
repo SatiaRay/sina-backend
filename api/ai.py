@@ -88,9 +88,9 @@ async def ask_question_agent_socket(
                     }
                     hiddenQuestion = True
                     
-                case "file":
+                case "image":
                     message = {
-                        "type": "file",
+                        "type": "image",
                         "body": json.dumps(data.get('files'))
                     }
                     
