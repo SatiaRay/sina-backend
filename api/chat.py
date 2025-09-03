@@ -12,6 +12,7 @@ class ChatHistoryResponse(BaseModel):
     chat_id: int
     role: str
     body: str
+    type: str
     created_at: datetime
 
 @router.get("/chat/history/{session_id}", response_model=List[ChatHistoryResponse], tags=["Chat"],
@@ -92,6 +93,7 @@ async def get_chat_history(
                 chat_id=msg.chat_id,
                 role=msg.role,
                 body=msg.body,
+                type=msg.type,
                 created_at=msg.created_at
             )
             for msg in history
