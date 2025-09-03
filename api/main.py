@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 from bs4 import BeautifulSoup
 
+from models.tools.functions.trigger_hook import TriggerHook
+
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
@@ -62,6 +64,7 @@ from .voice_agent import router as voice_agent_router
 from .system import router as system_router
 from .function_calling_log import router as function_calling_log_router
 from dynaconf import Dynaconf
+from .file import router as file_router
 
 from util.settings import initialize_system_settings
 
@@ -114,6 +117,8 @@ def init_service_container():
             bearer_token=os.getenv("MAYORAL_API_BEARER_TOKEN", ""),
         ),
     )
+
+    container.singleton("TriggerHook", TriggerHook())
 
     # Create and bind instances
     vector_store = container.make("vector_store")
@@ -210,6 +215,7 @@ app.include_router(user_router)
 app.include_router(voice_agent_router)
 app.include_router(system_router)
 app.include_router(function_calling_log_router)
+app.include_router(file_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [
