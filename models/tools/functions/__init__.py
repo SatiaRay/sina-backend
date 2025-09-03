@@ -10,7 +10,7 @@ from provider.service_container import container
 async def call_function(
     function_name: str,
     *args,
-    clinet_websocket_connection: WebSocket,
+    client_websocket_connection: WebSocket = None,
     user_context: Dict[str, str] = None,
     **kwargs
 ) -> Any:
@@ -20,7 +20,7 @@ async def call_function(
     Args:
         function_name: Format "{class_name}-{method_name}"
         *args: Positional arguments
-        clinet_websocket_connection: websocket connection object
+        client_websocket_connection: websocket connection object
         user_context: Dictionary with 'user_id' and 'session_id'
         **kwargs: Keyword arguments
     
@@ -31,7 +31,8 @@ async def call_function(
         call_function("Mayoral-submitRequest", mobile="...", ...)
     """
     # bind websocket connection object to service container to make it available for for function tools
-    container.instance('client_websocket_connection', clinet_websocket_connection)
+    if client_websocket_connection:
+        container.instance('client_websocket_connection', client_websocket_connection)
     
     # Initialize logger with user context
     user_id = (user_context or {}).get('user_id', 'system')
