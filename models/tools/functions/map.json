@@ -140,7 +140,7 @@
             "description": "تصویر های گزارش",
             "items": {
               "type": "string",
-              "description": "تصویر گزارش"
+              "description": "Realpath of the image. For example D:\\projects\\ai-chatbot\\storage/uploads\\032aa9f550eb4b9386cea295ba17b786.jpg or /home/ai-panel/storage/uploads/032aa9f550eb4b9386cea295ba17b786.jpg"
             }
           }
         },
@@ -164,7 +164,7 @@
         "properties": {
           "q": {
             "type": "string",
-            "description": "کلیدواژه برای جستجو. مثلا آسفالت, زباله, سد معبر, نظافت, ساخت و ساز غیر مجاز و ..."
+            "description": "کلیدواژه برای جستجو. مثلا آسفالت, زباله, سد معبر, نظافت, ساخت و ساز غیر مجاز و ... . مثلا وقتی کاربر اعلام می کند : این آشغال های سر کوچه ما رو کسی نیست جمع کنه ؟ شما باید کلیدواژه 'زباله' را وارد کنید"
           },
           "description": {
             "type": "string",
