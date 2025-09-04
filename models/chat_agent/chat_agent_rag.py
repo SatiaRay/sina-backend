@@ -365,13 +365,7 @@ class ChatAgentRag(ChatAgentRagInterface):
                         "name": event.item.name,
                         "arguments": event.item.arguments,
                     }
-                    
-                    if broadcast_response_to_websocket:
-                        # broadcast Agent call function event response to client
-                        await self.websocket.send_json(data={
-                            'event': 'fetching data',
-                            'message': "در حال واکشی اطلاعات, لطفا صبر کنید."
-                        })
+                   
                     break
             
             # Handle regular text output
