@@ -151,7 +151,7 @@ class ServiceContainer:
                 # Try to auto-load the class
                 return self._auto_load_class(abstract)
             except (ImportError, ValueError) as e:
-                raise ValueError(f"No binding found for {abstract} and auto-loading failed: {str(e)}")
+                return None
 
         binding = self._bindings[abstract]
 
