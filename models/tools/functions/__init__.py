@@ -3,9 +3,24 @@ from provider.service_container import container
 import traceback
 import sys
 from models.tools.functions.logging_decorator import FunctionCallLogger
-from typing import Union, Dict, Any
+from typing import Union, Dict, Any, Optional
 from fastapi import WebSocket
 from provider.service_container import container
+import os
+import json
+
+# Cache for map.json content
+_map_json_cache = None
+
+
+def get_map_json():
+    global _map_json_cache
+    if _map_json_cache is None:
+        map_path = os.path.join(os.path.dirname(__file__), "map.json")
+        with open(map_path, encoding="utf-8") as f:
+            _map_json_cache = json.load(f)
+    return _map_json_cache
+
 
 async def call_function(
     function_name: str,
@@ -32,8 +47,15 @@ async def call_function(
     """
     # bind websocket connection object to service container to make it available for for function tools
     if client_websocket_connection:
-        container.instance('client_websocket_connection', client_websocket_connection)
-    
+        map_json = get_map_json()
+        lables = map_json.get("lables", {})
+        lable = lables.get(function_name)
+        if lable:
+            await client_websocket_connection.send_json(
+                {"event": "call_function", "lable": lable}
+            )
+
+
     # Initialize logger with user context
     user_id = (user_context or {}).get('user_id', 'system')
     session_id = (user_context or {}).get('session_id', 'system')
