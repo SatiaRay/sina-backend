@@ -4,6 +4,7 @@ from typing import List
 import os
 from uuid import uuid4
 import mimetypes
+import magic  # Add this import
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -27,7 +28,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
     for file in files:
-        # Validate content type
+        # Validate content type (browser-provided)
         if file.content_type not in ALLOWED_CONTENT_TYPES:
             raise HTTPException(
                 status_code=400,
@@ -44,6 +45,13 @@ async def upload_files(files: List[UploadFile] = File(...)):
             raise HTTPException(
                 status_code=400,
                 detail=f"File '{filename}' exceeds the maximum allowed size of {MAX_FILE_SIZE // (1024 * 1024)} MB.",
+            )
+        # Detect true MIME type using python-magic
+        detected_type = magic.from_buffer(content, mime=True)
+        if detected_type not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{filename}' content does not match allowed types. Detected: {detected_type}",
             )
         with open(file_path, "wb") as f:
             f.write(content)
