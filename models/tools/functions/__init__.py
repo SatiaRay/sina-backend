@@ -47,6 +47,8 @@ async def call_function(
     """
     # bind websocket connection object to service container to make it available for for function tools
     if client_websocket_connection:
+        container.instance('client_websocket_connection', client_websocket_connection)
+        
         map_json = get_map_json()
         lables = map_json.get("lables", {})
         lable = lables.get(function_name)
