@@ -12,6 +12,7 @@ class ChatHistoryResponse(BaseModel):
     chat_id: int
     role: str
     body: str
+    type: str
     created_at: datetime
 
 @router.get("/chat/history/{session_id}", response_model=List[ChatHistoryResponse], tags=["Chat"],
@@ -25,6 +26,8 @@ async def get_chat_history(
 ):
     """
     دریافت تاریخچه چت بر اساس شناسه جلسه
+    
+    (توجه)پیام های پنهان را باز نمیگرداند
     
     - **session_id**: شناسه جلسه چت
     - **limit**: تعداد پیام‌های مورد نظر (پیش‌فرض: 20)
@@ -66,6 +69,7 @@ async def get_chat_history(
         # Then get the chat history for this chat with offset
         history = db.query(ChatHistory)\
             .filter(ChatHistory.chat_id == chat.id)\
+            .filter(ChatHistory.hidden != True)\
             .order_by(ChatHistory.created_at.desc())\
             .offset(int(offset))\
             .limit(int(limit))\
@@ -89,6 +93,7 @@ async def get_chat_history(
                 chat_id=msg.chat_id,
                 role=msg.role,
                 body=msg.body,
+                type=msg.type,
                 created_at=msg.created_at
             )
             for msg in history

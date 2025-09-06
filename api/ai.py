@@ -65,30 +65,52 @@ async def ask_question_agent_socket(
 
     try:
         while True:
-            data = await websocket.receive_text()
-            question_data = json.loads(data)
-            question = question_data.get("question", "")
-
-            if not question:
-                await websocket.send_text("Error: No question provided.")
+            data = await websocket.receive_json()
+            
+            if not data.get('event'):
+                await websocket.send_text("Error: No event type provided.")
                 continue
-
-            api_logger.info(f"Processing question with agent: {question}")
-
-            response = await agent_rag.generate_response_socket(
-                question=question, websocket=websocket
+            
+            await websocket.send_json(
+                {
+                    "event": "loading",
+                }
+            )
+            
+            hiddenQuestion = False
+            hiddenAnswer = False
+            
+            match data.get('event'):
+                case "cancel":
+                    message = {
+                        "type": "text",
+                        "body": data.get('desc')
+                    }
+                    hiddenQuestion = True
+                    
+                case "image":
+                    message = {
+                        "type": "image",
+                        "body": json.dumps(data.get('files'))
+                    }
+                    
+                case "text":
+                    message = {
+                        "type": "text",
+                        "body": data.get('text')
+                    }
+                    
+            await agent_rag.generate_response_socket(
+                message=message, websocket=websocket, hiddenQuestion=hiddenQuestion, hiddenAnswer=hiddenAnswer
             )
 
-            if response:
-                await websocket.send_json(
-                    {
-                        "event": "finished",
-                        "msg": "Response generated complete",
-                    }
-                )
-
-            if isinstance(response, dict) and response.get("status") == "error":
-                await websocket.send_text(f"Error: {response.get('error')}")
+            await websocket.send_json(
+                {
+                    "event": "finished",
+                    "msg": "Response generated complete",
+                }
+                    )
+                
 
     except WebSocketDisconnect:
         api_logger.info("WebSocket disconnected")

@@ -9,7 +9,6 @@ from models.tools.functions.logging_decorator import FunctionCallLogger
 from models.agents.mayoral_subject_selector import MayoralSubjectSelector
 
 
-
 # 137 app api tool functions
 class Mayoral:
     def __init__(self, bearer_token) -> None:
@@ -126,8 +125,24 @@ class Mayoral:
 
     @FunctionCallLogger()
     async def submitRequest(
-        self, mobile, address, lat, long, subject_id, description: str = None
+        self,
+        mobile,
+        address,
+        lat,
+        long,
+        subject_id,
+        description: str = None,
+        images: list[str] = [],
     ) -> Optional[Dict[str, Any]]:
+        import mimetypes
+
+        base_url = os.getenv("MAYORAL_API_BASE_URL", "https://arak.satia.co")
+        url = f"{base_url}/api/submit/request"
+        headers = {
+            "Authorization": f"Bearer {self.bearer_token}",
+            "Accept": "application/json",
+        }
+
         data = {
             "mobile": mobile,
             "address": address,
@@ -137,9 +152,34 @@ class Mayoral:
             "subject_id": subject_id,
         }
 
-        data = self._make_api_request("api/submit/request", method="POST", data=data)
+        files = []
+        file_handles = []
+        try:
+            for img_path in images:
+                mime_type, _ = mimetypes.guess_type(img_path)
+                if not mime_type:
+                    mime_type = "application/octet-stream"
+                f = open(img_path, "rb")
+                file_handles.append(f)
+                files.append(("images[]", (os.path.basename(img_path), f, mime_type)))
 
-        return data
+            response = requests.post(
+                url,
+                data=data,
+                files=files,
+                headers=headers,
+            )
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error making POST request to {url}: {e}")
+            print(
+                f"Response text: {response.text if 'response' in locals() else 'No response'}"
+            )
+            return None
+        finally:
+            for f in file_handles:
+                f.close()
 
     @FunctionCallLogger()
     async def searchSubject(self, q, description) -> Optional[Dict[str, Any]]:
@@ -148,18 +188,18 @@ class Mayoral:
         }
 
         data = self._make_api_request("api/subject/search", method="GET", params=params)
-        
+
         transformed_data = []
-        
-        for item in data['results']:
+
+        for item in data["results"]:
             transformed_item = {
-                "subject_id": item['id'],
-                "description": item['name'],
+                "subject_id": item["id"],
+                "description": item["name"],
             }
             transformed_data.append(transformed_item)
-            
+
         agent = MayoralSubjectSelector()
-        
+
         input = f"""
             User Request:
             {description}
@@ -167,7 +207,7 @@ class Mayoral:
             Found relevant subjects:
             {transformed_data}
         """
-        
+
         res = await Runner.run(agent, input)
-            
+
         return json.loads(res.final_output)

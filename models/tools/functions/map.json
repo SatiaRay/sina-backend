@@ -134,6 +134,14 @@
           "description": {
             "type": "string",
             "description": "توضیحات پیام"
+          },
+          "images": {
+            "type": "array",
+            "description": "تصویر های گزارش",
+            "items": {
+              "type": "string",
+              "description": "Realpath of the image. For example D:\\projects\\ai-chatbot\\storage/uploads\\032aa9f550eb4b9386cea295ba17b786.jpg or /home/ai-panel/storage/uploads/032aa9f550eb4b9386cea295ba17b786.jpg"
+            }
           }
         },
         "required": [
@@ -156,7 +164,7 @@
         "properties": {
           "q": {
             "type": "string",
-            "description": "کلیدواژه برای جستجو. مثلا آسفالت, زباله, سد معبر, نظافت, ساخت و ساز غیر مجاز و ..."
+            "description": "کلیدواژه برای جستجو. مثلا آسفالت, زباله, سد معبر, نظافت, ساخت و ساز غیر مجاز و ... . مثلا وقتی کاربر اعلام می کند : این آشغال های سر کوچه ما رو کسی نیست جمع کنه ؟ شما باید کلیدواژه 'زباله' را وارد کنید"
           },
           "description": {
             "type": "string",
@@ -194,6 +202,22 @@
       "parameters": {
         "type": "object",
         "properties": {
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "TriggerHook-trigger_upload_image_event",
+      "description": "ارسال درخواست بارگزاری تصویر به کاربر (این متود قابلیت آپلود تصویر را برای کاربر فعال می کند )",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "caption": {
+            "type": "string",
+            "description": "توضیحات که به همراه پیام درخواست آپلود تصویر به کاربر ارسال می شود"
+          }
         },
         "required": [],
         "additionalProperties": false
