@@ -99,6 +99,12 @@ async def ask_question_agent_socket(
                         "type": "text",
                         "body": data.get('text')
                     }
+                
+                case "wizard":
+                    message = {
+                        "type": 'wizard',
+                        "wizard_id": data.get('wizard_id')
+                    }
                     
             await agent_rag.generate_response_socket(
                 message=message, websocket=websocket, hiddenQuestion=hiddenQuestion, hiddenAnswer=hiddenAnswer
