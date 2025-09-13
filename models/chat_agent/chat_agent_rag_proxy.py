@@ -5,7 +5,7 @@ from database.models import get_db
 from database.repositories.workflow_repository import WorkflowRepository
 from .chat_agent_rag_interface import ChatAgentRagInterface
 from .chat_agent_rag import ChatAgentRag
-from database.repository import ChatRepository, ChatHistoryRepository
+from database.repository import ChatRepository, ChatHistoryRepository, WizardRepository
 from database.models import Chat
 from typing import List, Dict, Any, Optional, Union
 import logging
@@ -19,6 +19,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         self.chat_repository = ChatRepository(self.db)
         self.chat_history_repository = ChatHistoryRepository(self.db)
         self.workflow_repository = WorkflowRepository(self.db)  # Initialize workflow repository
+        self.wizard_repository = WizardRepository(self.db)  # Initialize wizard repository
 
     async def generate_response_socket(
         self,
@@ -27,14 +28,36 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         hiddenQuestion=False,
         hiddenAnswer=False,
     ) -> Dict[str, Any]:
-        # Store user question message in chat history
-        self.__update_chat_history(
-            message, "user", websocket=websocket, hidden=hiddenQuestion
-        )
-
         try:
             # Get or create chat session
             chat = self.__get_chat(request=None, websocket=websocket)
+            
+            # Send wizard body response if message type is wizard and wizard type is answer
+            if message.get('type') == 'wizard' and message.get('wizard_id'):
+                wizard = self.wizard_repository.get(message['wizard_id'])
+                if wizard and getattr(wizard, 'wizard_type', None) == 'answer':
+                    # Send wizard body as response
+                    await websocket.send_json({
+                        "event": "delta",
+                        "message": getattr(wizard, 'context', None) or ""
+                    })
+                    # Add wizard response to chat history
+                    self.__update_chat_history(
+                        {"body": getattr(wizard, 'context', None) or "", "type": "text"},
+                        role="assistant",
+                        websocket=websocket,
+                        hidden=hiddenAnswer
+                    )
+                    return {
+                        "status": "success",
+                        "response": getattr(wizard, 'context', None) or ""
+                    }
+            
+            
+            # Store user question message in chat history
+            self.__update_chat_history(
+                message, "user", websocket=websocket, hidden=hiddenQuestion
+            )
             
             # Get chat history
             chat_history = self.chat_history_repository.get_chat_history_by_chat_id(chat_id=chat.id, limit=50)
@@ -73,10 +96,6 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 self.__update_chat_history(
                     response, role="assistant", websocket=websocket, hidden=hiddenAnswer
                 )
-
-            await websocket.send_json({
-                "event": "finish",
-            })
             
             return {
                 "status": "success",
