@@ -64,6 +64,7 @@ from .system import router as system_router
 from .function_calling_log import router as function_calling_log_router
 from dynaconf import Dynaconf
 from .file import router as file_router
+from .auth import router as auth_router
 
 from util.settings import initialize_system_settings
 
@@ -213,6 +214,7 @@ app.include_router(voice_agent_router)
 app.include_router(system_router)
 app.include_router(function_calling_log_router)
 app.include_router(file_router)
+app.include_router(auth_router)
 
 # تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
 tags_metadata = [

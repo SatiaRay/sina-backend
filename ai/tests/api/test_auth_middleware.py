@@ -2,12 +2,9 @@ import time
 from typing import List, Tuple
 
 import pytest
-from fastapi import Request
 from jose import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-
-from api.main import app
 
 
 def generate_rsa_keypair() -> Tuple[str, str]:
@@ -63,13 +60,6 @@ def test_missing_token_returns_401(client):
 
 
 def test_valid_token_allows_and_exposes_scopes_and_user(client, rsa_keys):
-    @app.get("/whoami")
-    def whoami(request: Request):
-        return {
-            "scopes": getattr(request.state, "scopes", []),
-            "user_id": getattr(request.state, "user_id", None),
-        }
-
     private_pem, _ = rsa_keys
     now = time.time()
     token = _make_token(["tenant_id:1"], sub="1", nbf=now - 10, exp=now + 3600, private_pem=private_pem)
