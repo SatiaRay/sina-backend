@@ -7,6 +7,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 
 from models.tools.functions.trigger_hook import TriggerHook
+from util.helper import decode_jwt_token
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
@@ -284,6 +285,39 @@ async def log_requests(request: Request, call_next):
             },
         )
 
+# Checking authentication access_token and bind to service container if is valid
+@app.middleware("http")
+async def guard_middleware(request: Request, call_next):
+    auth = request.headers.get("Authorization")
+    
+    if not auth or not auth.startswith("Bearer "):
+        return JSONResponse(
+                status_code=401,
+                content={
+                    "msg": "Missing token",
+                }
+            )
+
+    token = auth.split(" ")[1]
+    
+    try:
+        payload = decode_jwt_token(token=token)
+        
+        request.state.scopes = payload.get('scopes') or []
+        
+        request.state.user_id = payload.get('sub') or None
+        
+        response = await call_next(request)
+        
+        return response
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "msg": "Unauthorized",
+            }
+        ) 
 
 # مدل‌های درخواست و پاسخ
 class QuestionRequest(BaseModel):
