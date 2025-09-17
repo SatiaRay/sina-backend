@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 # Import the system module
 from api.system import DatabaseExportImport, router
-from database.models import Base, User, Wizard, Document, Chat, ChatHistory, Workflow, Instruction
+from database.models import Base, Wizard, Document, Chat, ChatHistory, Workflow, Instruction
 
 
 class TestDatabaseExportImport:
@@ -98,7 +98,6 @@ class TestDatabaseExportImport:
         """Test successful database export"""
         # Mock export data
         mock_mysql_export.return_value = {
-            'users': [{'id': 1, 'email': 'test@example.com'}],
             'documents': [{'id': 1, 'title': 'Test Doc'}]
         }
         mock_chroma_export.return_value = {
@@ -155,12 +154,6 @@ class TestDatabaseExportImport:
         mock_session = Mock()
         mock_db_connection.return_value = (mock_session, "mysql://test")
         
-        # Mock User records
-        mock_user = Mock()
-        mock_user.id = 1
-        mock_user.email = "test@example.com"
-        mock_user.created_at = datetime.now()
-        
         # Mock table columns
         mock_id_col = Mock()
         mock_id_col.name = 'id'
@@ -168,9 +161,6 @@ class TestDatabaseExportImport:
         mock_email_col.name = 'email'
         mock_created_col = Mock()
         mock_created_col.name = 'created_at'
-        
-        mock_user.__table__ = Mock()
-        mock_user.__table__.columns = [mock_id_col, mock_email_col, mock_created_col]
         
         # Mock Document records
         mock_doc = Mock()
@@ -184,7 +174,6 @@ class TestDatabaseExportImport:
         
         # Setup query mocks
         mock_session.query.return_value.all.side_effect = [
-            [mock_user],  # users
             [],           # wizards
             [],           # crawled_domains
             [],           # crawl_jobs
@@ -199,11 +188,8 @@ class TestDatabaseExportImport:
         result = db_export_import._export_mysql_data()
         
         # Verify results
-        assert 'users' in result
         assert 'documents' in result
-        assert len(result['users']) == 1
         assert len(result['documents']) == 1
-        assert result['users'][0]['email'] == "test@example.com"
         assert result['documents'][0]['title'] == "Test Document"
         
         mock_session.close.assert_called_once()
@@ -248,14 +234,13 @@ class TestDatabaseExportImport:
         metadata = {
             "export_timestamp": datetime.now().isoformat(),
             "version": "1.0",
-            "mysql_tables": ["users", "documents"],
+            "mysql_tables": ["documents"],
             "chroma_collections": ["satya_docs"],
             "total_mysql_records": 2,
             "total_chroma_records": 1
         }
         
         mysql_data = {
-            "users": [{"id": 1, "email": "test@example.com", "created_at": datetime.now().isoformat()}],
             "documents": [{"id": 1, "title": "Test Doc", "created_at": datetime.now().isoformat()}]
         }
         
@@ -286,7 +271,6 @@ class TestDatabaseExportImport:
         with patch.object(db_export_import, '_import_mysql_data') as mock_mysql_import, \
              patch.object(db_export_import, '_import_chroma_data') as mock_chroma_import:
             
-            mock_mysql_import.return_value = {"users": {"imported": 1, "status": "success"}}
             mock_chroma_import.return_value = {"status": "success", "total_records": 1}
             
             # Import database
@@ -355,14 +339,6 @@ class TestDatabaseExportImport:
         
         # Test data
         mysql_data = {
-            "users": [
-                {
-                    "id": 1,
-                    "email": "test@example.com",
-                    "created_at": datetime.now().isoformat(),
-                    "updated_at": datetime.now().isoformat()
-                }
-            ],
             "documents": [
                 {
                     "id": 1,
@@ -379,14 +355,12 @@ class TestDatabaseExportImport:
             result = db_export_import._import_mysql_data(mysql_data)
             
             # Verify results
-            assert 'users' in result
             assert 'documents' in result
-            assert result['users']['status'] == 'success'
             assert result['documents']['status'] == 'success'
             
             # Verify database operations
-            assert mock_session.add.call_count == 2  # One for each table
-            assert mock_session.commit.call_count == 2
+            assert mock_session.add.call_count == 1  # One for each table
+            assert mock_session.commit.call_count == 1
             mock_session.close.assert_called_once()
     
     @patch('api.system.DatabaseExportImport._get_chroma_client')
@@ -505,7 +479,6 @@ class TestSystemEndpoints:
         with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp_file:
             with zipfile.ZipFile(tmp_file.name, 'w') as zipf:
                 zipf.writestr("metadata.json", json.dumps({"test": "data"}))
-                zipf.writestr("mysql_data.json", json.dumps({"users": []}))
                 zipf.writestr("chroma_data.json", json.dumps({"satya_docs": {"count": 0}}))
         
         try:

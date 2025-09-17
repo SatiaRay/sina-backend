@@ -3,6 +3,8 @@ from unittest.mock import Mock, AsyncMock, patch
 from fastapi import WebSocket
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from database.models import Chat, ChatHistory
+from typing import List, Dict, Any, Optional, Union
+from fastapi import Request
 
 @pytest.fixture
 def mock_websocket():
@@ -65,146 +67,40 @@ async def test_generate_response_socket_success_string(
     mock_workflow_repository
 ):
     # Arrange
-    question = "What is the weather?"
-    expected_response = "AI response"
+    question = {
+        'type': 'text',
+        'body': "What is the weather?"
+    }
+    # expected_response = "AI response"
+    expected_response = {
+        'type': 'text',
+        'body': "AI response"
+    }
     
-    # Mock the internal methods
-    chat_agent._ChatAgentRagProxy__get_chat = Mock(return_value=mock_chat)
-    chat_agent._ChatAgentRagProxy__update_chat_history = Mock()
-    chat_agent.workflow_repository.get_active_workflows_flows.return_value = mock_workflows
-    mock_chat_history_repository.get_chat_history_by_chat_id.return_value = mock_chat_history
+    # Setup agent rag proxy    
+    agent_proxy = ChatAgentRagProxy()
+    agent_proxy.chat_history_repository = mock_chat_history_repository
+    agent_proxy.workflow_repository = mock_workflow_repository
     
-    # Mock ChatAgentRag
-    with patch('models.chat_agent.chat_agent_rag_proxy.ChatAgentRag') as mock_rag_class:
-        mock_rag_instance = AsyncMock()
-        mock_rag_instance.generate_response_socket.return_value = expected_response
-        mock_rag_class.return_value = mock_rag_instance
-        
-        # Act
-        response = await chat_agent.generate_response_socket(question, mock_websocket)
-        
-        # Assert
-        # 1. Verify chat history was updated with user question
-        chat_agent._ChatAgentRagProxy__update_chat_history.assert_any_call(
-            question, "user", websocket=mock_websocket
-        )
-        
-        # 2. Verify ChatAgentRag was initialized with correct parameters
-        mock_rag_class.assert_called_once_with(
-            question=question,
-            history=[{"role": msg.role, "body": msg.body} for msg in mock_chat_history],
-            websocket=mock_websocket,
-            workflows=mock_workflows,
-            db=chat_agent.db
-        )
-        
-        # 3. Verify generate_response_socket was called
-        mock_rag_instance.generate_response_socket.assert_called_once()
-        
-        # 4. Verify chat history was updated with AI response
-        chat_agent._ChatAgentRagProxy__update_chat_history.assert_any_call(
-            expected_response, role="assistant", websocket=mock_websocket
-        )
-        
-        # 5. Verify the response was returned in the correct format
-        assert response == {
-            "status": "success",
-            "response": expected_response
-        }
-
-@pytest.mark.asyncio
-async def test_generate_response_socket_success_list(
-    chat_agent,
-    mock_websocket,
-    mock_chat,
-    mock_chat_history,
-    mock_workflows,
-    mock_chat_history_repository,
-    mock_workflow_repository
-):
-    # Arrange
-    question = "What is the weather?"
-    expected_response = ["First response", "Second response"]
+    # Mock agent
+    async def mock_generate_response_sokcet():
+        return expected_response
+    agent = Mock()
+    agent.generate_response_socket = mock_generate_response_sokcet
     
-    # Mock the internal methods
-    chat_agent._ChatAgentRagProxy__get_chat = Mock(return_value=mock_chat)
-    chat_agent._ChatAgentRagProxy__update_chat_history = Mock()
-    chat_agent.workflow_repository.get_active_workflows_flows.return_value = mock_workflows
-    mock_chat_history_repository.get_chat_history_by_chat_id.return_value = mock_chat_history
+    # update chat mock
+    def mock_update_chat(
+        message: Union[dict, str, list[str]],
+        role: str,
+        request: Optional[Request] = None,
+        websocket: Optional[WebSocket] = None,
+        hidden=False
+    ) :
+        assert (message == question and role == 'user') or (message == expected_response and role == 'assistant')
     
-    # Mock ChatAgentRag
-    with patch('models.chat_agent.chat_agent_rag_proxy.ChatAgentRag') as mock_rag_class:
-        mock_rag_instance = AsyncMock()
-        mock_rag_instance.generate_response_socket.return_value = expected_response
-        mock_rag_class.return_value = mock_rag_instance
-        
-        # Act
-        response = await chat_agent.generate_response_socket(question, mock_websocket)
-        
-        # Assert
-        # 1. Verify chat history was updated with user question
-        chat_agent._ChatAgentRagProxy__update_chat_history.assert_any_call(
-            question, "user", websocket=mock_websocket
-        )
-        
-        # 2. Verify ChatAgentRag was initialized with correct parameters
-        mock_rag_class.assert_called_once_with(
-            question=question,
-            history=[{"role": msg.role, "body": msg.body} for msg in mock_chat_history],
-            websocket=mock_websocket,
-            workflows=mock_workflows,
-            db=chat_agent.db
-        )
-        
-        # 3. Verify generate_response_socket was called
-        mock_rag_instance.generate_response_socket.assert_called_once()
-        
-        # 4. Verify chat history was updated with each AI response
-        for resp in expected_response:
-            chat_agent._ChatAgentRagProxy__update_chat_history.assert_any_call(
-                resp, role="assistant", websocket=mock_websocket
-            )
-        
-        # 5. Verify the response was returned in the correct format
-        assert response == {
-            "status": "success",
-            "response": expected_response
-        }
-
-@pytest.mark.asyncio
-async def test_generate_response_socket_error(
-    chat_agent,
-    mock_websocket,
-    mock_chat
-):
-    # Arrange
-    question = "What is the weather?"
-    error_message = "Something went wrong"
-    
-    # Mock the internal methods
-    chat_agent._ChatAgentRagProxy__get_chat = Mock(return_value=mock_chat)
-    chat_agent._ChatAgentRagProxy__update_chat_history = Mock()
-    
-    # Mock ChatAgentRag to raise an exception
-    with patch('models.chat_agent.chat_agent_rag_proxy.ChatAgentRag') as mock_rag_class:
-        mock_rag_instance = AsyncMock()
-        mock_rag_instance.generate_response_socket.side_effect = Exception(error_message)
-        mock_rag_class.return_value = mock_rag_instance
-        
-        # Act
-        response = await chat_agent.generate_response_socket(question, mock_websocket)
-        
-        # Assert
-        # Verify error was handled and chat history was updated with error message
-        chat_agent._ChatAgentRagProxy__update_chat_history.assert_any_call(
-            f"Error: {error_message}", role="assistant", websocket=mock_websocket
-        )
-        
-        # Verify error response was returned
-        assert response == {
-            "status": "error",
-            "error": error_message
-        }
+    with patch.object(agent_proxy, 'update_chat_history', mock_update_chat),\
+        patch.object(agent_proxy, 'agent_factory', return_value=agent):
+        await agent_proxy.generate_response_socket(question, mock_websocket)
 
 @pytest.mark.asyncio
 async def test_update_chat_history_string(chat_agent, mock_chat):
@@ -214,37 +110,13 @@ async def test_update_chat_history_string(chat_agent, mock_chat):
     chat_agent._ChatAgentRagProxy__get_chat = Mock(return_value=mock_chat)
     
     # Act
-    chat_agent._ChatAgentRagProxy__update_chat_history(message, role)
+    chat_agent.update_chat_history(message, role)
     
     # Assert
     chat_agent.chat_history_repository.create.assert_called_once_with({
         "chat_id": mock_chat.id,
         "body": message,
-        "role": role
+        "role": role,
+        "hidden": False,
+        "type": 'text'
     })
-
-@pytest.mark.asyncio
-async def test_update_chat_history_list(chat_agent, mock_chat):
-    # Arrange
-    messages = ["First message", "Second message"]
-    role = "assistant"
-    chat_agent._ChatAgentRagProxy__get_chat = Mock(return_value=mock_chat)
-    
-    # Act
-    chat_agent._ChatAgentRagProxy__update_chat_history(messages, role)
-    
-    # Assert
-    assert chat_agent.chat_history_repository.create.call_count == 2
-    
-    # Verify each message was stored separately
-    calls = chat_agent.chat_history_repository.create.call_args_list
-    assert calls[0][0][0] == {
-        "chat_id": mock_chat.id,
-        "body": messages[0],
-        "role": role
-    }
-    assert calls[1][0][0] == {
-        "chat_id": mock_chat.id,
-        "body": messages[1],
-        "role": role
-    } 

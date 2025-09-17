@@ -333,7 +333,12 @@ async def test_vectorize_task_document_not_found(db_session, mock_job):
     metadata = {"source": "test", "title": "Test Vector"}
     
     # Mock dependencies
-    with patch('rq.get_current_job', return_value=mock_job):
+    with patch('rq.get_current_job', return_value=mock_job), \
+         patch('api.document.DocumentRepository') as mock_repo:
+             
+        # Setup mock repository
+        mock_repo.return_value.get.return_value = None
+             
         # Execute task with non-existent document ID
         with pytest.raises(HTTPException) as exc_info:
             await vectorize_task(999, html, metadata)

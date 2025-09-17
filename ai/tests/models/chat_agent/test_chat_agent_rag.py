@@ -127,44 +127,42 @@ def test_instruction_formatting(chat_agent, db):
     instruction_lines = [line for line in lines if line.startswith("* ")]
     assert len(instruction_lines) == 3, "Should have exactly 3 instruction lines"
     
-@patch('models.chat_agent.chat_agent_rag.ChatAgentRag.suplly_called_function')
+@patch('models.chat_agent.chat_agent_rag.ChatAgentRag._suplly_called_function')
 @pytest.mark.asyncio
 async def test_generate_response_socket_with_function_call(mock_suplly_func, chat_agent, mock_websocket):
-    mock_event = Mock()
-    mock_event.type = 'response.output_item.done'
-    mock_event.item = Mock()
-    mock_event.item.type = 'function_call'
-    mock_event.item.name = 'test_function'
-    mock_event.item.arguments = '{"arg1": "value1"}'
-    mock_event.item.id = 'call_123'
-
-    def fake_stream_response(self, messages):
-        yield mock_event
+    async def fake_stream_event_handler(self, stream, broadcast_response_to_websocket):
+        return {
+            "call_info": {
+                "type": "function_call",
+                "id" : 'call_123',
+                "call_id": 'call_123',
+                "name": 'test_function',
+                "arguments": '{"arg1": "value1"}',
+            },
+            "text": ""
+        }
 
     # Create a dummy coroutine to simulate the response
     async def mock_sub_response():
         return "Function result"
 
-    mock_suplly_func.return_value = asyncio.create_task(mock_sub_response())
+    # mock_suplly_func.return_value = asyncio.create_task(mock_sub_response())
+    mock_suplly_func.return_value = "Function result"
 
-    with patch('models.chat_agent.chat_agent_rag.ChatAgentRag.stream_openai_response', new=fake_stream_response):
+    with patch('models.chat_agent.chat_agent_rag.ChatAgentRag._stream_event_handler', new=fake_stream_event_handler):
         response = await chat_agent.generate_response_socket()
-
-        assert isinstance(response, list)
-        assert len(response) == 2
-        assert response[0] == ""
-        assert response[1] == "Function result"
+        
+        assert response == "Function result"
 
 @pytest.mark.asyncio
 async def test_generate_response_socket_with_text_response(chat_agent, mock_websocket):
     """Test generate_response_socket with a regular text response"""
     # Mock the OpenAI client response
-    mock_event = Mock()
-    mock_event.type = 'response.output_text.delta'
-    mock_event.delta = "Hello, this is a test response"
-
-    with patch('models.chat_agent.chat_agent_rag.ChatAgentRag.stream_openai_response') as mock_stream:
-        mock_stream.return_value = [mock_event]
+    with patch('models.chat_agent.chat_agent_rag.ChatAgentRag._stream_event_handler') as mock_stream:
+        mock_stream.return_value = {
+            "call_info": None,
+            "text": "Hello, this is a test response"
+        }
         
         # Act
         response = await chat_agent.generate_response_socket()
@@ -175,7 +173,7 @@ async def test_generate_response_socket_with_text_response(chat_agent, mock_webs
 @pytest.mark.asyncio
 async def test_generate_response_socket_with_error(chat_agent, mock_websocket):
     """Test generate_response_socket when an error occurs"""
-    with patch('models.chat_agent.chat_agent_rag.ChatAgentRag.stream_openai_response') as mock_stream:
+    with patch('models.chat_agent.chat_agent_rag.ChatAgentRag._stream_event_handler') as mock_stream:
         mock_stream.side_effect = Exception("Test error")
         
         # Act & Assert

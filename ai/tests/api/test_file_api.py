@@ -41,6 +41,7 @@ def test_upload_multiple_files():
         ("files", ("b.txt", io.BytesIO(b"B"), "text/plain")),
     ]
     response = client.post("/files/upload", files=files)
+    print(response.text)
     assert response.status_code == 200
     data = response.json()
     assert "files" in data

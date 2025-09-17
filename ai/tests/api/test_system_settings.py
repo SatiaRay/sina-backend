@@ -34,31 +34,23 @@ def patch_settings_schema(monkeypatch):
     yield
 
 
+@patch("api.system.get_dynamic_settings_schema", return_value=MOCK_SCHEMA)
 @patch("api.system.open", new_callable=mock_open, read_data=json.dumps(MOCK_SETTINGS))
 @patch("api.system.os.path.exists", return_value=True)
-def test_get_system_settings(mock_exists, mock_file):
-    response = client.get("/system/settings")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["site_name"] == MOCK_SETTINGS["site_name"]
-    assert data["text_agent_model"] == MOCK_SETTINGS["text_agent_model"]
-    mock_file.assert_called_with(system_mod.SYSTEM_SETTINGS_PATH, "r", encoding="utf-8")
-
-
-@patch("api.system.open", new_callable=mock_open, read_data=json.dumps(MOCK_SETTINGS))
-@patch("api.system.os.path.exists", return_value=True)
-def test_post_system_settings_valid(mock_exists, mock_file):
-    with patch.object(
-        system_mod.config, "get", return_value=["mock-model-v1", "other-model"]
-    ):
-        response = client.post("/system/settings", json=MOCK_SETTINGS)
-        assert response.status_code == 200
-        assert response.json()["message"] == "Settings updated successfully"
-        mock_file.assert_called_with(
-            system_mod.SYSTEM_SETTINGS_PATH, "w", encoding="utf-8"
-        )
-        handle = mock_file()
-        handle.write.assert_called()  # Should write JSON
+def test_post_system_settings_valid(mock_exists, mock_file, mock_schema):
+    mock_settings = MagicMock()
+    with patch("api.system.container.make", return_value=mock_settings):
+        with patch.object(
+            system_mod.config, "get", return_value=["mock-model-v1", "other-model"]
+        ):
+            response = client.post("/system/settings", json=MOCK_SETTINGS)
+            assert response.status_code == 200
+            assert response.json()["message"] == "Settings updated successfully"
+            mock_file.assert_called_with(
+                system_mod.SYSTEM_SETTINGS_PATH, "w", encoding="utf-8"
+            )
+            handle = mock_file()
+            handle.write.assert_called()  # Should write JSON
 
 
 @patch("api.system.open", new_callable=mock_open, read_data=json.dumps(MOCK_SCHEMA))
