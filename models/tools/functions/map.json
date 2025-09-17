@@ -1,4 +1,16 @@
 {
+  "lables" : {
+    "AppSatiaCo-get_connection_logs" : "در حال دریافت جزئیات مصرف اینترنت",
+    "AppSatiaCo-get_service_info" : "در حال واکشی مشخصات اشتراک اینترنت",
+    "AppSatiaCo-get_accounts_list" : "در حال واکشی فهرست اشتراک ها",
+    "Neshan-search_address" : "در حال جستجوی آدرس",
+    "Neshan-reverse" : "تبدیل مختصات جغرافیای به آدرس",
+    "Mayoral-submitRequest" : "در حال ثبت پیام در سامانه 137",
+    "Mayoral-searchSubject" : "در حال جستجوی موضوع در سامانه 137",
+    "Ayan-get_zoning" : "درحال دریافت مشخصات منطقه بندی",
+    "Ayan-get_conditions" : "در حال واکشی ضوابط ساخت و ساز",
+    "TriggerHook-trigger_upload_image_event" : "درخواست ارسال عکس"
+  },
   "functions": [
     {
       "type": "function",

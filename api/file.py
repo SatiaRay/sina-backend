@@ -18,6 +18,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
     # Define allowed content types and max file size (in bytes)
     ALLOWED_CONTENT_TYPES = [
         "image/jpeg",
+        "image/jpg",
         "image/png",
         "image/webp",
         "application/pdf",
