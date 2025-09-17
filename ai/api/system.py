@@ -20,7 +20,6 @@ import sys
 
 from database.models import (
     Base,
-    User,
     Wizard,
     CrawledDomain,
     CrawlJobs,
@@ -167,7 +166,6 @@ class DatabaseExportImport:
 
             # Define tables to export (in order of dependencies)
             tables = [
-                ("users", User),
                 ("wizards", Wizard),
                 ("crawled_domains", CrawledDomain),
                 ("crawl_jobs", CrawlJobs),
@@ -332,7 +330,6 @@ class DatabaseExportImport:
             import_results = {}
 
             tables = [
-                ("users", User),
                 ("wizards", Wizard),
                 ("crawled_domains", CrawledDomain),
                 ("crawl_jobs", CrawlJobs),
@@ -408,7 +405,6 @@ class DatabaseExportImport:
                 "workflows",
                 "instructions",
                 "wizards",
-                "users",
             ]
 
             for table in tables:
@@ -501,7 +497,6 @@ def get_dynamic_settings_schema(include_enum=True):
         schema = json.load(f)
 
     # Pick schema type
-
     return schema 
 
 

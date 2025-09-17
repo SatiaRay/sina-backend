@@ -429,6 +429,7 @@ def list_documents(
                 domain=(
                     DomainInfo(id=domain.id, domain=domain.domain) if domain else None
                 ),
+                status=doc.status,
                 created_at=doc.created_at,
                 updated_at=doc.updated_at,
             )

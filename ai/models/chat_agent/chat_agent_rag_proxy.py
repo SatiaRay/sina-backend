@@ -42,7 +42,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                         "message": getattr(wizard, 'context', None) or ""
                     })
                     # Add wizard response to chat history
-                    self.__update_chat_history(
+                    self.update_chat_history(
                         {"body": getattr(wizard, 'context', None) or "", "type": "text"},
                         role="assistant",
                         websocket=websocket,
@@ -55,7 +55,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             
             
             # Store user question message in chat history
-            self.__update_chat_history(
+            self.update_chat_history(
                 message, "user", websocket=websocket, hidden=hiddenQuestion
             )
             
@@ -74,26 +74,27 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             workflows = self.workflow_repository.get_active_workflows_flows('text_agent')
 
             # Initialize agent with all required parameters
-            agent = ChatAgentRag(
+            agent = self.agent_factory(
                 question=message['body'],
                 history=formatted_history,
                 websocket=websocket,
-                workflows=workflows,
-                db=self.db
+                workflows=workflows
             )
 
             # Generate response
             response = await agent.generate_response_socket()
+            
+            print(response)
 
             # Store AI response in chat history
             if isinstance(response, list):
                 for resp in response:
-                    self.__update_chat_history(
+                    self.update_chat_history(
                         resp, role="assistant", websocket=websocket, hidden=hiddenAnswer
                     )
             else:
                 # If response is a single string, store it directly
-                self.__update_chat_history(
+                self.update_chat_history(
                     response, role="assistant", websocket=websocket, hidden=hiddenAnswer
                 )
             
@@ -104,8 +105,16 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             logger.error(error_msg)
-            self.__update_chat_history(error_msg, role="assistant", websocket=websocket)
             return {"status": "error", "error": str(e)}
+        
+    def agent_factory(self,question, history, websocket, workflows):
+        return ChatAgentRag(
+            question=question,
+            history=history,
+            websocket=websocket,
+            workflows=workflows,
+            db=self.db
+        )
 
     # Get or create chat session
     def __get_chat(self, request: Optional[Request] = None, websocket: Optional[WebSocket] = None) -> Chat:
@@ -138,7 +147,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             raise e
 
     # Store new chat history message
-    def __update_chat_history(
+    def update_chat_history(
         self,
         message: Union[dict, str, list[str]],
         role: str,

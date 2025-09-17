@@ -49,11 +49,17 @@ async def upload_files(files: List[UploadFile] = File(...)):
             )
         # Detect true MIME type using python-magic
         detected_type = magic.from_buffer(content, mime=True)
+        # Allow .txt files detected as application/octet-stream if browser type is text/plain or extension is .txt
         if detected_type not in ALLOWED_CONTENT_TYPES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File '{filename}' content does not match allowed types. Detected: {detected_type}",
-            )
+            if detected_type == "application/octet-stream" and (
+                file.content_type == "text/plain" or ext.lower() == ".txt"
+            ):
+                pass  # allow
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File '{filename}' content does not match allowed types. Detected: {detected_type}",
+                )
         with open(file_path, "wb") as f:
             f.write(content)
         url = f"/files/{unique_name}"

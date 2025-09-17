@@ -58,8 +58,6 @@ from .ai import router as ai_router
 from .job import router as job_router
 from .instruction import router as instruction_router
 from .ai_functions_tools import router as ai_functions_router
-from .auth import router as auth_router
-from .user import router as user_router
 from .voice_agent import router as voice_agent_router
 from .system import router as system_router
 from .function_calling_log import router as function_calling_log_router
@@ -210,8 +208,6 @@ app.include_router(about_router)
 app.include_router(job_router)
 app.include_router(instruction_router)
 app.include_router(ai_functions_router)
-app.include_router(auth_router)
-app.include_router(user_router)
 app.include_router(voice_agent_router)
 app.include_router(system_router)
 app.include_router(function_calling_log_router)
