@@ -30,3 +30,4 @@ dynaconf==3.2.11
 python-magic==0.4.27
 pytest-asyncio==1.2.0
 python-jose==3.5.0
+uvicorn==0.36.0
