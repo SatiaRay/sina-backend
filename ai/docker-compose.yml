@@ -1,35 +1,58 @@
+version: "3.8"
+
 services:
-  chroma:
-      image: chromadb/chroma
   mysql:
-    image: mysql
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
     environment:
       MYSQL_ROOT_PASSWORD: 123456789
-      MYSQL_DATABASE: ai_db
-      MYSQL_USER: ai_chatbot
+      MYSQL_DATABASE: aidb
+      MYSQL_USER: aibot
       MYSQL_PASSWORD: 123456789
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-  app:
+    networks:
+      - backend
+
+  redis:
+    image: redis:7.2
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - backend
+
+  ai:
     build:
       context: .
       dockerfile: dockerfile
-    container_name: khan
-    ports:
-      - "8000:8000"
+    container_name: ai
     depends_on:
       - mysql
-      - chroma
-    command: >
-      sh -c "./wait-for-it.sh mysql:3306 --timeout=60 --strict && 
-            alembic upgrade head &&
-            uvicorn api.main:app --host 0.0.0.0 --reload"
+      - redis
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: aibot
+      MYSQL_PASSWORD: 123456789
+      MYSQL_DATABASE: aidb
+      MYSQL_PORT: 3306
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "8090:8090"
+    networks:
+      - backend
     volumes:
-      - .:/app  # ✅ Mount the project directory into the container
-  
+      - ./data:/var/www/html/ai/data
+    command: uvicorn api.main:app --host=0.0.0.0 --port=8090
 
 volumes:
   mysql_data:
-    driver: local
+
+networks:
+  backend:
+    driver: bridge
