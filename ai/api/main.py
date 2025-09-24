@@ -289,7 +289,11 @@ async def log_requests(request: Request, call_next):
 
 # Checking authentication access_token and bind to service container if is valid
 @app.middleware("http")
-async def guard_middleware(request: Request, call_next):
+async def guard_middleware(request: Request, call_next):    
+    # Skip auth for preflight CORS requests
+    if request.method == "OPTIONS":
+        return await call_next(request)
+    
     auth = request.headers.get("Authorization")
     
     if not auth or not auth.startswith("Bearer "):
