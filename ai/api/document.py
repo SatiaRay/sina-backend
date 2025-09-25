@@ -906,6 +906,7 @@ def get_documents_by_domain(
     # Create response with domain info
     items = []
     for doc in documents:
+        print(doc)
         items.append(
             DocumentListResponse(
                 id=doc.id,
@@ -914,6 +915,7 @@ def get_documents_by_domain(
                 agent_type=doc.agent_type,
                 domain_id=doc.domain_id,
                 domain=DomainInfo(id=domain.id, domain=domain.domain),
+                status=doc.status,
                 created_at=doc.created_at,
                 updated_at=doc.updated_at,
             )
