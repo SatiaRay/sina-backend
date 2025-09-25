@@ -21,7 +21,7 @@ services:
       - "sail-mysql:/var/lib/mysql"
       - "./idp/docker/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh"
     networks:
-      - sail
+      - default
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}", "-P", "3307"]
       retries: 3
@@ -50,7 +50,7 @@ services:
     volumes:
       - "./idp:/var/www/html"
     networks:
-      - sail
+      - default
     depends_on:
       - idp-mysql
 
@@ -73,7 +73,7 @@ services:
     volumes:
       - ai-mysql-data:/var/lib/mysql
     networks:
-      - backend
+      - default
 
   ai-redis:
     image: redis:7.2
@@ -82,7 +82,7 @@ services:
     ports:
       - "6379:6379"
     networks:
-      - backend
+      - default
 
   ai:
     build:
@@ -105,7 +105,7 @@ services:
     ports:
       - "8090:80"
     networks:
-      - backend
+      - default
     volumes:
       - ./ai:/var/www/html/ai
     command: >
@@ -124,7 +124,7 @@ services:
         REDIS_HOST: ai-redis
         REDIS_PORT: 6379
       networks:
-        - backend
+        - default
       volumes:
         - ./ai:/var/www/html/ai
       command: >
@@ -142,7 +142,7 @@ services:
       REDIS_HOST: ai-redis
       REDIS_PORT: 6379
     networks:
-      - backend
+      - default
     volumes:
       - ./ai:/var/www/html/ai
     command: >
@@ -161,7 +161,7 @@ services:
       REDIS_HOST: ai-redis
       REDIS_PORT: 6379
     networks:
-      - backend
+      - default
     volumes:
       - ./ai:/var/www/html/ai
     command: >
@@ -176,7 +176,5 @@ volumes:
     driver: local
 
 networks:
-  sail:
-    driver: bridge
-  backend:
+  default:
     driver: bridge
