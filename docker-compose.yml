@@ -107,8 +107,67 @@ services:
     networks:
       - backend
     volumes:
-      - ./ai/.:/var/www/html/ai/.
-    command: /bin/sh -c "wait-for-it.sh ai-mysql:3306 -- alembic upgrade head && uvicorn api.main:app --reload --host=0.0.0.0 --port=80"
+      - ./ai:/var/www/html/ai
+    command: >
+      /bin/sh -c "wait-for-it.sh ai-mysql:3306 -- alembic upgrade head &&
+                  uvicorn api.main:app --reload --host=0.0.0.0 --port=80"
+  rq-worker-default:
+      build:
+        context: ./ai
+        dockerfile: dockerfile
+      container_name: rq-worker-default
+      depends_on:
+        - ai-redis
+      env_file:
+        - ./ai/.env
+      environment:
+        REDIS_HOST: ai-redis
+        REDIS_PORT: 6379
+      networks:
+        - backend
+      volumes:
+        - ./ai:/var/www/html/ai
+      command: >
+        /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker"
+  rq-worker-vectorize:
+    build:
+      context: ./ai
+      dockerfile: dockerfile
+    container_name: rq-worker-vectorize
+    depends_on:
+      - ai-redis
+    env_file:
+      - ./ai/.env
+    environment:
+      REDIS_HOST: ai-redis
+      REDIS_PORT: 6379
+    networks:
+      - backend
+    volumes:
+      - ./ai:/var/www/html/ai
+    command: >
+      /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker vectorize"
+
+  rq-worker-crawl:
+    build:
+      context: ./ai
+      dockerfile: dockerfile
+    container_name: rq-worker-crawl
+    depends_on:
+      - ai-redis
+    env_file:
+      - ./ai/.env
+    environment:
+      REDIS_HOST: ai-redis
+      REDIS_PORT: 6379
+    networks:
+      - backend
+    volumes:
+      - ./ai:/var/www/html/ai
+    command: >
+      /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker crawl"
+  
+
 
 volumes:
   sail-mysql:
