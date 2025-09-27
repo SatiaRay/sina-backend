@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import base64
 from typing import Dict, Any, Optional
 from redis import Redis
 from redis.exceptions import RedisError
@@ -8,9 +9,16 @@ from models.tools.functions.logging_decorator import FunctionCallLogger
 
 
 class AppSatiaCo:
-    def __init__(self, access_token: str, customer: str) -> None:
-        self.access_token = access_token
-        self.customer = customer
+    def __init__(self, token: str, customer: str) -> None:
+        self.access_token = token
+        # Decode base64 customer data
+        try:
+            decoded_customer = base64.b64decode(customer).decode('utf-8')
+            self.customer = json.loads(decoded_customer)
+        except (base64.binascii.Error, json.JSONDecodeError, UnicodeDecodeError) as e:
+            print(f"Error decoding customer data: {e}")
+            # Fallback to original customer string if decoding fails
+            self.customer = customer
         self.redis_host = os.getenv('REDIS_HOST', '127.0.0.1')
         self.redis_port = int(os.getenv('REDIS_PORT', 6379))
         self.redis_db = int(os.getenv('REDIS_DB', 0))
@@ -67,7 +75,7 @@ class AppSatiaCo:
         # Base payload with common parameters
         payload = {
             "token": self.access_token,
-            "customer": self.customer
+            "customer": json.dumps(self.customer) if isinstance(self.customer, dict) else self.customer
         }
         
         # Add any extra parameters
@@ -81,11 +89,33 @@ class AppSatiaCo:
         if cached_data:
             return cached_data
                 
-        base_url = os.getenv('APP_SATIA_CO_API_BASE_URL', 'https://app.satia.co')
+        base_url = os.getenv('APP_SATIA_CO_API_BASE_URL', 'https://app.satia.co/proxy.php')
+
         try:
             response = requests.post(f"{base_url}/{endpoint}", data=payload)
             response.raise_for_status()
-            data = response.json()
+            
+            # Check if response has content before parsing JSON
+            if not response.content:
+                print(f"Error fetching data from {endpoint}: Empty response received")
+                return None
+            
+            # Check if response content type is JSON
+            content_type = response.headers.get('content-type', '').lower()
+            if 'application/json' not in content_type and 'text/json' not in content_type:
+                print(f"Error fetching data from {endpoint}: Non-JSON response received. Content-Type: {content_type}")
+                print(f"Response content: {response.text[:500]}")  # Log first 500 chars for debugging
+                return None
+
+            print(response.text)
+            
+            # Try to parse JSON
+            try:
+                data = response.json()
+            except json.JSONDecodeError as json_err:
+                print(f"Error parsing JSON from {endpoint}: {json_err}")
+                print(f"Response content: {response.text[:500]}")  # Log first 500 chars for debugging
+                return None
             
             # Cache the successful response
             self._set_cache(cache_key, data)
