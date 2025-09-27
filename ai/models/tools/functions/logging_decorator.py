@@ -11,9 +11,8 @@ from database.repositories.function_call_log_repository import FunctionCallLogRe
 from functools import wraps
 
 class FunctionCallLogger:
-    def __init__(self, user_id: str = "system", session_id: str = "system"):
-        self.user_id = user_id
-        self.session_id = session_id
+    def __init__(self):
+        pass
 
     def __call__(self, func):
         @wraps(func)
@@ -23,10 +22,6 @@ class FunctionCallLogger:
                 "timestamp": datetime.utcnow().isoformat() + "Z",
                 "tool": self._get_clean_tool_name(func),
                 "params": self._extract_params(func, args, kwargs),
-                "user": {
-                    "id": self.user_id,
-                    "session": self.session_id
-                },
                 "metadata": {
                     "duration": 0,
                     "tokens": 0
@@ -96,8 +91,6 @@ class FunctionCallLogger:
                 'timestamp': datetime.fromisoformat(log_entry['timestamp'].replace('Z', '')),
                 'tool': log_entry['tool'],
                 'params': log_entry.get('params'),
-                'user_id': log_entry['user'].get('id'),
-                'session_id': log_entry['user'].get('session'),
                 'response': log_entry.get('response'),
                 'error': log_entry.get('error'),
                 'duration_ms': log_entry['metadata']['duration'],

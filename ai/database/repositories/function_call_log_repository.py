@@ -21,7 +21,6 @@ class FunctionCallLogRepository:
             timestamp=log_data.get('timestamp'),
             tool=log_data.get('tool'),
             params=log_data.get('params'),
-            user_id=log_data.get('user_id'),
             session_id=log_data.get('session_id'),
             response=log_data.get('response'),
             error=log_data.get('error'),
@@ -43,7 +42,7 @@ class FunctionCallLogRepository:
     self,
     hours: int = 24,
     tool_name: Optional[str] = None,
-    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     min_duration: Optional[int] = None,
     max_duration: Optional[int] = None,
     has_errors: bool = False,
@@ -59,8 +58,8 @@ class FunctionCallLogRepository:
         # Additional filters
         if tool_name:
             query = query.filter(FunctionCallLog.tool == tool_name)
-        if user_id:
-            query = query.filter(FunctionCallLog.user_id == user_id)
+        if session_id:
+            query = query.filter(FunctionCallLog.session_id == session_id)
         if min_duration:
             query = query.filter(FunctionCallLog.duration_ms >= min_duration)
         if max_duration:
@@ -76,7 +75,6 @@ class FunctionCallLogRepository:
             "timestamp": log.timestamp.isoformat(),
             "tool": log.tool,
             "params": log.params,
-            "user_id": log.user_id,
             "session_id": log.session_id,
             "response": log.response,
             "error": log.error,
@@ -116,7 +114,7 @@ class FunctionCallLogRepository:
             "error_count": int(r[4]) if r[4] is not None else 0
         } for r in results]
 
-    def get_user_activity(self, user_id, days):
+    def get_session_activity(self, session_id, days):
         # Ensure this returns a dict, not SQLAlchemy objects
         return {
             'total_calls': stats.total_calls,
@@ -145,7 +143,6 @@ class FunctionCallLogRepository:
             "timestamp": log.timestamp,
             "tool": log.tool,
             "params": log.params,
-            "user_id": log.user_id,
             "session_id": log.session_id,
             "response": log.response,
             "error": log.error,
@@ -158,7 +155,7 @@ class FunctionCallLogRepository:
     self,
     hours: int,
     tool_name: Optional[str] = None,
-    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     min_duration: Optional[int] = None,
     max_duration: Optional[int] = None,
     has_errors: bool = False
@@ -167,7 +164,7 @@ class FunctionCallLogRepository:
         query = self._build_base_query(
             hours=hours,
             tool_name=tool_name,
-            user_id=user_id,
+            session_id=session_id,
             min_duration=min_duration,
             max_duration=max_duration,
             has_errors=has_errors
@@ -178,7 +175,7 @@ class FunctionCallLogRepository:
         self,
         hours: int,
         tool_name: Optional[str] = None,
-        user_id: Optional[str] = None,
+        session_id: Optional[str] = None,
         min_duration: Optional[int] = None,
         max_duration: Optional[int] = None,
         has_errors: bool = False,
@@ -189,7 +186,7 @@ class FunctionCallLogRepository:
         query = self._build_base_query(
             hours=hours,
             tool_name=tool_name,
-            user_id=user_id,
+            session_id=session_id,
             min_duration=min_duration,
             max_duration=max_duration,
             has_errors=has_errors
@@ -200,7 +197,7 @@ class FunctionCallLogRepository:
         self,
         hours: int,
         tool_name: Optional[str] = None,
-        user_id: Optional[str] = None,
+        session_id: Optional[str] = None,
         min_duration: Optional[int] = None,
         max_duration: Optional[int] = None,
         has_errors: bool = False
@@ -213,8 +210,8 @@ class FunctionCallLogRepository:
         
         if tool_name:
             query = query.filter(FunctionCallLog.tool == tool_name)
-        if user_id:
-            query = query.filter(FunctionCallLog.user_id == user_id)
+        if session_id:
+            query = query.filter(FunctionCallLog.session_id == session_id)
         if min_duration:
             query = query.filter(FunctionCallLog.duration_ms >= min_duration)
         if max_duration:
