@@ -14,7 +14,7 @@ router = APIRouter(
 class LogQueryParams(BaseModel):
     hours: int = 24
     tool_name: Optional[str] = None
-    user_id: Optional[str] = None
+    session_id: Optional[str] = None
     min_duration: Optional[int] = None
     max_duration: Optional[int] = None
     has_errors: bool = False
@@ -45,7 +45,7 @@ class PaginatedLogResponse(BaseModel):
 async def get_logs(
     hours: int = Query(24, description="Time window in hours"),
     tool_name: Optional[str] = Query(None, description="Filter by tool name"),
-    user_id: Optional[str] = Query(None, description="Filter by user ID"),
+    session_id: Optional[str] = Query(None, description="Filter by session ID"),
     min_duration: Optional[int] = Query(None, description="Minimum duration in ms"),
     max_duration: Optional[int] = Query(None, description="Maximum duration in ms"),
     has_errors: bool = Query(False, description="Only include failed calls"),
@@ -70,7 +70,7 @@ async def get_logs(
             total = repo.get_logs_count(
                 hours=hours,
                 tool_name=tool_name,
-                user_id=user_id,
+                session_id=session_id,
                 min_duration=min_duration,
                 max_duration=max_duration,
                 has_errors=has_errors
@@ -83,7 +83,7 @@ async def get_logs(
             logs = repo.get_paginated_logs(
                 hours=hours,
                 tool_name=tool_name,
-                user_id=user_id,
+                session_id=session_id,
                 min_duration=min_duration,
                 max_duration=max_duration,
                 has_errors=has_errors,
@@ -123,14 +123,14 @@ async def get_tool_usage_stats(
             detail=f"Failed to retrieve tool statistics: {str(e)}"
         )
 
-@router.get("/stats/user/{user_id}", response_model=UserActivityResponse)
-async def get_user_activity(
-    user_id: str,
+@router.get("/stats/session/{session_id}", response_model=UserActivityResponse)
+async def get_session_activity(
+    session_id: str,
     days: int = Query(30, description="Time window in days")
 ):
     try:
         with FunctionCallLogRepository() as repo:
-            activity = repo.get_user_activity(user_id, days=days)
+            activity = repo.get_session_activity(session_id, days=days)
             return activity  # Assuming this already returns a dict
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
@@ -156,7 +156,6 @@ async def search_logs(
                         "timestamp": log.timestamp.isoformat(),
                         "tool": log.tool,
                         "params": log.params,
-                        "user_id": log.user_id,
                         "session_id": log.session_id,
                         # Clean response data by removing Ellipsis
                         "response": clean_response_data(log.response),
@@ -213,7 +212,6 @@ async def get_log_by_id(log_id: int):
                 "timestamp": log.timestamp.isoformat() if hasattr(log, 'timestamp') else None,
                 "tool": log.tool,
                 "params": log.params,
-                "user_id": log.user_id,
                 "session_id": log.session_id,
                 "response": log.response,
                 "error": log.error,

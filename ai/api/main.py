@@ -94,13 +94,13 @@ def init_service_container():
     container.singleton("workflow_repository", WorkflowRepository)
 
     # Bind AppSatiaCo as singleton with required dependencies
-    container.singleton(
-        "AppSatiaCo",
-        lambda: AppSatiaCo(
-            access_token=os.getenv("SATIA_ACCESS_TOKEN", ""),
-            customer=os.getenv("SATIA_CUSTOMER", ""),
-        ),
-    )
+    # container.singleton(
+    #     "AppSatiaCo",
+    #     lambda: AppSatiaCo(
+    #         access_token=os.getenv("SATIA_ACCESS_TOKEN", ""),
+    #         customer=os.getenv("SATIA_CUSTOMER", ""),
+    #     ),
+    # )
 
     container.singleton(
         "Neshan",

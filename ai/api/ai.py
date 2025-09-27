@@ -7,11 +7,13 @@ from fastapi import (
     UploadFile,
     File,
 )
+from models.tools.functions.app_satia_co import AppSatiaCo
 from typing import Optional, List, Dict
 import json
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from provider.service_container import container
 from util.logging_config import configure_logging, log_error
+from util.redis_binding_manager import binding_manager
 import wave
 import os
 from models.models.speech_to_text_model import SpeechToTextModel
@@ -62,6 +64,9 @@ async def ask_question_agent_socket(
     session_id: str = Query(..., description="Session ID is required"),
 ):
     await websocket.accept()
+    
+    # Generate unique binding token for this WebSocket session
+    binding_token = binding_manager.generate_binding_token()
 
     try:
         while True:
@@ -71,11 +76,6 @@ async def ask_question_agent_socket(
                 await websocket.send_text("Error: No event type provided.")
                 continue
             
-            await websocket.send_json(
-                {
-                    "event": "loading",
-                }
-            )
             
             hiddenQuestion = False
             hiddenAnswer = False
@@ -105,9 +105,49 @@ async def ask_question_agent_socket(
                         "type": 'wizard',
                         "wizard_id": data.get('wizard_id')
                     }
-                    
+
+                case "service":
+                    if(data.get('name') == 'satia'):
+                        # Extract token and customer from the credentials object
+                        credentials = data.get('credentials', {})
+                        token = credentials.get('token', '')
+                        customer = credentials.get('customer', '')
+
+                        # Store binding data in Redis with unique token
+                        binding_data = {
+                            "class_name": "AppSatiaCo",
+                            "token": token,
+                            "customer": customer
+                        }
+                        
+                        success = binding_manager.store_binding(binding_token, "AppSatiaCo", binding_data)
+                        
+                        if success:
+                            await websocket.send_json(
+                                {
+                                    "event": "notice",
+                                    "msg": "Service is ready",
+                                }
+                            )
+                        else:
+                            await websocket.send_json(
+                                {
+                                    "event": "error",
+                                    "msg": "Failed to initialize service",
+                                }
+                            )
+
+            if (data.get('event') == 'service'):
+                continue
+
+            await websocket.send_json(
+                {
+                    "event": "loading",
+                }
+            )
+            
             await agent_rag.generate_response_socket(
-                message=message, websocket=websocket, hiddenQuestion=hiddenQuestion, hiddenAnswer=hiddenAnswer
+                message=message, websocket=websocket, hiddenQuestion=hiddenQuestion, hiddenAnswer=hiddenAnswer, binding_token=binding_token
             )
 
             await websocket.send_json(
@@ -124,6 +164,8 @@ async def ask_question_agent_socket(
         log_error(error_logger, e, f"Failed while processing: {str(e)}")
         await websocket.send_text(f"Error: {str(e)}")
     finally:
+        # Clean up Redis bindings for this session
+        binding_manager.remove_all_bindings(binding_token)
         await websocket.close()
 
 

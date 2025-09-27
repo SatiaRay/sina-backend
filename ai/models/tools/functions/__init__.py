@@ -6,6 +6,8 @@ from models.tools.functions.logging_decorator import FunctionCallLogger
 from typing import Union, Dict, Any, Optional
 from fastapi import WebSocket
 from provider.service_container import container
+from util.redis_binding_manager import binding_manager
+from models.tools.functions.app_satia_co import AppSatiaCo
 import os
 import json
 
@@ -26,17 +28,17 @@ async def call_function(
     function_name: str,
     *args,
     client_websocket_connection: WebSocket = None,
-    user_context: Dict[str, str] = None,
+    binding_token: str = None,
     **kwargs
 ) -> Any:
     """
-    Enhanced function caller with logging support.
+    Enhanced function caller with logging support and Redis-based binding.
     
     Args:
         function_name: Format "{class_name}-{method_name}"
         *args: Positional arguments
         client_websocket_connection: websocket connection object
-        user_context: Dictionary with 'user_id' and 'session_id'
+        binding_token: Unique token for this WebSocket session to retrieve bindings
         **kwargs: Keyword arguments
     
     Supports both legacy style:
@@ -59,15 +61,30 @@ async def call_function(
 
 
     # Initialize logger with user context
-    user_id = (user_context or {}).get('user_id', 'system')
-    session_id = (user_context or {}).get('session_id', 'system')
-    logger = FunctionCallLogger(user_id=user_id, session_id=session_id)
+    logger = FunctionCallLogger()
     
     try:
         class_name, method_name = function_name.split('-')
-        instance = container.make(class_name)
+        
+        # Try to get instance from Redis binding first, then fall back to service container
+        instance = None
+        if binding_token:
+            binding_data = binding_manager.get_binding(binding_token, class_name)
+            if binding_data:
+                # Create instance from Redis binding data
+                if class_name == "AppSatiaCo":
+                    instance = AppSatiaCo(
+                        token=binding_data.get("token", ""),
+                        customer=binding_data.get("customer", "")
+                    )
+                # Add other classes here as needed
+        
+        # Fallback to service container if Redis binding not found
         if not instance:
-            print(f"Class {class_name} not found in service container")
+            instance = container.make(class_name)
+        
+        if not instance:
+            print(f"Class {class_name} not found in Redis bindings or service container")
             return None
             
         method = getattr(instance, method_name, None)

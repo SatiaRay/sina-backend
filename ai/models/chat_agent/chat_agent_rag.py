@@ -98,13 +98,15 @@ class ChatAgentRag(ChatAgentRagInterface):
             history: Optional[List[Dict[str, str]]] = None,
             websocket: WebSocket = None,
             workflows: Optional[str] = None,
-            db: Session = SessionLocal()
+            db: Session = SessionLocal(),
+            binding_token: str = None
         ):
         self.db = db
         self.question = question
         self.history = history
         self.websocket = websocket
         self.workflows = workflows
+        self.binding_token = binding_token
         
         self.vector_store = VectorStore()
         self.client = OpenAI()
@@ -390,7 +392,12 @@ class ChatAgentRag(ChatAgentRagInterface):
             self.history.append(called_function)
             
             # Call the function and get result
-            result = await call_function(called_function['name'], json.loads(called_function['arguments']), client_websocket_connection=self.websocket)
+            result = await call_function(
+                called_function['name'], 
+                json.loads(called_function['arguments']), 
+                client_websocket_connection=self.websocket,
+                binding_token=self.binding_token
+            )
             
             # Add result to chat history
             if self.history is None:
