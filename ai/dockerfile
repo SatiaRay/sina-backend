@@ -1,0 +1,16 @@
+FROM python
+
+RUN mkdir -p /var/www/html/ai
+WORKDIR /var/www/html/ai
+
+# Install wait-for-it.sh
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/* && apt-get install -y curl && \
+    curl -o /usr/local/bin/wait-for-it.sh https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh && \
+    chmod +x /usr/local/bin/wait-for-it.sh
+
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+COPY . .
+
+EXPOSE 8090

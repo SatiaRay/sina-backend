@@ -21,7 +21,7 @@ services:
       - "sail-mysql:/var/lib/mysql"
       - "./idp/docker/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh"
     networks:
-      - default
+      - sail
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}", "-P", "3307"]
       retries: 3
@@ -50,7 +50,7 @@ services:
     volumes:
       - "./idp:/var/www/html"
     networks:
-      - default
+      - sail
     depends_on:
       - idp-mysql
 
@@ -73,7 +73,7 @@ services:
     volumes:
       - ai-mysql-data:/var/lib/mysql
     networks:
-      - default
+      - backend
 
   ai-redis:
     image: redis:7.2
@@ -82,7 +82,7 @@ services:
     ports:
       - "6379:6379"
     networks:
-      - default
+      - backend
 
   ai:
     build:
@@ -105,69 +105,11 @@ services:
     ports:
       - "8090:80"
     networks:
-      - default
+      - backend
     volumes:
-      - ./ai:/var/www/html/ai
-    command: >
-      /bin/sh -c "wait-for-it.sh ai-mysql:3306 -- alembic upgrade head &&
-                  uvicorn api.main:app --reload --host=0.0.0.0 --port=80"
-  rq-worker-default:
-      build:
-        context: ./ai
-        dockerfile: dockerfile
-      container_name: rq-worker-default
-      depends_on:
-        - ai-redis
-      env_file:
-        - ./ai/.env
-      environment:
-        REDIS_HOST: ai-redis
-        REDIS_PORT: 6379
-      networks:
-        - default
-      volumes:
-        - ./ai:/var/www/html/ai
-      command: >
-        /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker"
-  rq-worker-vectorize:
-    build:
-      context: ./ai
-      dockerfile: dockerfile
-    container_name: rq-worker-vectorize
-    depends_on:
-      - ai-redis
-    env_file:
-      - ./ai/.env
-    environment:
-      REDIS_HOST: ai-redis
-      REDIS_PORT: 6379
-    networks:
-      - default
-    volumes:
-      - ./ai:/var/www/html/ai
-    command: >
-      /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker vectorize"
-
-  rq-worker-crawl:
-    build:
-      context: ./ai
-      dockerfile: dockerfile
-    container_name: rq-worker-crawl
-    depends_on:
-      - ai-redis
-    env_file:
-      - ./ai/.env
-    environment:
-      REDIS_HOST: ai-redis
-      REDIS_PORT: 6379
-    networks:
-      - default
-    volumes:
-      - ./ai:/var/www/html/ai
-    command: >
-      /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker crawl"
-  
-
+      - ./ai/data:/var/www/html/ai/data
+      - ./ai/.env:/var/www/html/ai/.env
+    command: /bin/sh -c "wait-for-it.sh ai-mysql:3306 -- alembic upgrade head && uvicorn api.main:app --host=0.0.0.0 --port=80"
 
 volumes:
   sail-mysql:
@@ -176,5 +118,7 @@ volumes:
     driver: local
 
 networks:
-  default:
+  sail:
+    driver: bridge
+  backend:
     driver: bridge
