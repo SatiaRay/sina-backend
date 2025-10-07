@@ -23,6 +23,7 @@ import io
 import uuid
 from dynaconf import Dynaconf
 from pathlib import Path
+from util.auth import auth_validate
 
 
 # Configure loggers
@@ -62,7 +63,12 @@ def get_voice_to_text_model():
 async def ask_question_agent_socket(
     websocket: WebSocket,
     session_id: str = Query(..., description="Session ID is required"),
+    token: str = Query(..., description="Auth token is required"),
 ):
+    if not token or not await auth_validate(token):
+        await websocket.close(code=1008)  # 1008 = Policy Violation
+        return
+
     await websocket.accept()
     
     # Generate unique binding token for this WebSocket session
