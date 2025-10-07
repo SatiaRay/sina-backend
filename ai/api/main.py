@@ -1,3 +1,4 @@
+import re
 import sys
 import os
 from pathlib import Path
@@ -5,15 +6,16 @@ from urllib.parse import urlparse
 import json
 from datetime import datetime
 from bs4 import BeautifulSoup
+from typing import Union
 
 from models.tools.functions.trigger_hook import TriggerHook
-from util.helper import decode_jwt_token
+from util.auth import decode_jwt_token, auth_validate
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from fastapi import FastAPI, HTTPException, Depends, Body, Request
+from fastapi import FastAPI, HTTPException, Depends, Body, Request, WebSocket
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -294,36 +296,22 @@ async def guard_middleware(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
     
-    auth = request.headers.get("Authorization")
-    
-    if not auth or not auth.startswith("Bearer "):
-        return JSONResponse(
-                status_code=401,
-                content={
-                    "msg": "Missing token",
-                }
-            )
+    auth = await auth_validate(credential=request)
 
-    token = auth.split(" ")[1]
-    
-    try:
-        payload = decode_jwt_token(token=token)
-        
-        request.state.scopes = payload.get('scopes') or []
-        
-        request.state.user_id = payload.get('sub') or None
-        
-        response = await call_next(request)
-        
-        return response
-        
-    except Exception as e:
+    if not auth:
         return JSONResponse(
             status_code=401,
             content={
                 "msg": "Unauthorized",
             }
         ) 
+    
+    response = await call_next(auth)
+        
+    return response
+        
+        
+
 
 # مدل‌های درخواست و پاسخ
 class QuestionRequest(BaseModel):
