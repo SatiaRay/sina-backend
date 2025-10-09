@@ -2,7 +2,6 @@
   "lables" : {
     "AppSatiaCo-get_connection_logs" : "در حال دریافت جزئیات مصرف اینترنت",
     "AppSatiaCo-get_service_info" : "در حال واکشی مشخصات اشتراک اینترنت",
-    "AppSatiaCo-get_accounts_list" : "در حال واکشی فهرست اشتراک ها",
     "Neshan-search_address" : "در حال جستجوی آدرس",
     "Neshan-reverse" : "تبدیل مختصات جغرافیای به آدرس",
     "Mayoral-submitRequest" : "در حال ثبت پیام در سامانه 137",
@@ -19,18 +18,7 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "serial": {
-            "type": "string",
-            "description": "سریال سرویس مورد نظر"
-          },
-          "beginDate": {
-            "type": "string",
-            "description": "تاریخ شروع برای فیلتر کردن"
-          },
-          "endDate": {
-            "type": "string",
-            "description": "تاریخ پایان برای فیلتر کردن"
-          }
+         
         },
         "required": [],
         "additionalProperties": false
@@ -43,38 +31,7 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "serial": {
-            "type": "string",
-            "description": "سریال سرویس مورد نظر"
-          },
-          "beginDate": {
-            "type": "string",
-            "description": "تاریخ شروع برای فیلتر کردن"
-          },
-          "endDate": {
-            "type": "string",
-            "description": "تاریخ پایان برای فیلتر کردن"
-          }
-        },
-        "required": [],
-        "additionalProperties": false
-      }
-    },
-    {
-      "type": "function",
-      "name": "AppSatiaCo-get_accounts_list",
-      "description": "فهرست تمامی اشتراک های اینترنت کاربر را باز میگرداند به همراه اطلاعاتی نظیر:سریال, وضعیت, شماره خط, وضعیت و نوع آن",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "beginDate": {
-            "type": "string",
-            "description": "تاریخ شروع برای فیلتر کردن"
-          },
-          "endDate": {
-            "type": "string",
-            "description": "تاریخ پایان برای فیلتر کردن"
-          }
+          
         },
         "required": [],
         "additionalProperties": false
