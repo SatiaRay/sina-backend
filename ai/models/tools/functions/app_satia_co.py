@@ -125,72 +125,25 @@ class AppSatiaCo:
             return None
         
     @FunctionCallLogger()
-    async def get_connection_logs(self, serial: str = "", beginDate: str = '', endDate: str = '', page: int = 1):
+    async def get_connection_logs(self, beginDate: str = '', endDate: str = '', page: int = 1):
         extra_params = {
             "beginDate": beginDate,
             "endDate": endDate,
             "page": page
         }
         
-        if serial:
-            account = self.find_account(serial, return_original_value=True)
-            if account:
-                extra_params["customer"] = json.dumps(account)
-        
         data = self._make_api_request("ibs/getConnectionLogs", extra_params)
         if not data:
             return None
 
-        services = data['result']['data']['services']
-        return {
-            'abroad': {
-                'label': "اینترنت بین الملل",
-                'download': services[0]['IN'],
-                'upload': services[0]['OUT'],
-                'total': services[0]['IN'] + services[0]['OUT'],
-                'discount': services[0]['CREDITUSED'] - (services[0]['IN'] + services[0]['OUT']),
-            },
-            'local': {
-                'label': "اینترنت داخلی",
-                'download': services[1]['IN'],
-                'upload': services[1]['OUT'],
-                'total': services[1]['IN'] + services[1]['OUT'],
-                'discount': services[1]['CREDITUSED'] - (services[0]['IN'] + services[0]['OUT']),
-            },
-            'tv': {
-                'label': "تلویزیون اینترنتی",
-                'download': services[2]['IN'],
-                'upload': services[2]['OUT'],
-                'total': services[2]['IN'] + services[2]['OUT'],
-                'discount': services[2]['CREDITUSED'] - (services[0]['IN'] + services[0]['OUT']),
-            },
-            'free': {
-                'label': "اینترنت رایگان",
-                'download': services[3]['IN'],
-                'upload': services[3]['OUT'],
-                'total': services[3]['IN'] + services[3]['OUT'],
-                'discount': services[3]['CREDITUSED'] - (services[0]['IN'] + services[0]['OUT']),
-            },
-            'messager': {
-                'label': "پیام رسان های داخلی",
-                'download': services[4]['IN'],
-                'upload': services[4]['OUT'],
-                'total': services[4]['IN'] + services[4]['OUT'],
-                'discount': services[4]['CREDITUSED'] - (services[0]['IN'] + services[0]['OUT']),
-            }
-        }
+        return data['result']['data']['credit']
         
     @FunctionCallLogger()
-    async def get_service_info(self, serial: str = "", beginDate: str = '', endDate: str = ''):
+    async def get_service_info(self, beginDate: str = '', endDate: str = ''):
         extra_params = {
             "beginDate": beginDate,
             "endDate": endDate,
         }
-        
-        if serial:
-            account = self.find_account(serial, return_original_value=True)
-            if account:
-                extra_params["customer"] = json.dumps(account)
         
         data = self._make_api_request("splash", extra_params=extra_params)
         if not data:
@@ -208,64 +161,3 @@ class AppSatiaCo:
             'reserved_cridit_gb': services[0]['IBSReserveCredit'],
             'is_active': services[0]['Active']
         }
-        
-    @FunctionCallLogger()
-    async def find_account(self, serial: str, return_original_value = False):
-        accounts = self.get_accounts_list()
-        if not accounts:
-            return None
-            
-        for account in accounts:
-            if str(account["serial"]) == str(serial):
-                if(return_original_value):
-                    return {
-                        "Serial": account["serial"],
-                        "Mobile": "",
-                        "AdslTel": account["number"],
-                        "Name": account["name"],
-                        "CustomerType": "W",
-                        "SmsCode": "",
-                        "UserId": "",
-                        "Type": account["type"],
-                        "status": [{
-                            "Serial": 6,
-                            "Name": account["status"],
-                            "BranchRef": "1",
-                            "pivot": {
-                                "CustomerRef": str(account["serial"]),
-                                "StatusRef": "6",
-                                "Active": "1",
-                                "Date": "",
-                                "Comment": ""
-                            }
-                        }]
-                    }
-                return account
-                
-        return None
-    
-    @FunctionCallLogger()
-    async def get_accounts_list(self, beginDate: str = '', endDate: str = ''):
-        extra_params = {
-            "beginDate": beginDate,
-            "endDate": endDate,
-        }
-        
-        data = self._make_api_request("splash", extra_params=extra_params)
-        if not data:
-            return None
-
-        accounts = data['user']['customers']
-        
-        output = []
-        
-        for account in accounts:
-            output.append({
-                "serial": account['Serial'],
-                "number": account['AdslTel'],
-                "name": account['Name'],
-                "type": account['Type'],
-                "status": account['status'][0]['Name']
-            })
-            
-        return output
