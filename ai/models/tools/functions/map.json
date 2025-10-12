@@ -2,6 +2,7 @@
   "lables" : {
     "AppSatiaCo-get_connection_logs" : "در حال دریافت جزئیات مصرف اینترنت",
     "AppSatiaCo-get_service_info" : "در حال واکشی مشخصات اشتراک اینترنت",
+    "AppSatiaCo-get_transaction_logs" : "در حال واکشی فهرست پرداخت ها و تراکنش های بانکی",
     "Neshan-search_address" : "در حال جستجوی آدرس",
     "Neshan-reverse" : "تبدیل مختصات جغرافیای به آدرس",
     "Mayoral-submitRequest" : "در حال ثبت پیام در سامانه 137",
@@ -28,6 +29,19 @@
       "type": "function",
       "name": "AppSatiaCo-get_service_info",
       "description": "جزئیات اشتراک کاربر مثل نوع اشتراک, حجم باقی مانده, مدت زمان باقی مانده و ... را باز میگرداند",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "AppSatiaCo-get_transaction_logs",
+      "description": "فهرست عملیات های بانکی و پرداخت های کاربر را باز میگرداند",
       "parameters": {
         "type": "object",
         "properties": {

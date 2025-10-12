@@ -161,3 +161,12 @@ class AppSatiaCo:
             'reserved_cridit_gb': services[0]['IBSReserveCredit'],
             'is_active': services[0]['Active']
         }
+
+    @FunctionCallLogger()
+    async def get_transaction_logs(self, beginDate: str = '', endDate: str = '', page: int = 1):
+        
+        data = self._make_api_request("payments/transactions")
+        if not data:
+            return None
+
+        return data['result']['data']
