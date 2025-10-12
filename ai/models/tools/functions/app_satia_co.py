@@ -180,3 +180,12 @@ class AppSatiaCo:
             return None
 
         return data['result']
+
+    @FunctionCallLogger()
+    async def get_service_status_history(self):
+        
+        data = self._make_api_request("services/historyStatus")
+        if not data:
+            return None
+
+        return data['result']
