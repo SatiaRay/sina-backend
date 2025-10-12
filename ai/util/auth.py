@@ -33,6 +33,9 @@ def decode_jwt_token(token: str):
 # Validate client request is authenticated or not through checking authorization token
 async def auth_validate(credential: str|Request) -> Union[WebSocket, Request, bool]:
     auth =  credential.headers.get("Authorization") if not isinstance(credential, str) else credential
+
+    if not auth:
+        return False
     
     if not isinstance(credential, str) and not auth.startswith("Bearer "):
         return False
