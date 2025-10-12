@@ -163,10 +163,20 @@ class AppSatiaCo:
         }
 
     @FunctionCallLogger()
-    async def get_transaction_logs(self, beginDate: str = '', endDate: str = '', page: int = 1):
+    async def get_transaction_logs(self):
         
         data = self._make_api_request("payments/transactions")
         if not data:
             return None
 
         return data['result']['data']
+
+        
+    @FunctionCallLogger()
+    async def get_service_history(self):
+        
+        data = self._make_api_request("services/serviceHistory")
+        if not data:
+            return None
+
+        return data['result']
