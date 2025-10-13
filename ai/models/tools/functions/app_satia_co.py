@@ -189,3 +189,12 @@ class AppSatiaCo:
             return None
 
         return data['result']
+
+    @FunctionCallLogger()
+    async def get_service_charging_history(self):
+        
+        data = self._make_api_request("services/ChargingHistory")
+        if not data:
+            return None
+
+        return data['result']
