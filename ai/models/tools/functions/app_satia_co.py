@@ -161,3 +161,49 @@ class AppSatiaCo:
             'reserved_cridit_gb': services[0]['IBSReserveCredit'],
             'is_active': services[0]['Active']
         }
+
+    @FunctionCallLogger()
+    async def get_transaction_logs(self):
+        
+        data = self._make_api_request("payments/transactions")
+        if not data:
+            return None
+
+        return data['result']['data']
+
+        
+    @FunctionCallLogger()
+    async def get_service_history(self):
+        
+        data = self._make_api_request("services/serviceHistory")
+        if not data:
+            return None
+
+        return data['result']
+
+    @FunctionCallLogger()
+    async def get_service_status_history(self):
+        
+        data = self._make_api_request("services/historyStatus")
+        if not data:
+            return None
+
+        return data['result']
+
+    @FunctionCallLogger()
+    async def get_service_charging_history(self):
+        
+        data = self._make_api_request("services/ChargingHistory")
+        if not data:
+            return None
+
+        return data['result']
+
+    @FunctionCallLogger()
+    async def get_little_more(self):
+        
+        data = self._make_api_request("ibs/littlemore")
+        if not data:
+            return None
+
+        return data

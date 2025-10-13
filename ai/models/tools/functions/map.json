@@ -2,6 +2,11 @@
   "lables" : {
     "AppSatiaCo-get_connection_logs" : "در حال دریافت جزئیات مصرف اینترنت",
     "AppSatiaCo-get_service_info" : "در حال واکشی مشخصات اشتراک اینترنت",
+    "AppSatiaCo-get_transaction_logs" : "در حال واکشی فهرست پرداخت ها و تراکنش های بانکی",
+    "AppSatiaCo-get_service_history" : "در حال واکشی سوابق سرویس",
+    "AppSatiaCo-get_service_status_history" : "در حال واکشی تاریخچه وضعیت سرویس",
+    "AppSatiaCo-get_service_charging_history" : "در حال واکشی سوابق خرید آنلاین  ناموفق",
+    "AppSatiaCo-get_little_more" : "ارسال درخواست دریافت اعتبار موقت",
     "Neshan-search_address" : "در حال جستجوی آدرس",
     "Neshan-reverse" : "تبدیل مختصات جغرافیای به آدرس",
     "Mayoral-submitRequest" : "در حال ثبت پیام در سامانه 137",
@@ -28,6 +33,71 @@
       "type": "function",
       "name": "AppSatiaCo-get_service_info",
       "description": "جزئیات اشتراک کاربر مثل نوع اشتراک, حجم باقی مانده, مدت زمان باقی مانده و ... را باز میگرداند",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "AppSatiaCo-get_transaction_logs",
+      "description": "فهرست عملیات های بانکی و پرداخت های کاربر را باز میگرداند",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "AppSatiaCo-get_service_history",
+      "description": "فهرست سوابق خرید سرویس اینترنت را باز میگرداند",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "AppSatiaCo-get_service_status_history",
+      "description": "تاریخچه تغییر وضعیت های سرویس را باز میگرداند. مثلا آماده نصب, درخواست جمع آوری, غیر فعال, بهره برداری و ...",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "AppSatiaCo-get_service_charging_history",
+      "description": "دریافت سوابق خرید آنلاین ناموفق ( خرید سرویس های ناموفق به دلایل مختلف مثل لغو توسط کاربر و ... )",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "AppSatiaCo-get_little_more",
+      "description": "دریافت اعتبار موقت اینترنت ( یک بسته با حجم محدود - معمولا 2 گیگ - بدون نیاز به پرداخت برای کاربر فعال میکند و هزینه آن از سرویس های آینده کاربر کسر می شود )",
       "parameters": {
         "type": "object",
         "properties": {
