@@ -6,6 +6,7 @@
     "AppSatiaCo-get_service_history" : "در حال واکشی سوابق سرویس",
     "AppSatiaCo-get_service_status_history" : "در حال واکشی تاریخچه وضعیت سرویس",
     "AppSatiaCo-get_service_charging_history" : "در حال واکشی سوابق خرید آنلاین  ناموفق",
+    "AppSatiaCo-get_little_more" : "ارسال درخواست دریافت اعتبار موقت",
     "Neshan-search_address" : "در حال جستجوی آدرس",
     "Neshan-reverse" : "تبدیل مختصات جغرافیای به آدرس",
     "Mayoral-submitRequest" : "در حال ثبت پیام در سامانه 137",
@@ -84,6 +85,19 @@
       "type": "function",
       "name": "AppSatiaCo-get_service_charging_history",
       "description": "دریافت سوابق خرید آنلاین ناموفق ( خرید سرویس های ناموفق به دلایل مختلف مثل لغو توسط کاربر و ... )",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "AppSatiaCo-get_little_more",
+      "description": "دریافت اعتبار موقت اینترنت ( یک بسته با حجم محدود - معمولا 2 گیگ - بدون نیاز به پرداخت برای کاربر فعال میکند و هزینه آن از سرویس های آینده کاربر کسر می شود )",
       "parameters": {
         "type": "object",
         "properties": {

@@ -198,3 +198,12 @@ class AppSatiaCo:
             return None
 
         return data['result']
+
+    @FunctionCallLogger()
+    async def get_little_more(self):
+        
+        data = self._make_api_request("ibs/littlemore")
+        if not data:
+            return None
+
+        return data
