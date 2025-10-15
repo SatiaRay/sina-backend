@@ -166,10 +166,14 @@ class AppSatiaCo:
     async def get_transaction_logs(self):
         
         data = self._make_api_request("payments/transactions")
-        if not data:
+        if not data or not data['result']['data']:
             return None
 
-        return data['result']['data']
+        transactions = data['result']['data']
+
+        fields = ["Comment", "description", "TypeName", "Price", "Date"]
+
+        return [{k: item.get(k) for k in fields} for item in transactions]
 
         
     @FunctionCallLogger()
