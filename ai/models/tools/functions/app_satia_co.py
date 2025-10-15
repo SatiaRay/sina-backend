@@ -193,10 +193,15 @@ class AppSatiaCo:
     async def get_service_status_history(self):
         
         data = self._make_api_request("services/historyStatus")
-        if not data:
+        if not data or not data['result']['data']:
             return None
 
-        return data['result']
+        services = data['result']['data']
+
+        fields = ["Name", "Date", "Description", "pivot"]
+
+        return [{k: item.get(k) for k in fields} for item in services]
+
 
     @FunctionCallLogger()
     async def get_service_charging_history(self):
