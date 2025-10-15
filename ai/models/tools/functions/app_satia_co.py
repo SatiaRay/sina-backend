@@ -183,7 +183,11 @@ class AppSatiaCo:
         if not data:
             return None
 
-        return data['result']
+        services = data['result']
+
+        fields = ["Name", "Serial", "Date", "Comment", "Type", "ActivePrint"]
+
+        return [{k: item.get(k) for k in fields} for item in services]
 
     @FunctionCallLogger()
     async def get_service_status_history(self):
