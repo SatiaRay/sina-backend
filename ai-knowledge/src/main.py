@@ -14,25 +14,25 @@ app = FastAPI()
 vector = VectorStore()
 
 # Checking authentication access_token and bind to service container if is valid
-# @app.middleware("http")
-# async def guard_middleware(request: Request, call_next):    
-#     # Skip auth for preflight CORS requests
-#     if request.method == "OPTIONS":
-#         return await call_next(request)
+@app.middleware("http")
+async def guard_middleware(request: Request, call_next):    
+    # Skip auth for preflight CORS requests
+    if request.method == "OPTIONS":
+        return await call_next(request)
     
-#     auth = await auth_validate(credential=request)
+    auth = await auth_validate(credential=request)
 
-#     if not auth:
-#         return JSONResponse(
-#             status_code=401,
-#             content={
-#                 "msg": "Unauthorized",
-#             }
-#         ) 
+    if not auth:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "msg": "Unauthorized",
+            }
+        ) 
     
-#     response = await call_next(auth)
+    response = await call_next(auth)
         
-#     return response
+    return response
 
 
 @app.get("/test")
