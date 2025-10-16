@@ -123,7 +123,8 @@ class VectorStore:
         client = OpenAI()
         response = client.embeddings.create(
             input=query,
-            model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
+            model=os.getenv("OPENAI_EMBEDDING_MODEL",
+                            "text-embedding-3-small"),
         )
         query_embedding = response.data[0].embedding
 
@@ -150,3 +151,12 @@ class VectorStore:
                 )
 
         return documents
+
+    def delete_documents(self, vector_ids: list[str]):
+        """Delete a vector from the vector store"""
+        self.collection.delete(ids=vector_ids)
+
+        # Publish event for document deletion
+        event_bus.publish(VectorStoreEvent.DOCUMENT_DELETED, {"ids": vector_ids})
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
+
