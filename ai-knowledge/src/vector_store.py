@@ -160,3 +160,30 @@ class VectorStore:
         event_bus.publish(VectorStoreEvent.DOCUMENT_DELETED, {"ids": vector_ids})
         event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
+    def update_document(self, document_id: str, document: Document):
+        """Update a document in the vector store"""
+        # تبدیل متن‌ها به بردار با استفاده از OpenAI
+        client = OpenAI()
+
+        print("Send modification to ebmedding model ...")
+
+        response = client.embeddings.create(
+            input=document.text, model=os.getenv("GPT_EMBEDDING_MODEL", "text-embedding-3-small")
+        )
+        embedding = response.data[0].embedding
+
+        print("Embedding done !")
+
+        self.collection.update(
+            embeddings=[embedding],
+            documents=[document.text],
+            metadatas=[document.metadata],
+            ids=[document_id],
+        )
+
+        # Publish event for document update
+        event_bus.publish(
+            VectorStoreEvent.DOCUMENT_UPDATED,
+            {"id": document_id, "text": document.text, "metadata": document.metadata},
+        )
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)

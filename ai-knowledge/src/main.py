@@ -36,6 +36,7 @@ def search(query: str):
 class DeleteDocumentsRequest(BaseModel):
     ids: list[str]
 
+
 @app.delete("/delete")
 def delete(request: DeleteDocumentsRequest, response: Response):
     try:
@@ -48,5 +49,24 @@ def delete(request: DeleteDocumentsRequest, response: Response):
         print("Error in deleting document:", e)
 
         response.status_code = 500
-        
-        return {"msg" : "Delete documents failed !"}
+
+        return {"msg": "Delete documents failed !"}
+
+
+@app.put('/update/{id}')
+def update(id: str, document: Document, response: Response):
+    try:
+        vector.update_document(id, document=document)
+
+        return {
+            "msg": "succeed",
+        }
+    except Exception as e:
+        print("Error in updating document:", e)
+
+        response.status_code = 500
+
+        return {"msg": "Update documents failed !"}
+
+
+
