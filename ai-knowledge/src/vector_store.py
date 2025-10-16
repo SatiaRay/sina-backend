@@ -157,7 +157,8 @@ class VectorStore:
         self.collection.delete(ids=vector_ids)
 
         # Publish event for document deletion
-        event_bus.publish(VectorStoreEvent.DOCUMENT_DELETED, {"ids": vector_ids})
+        event_bus.publish(VectorStoreEvent.DOCUMENT_DELETED,
+                          {"ids": vector_ids})
         event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
 
     def update_document(self, document_id: str, document: Document):
@@ -168,7 +169,8 @@ class VectorStore:
         print("Send modification to ebmedding model ...")
 
         response = client.embeddings.create(
-            input=document.text, model=os.getenv("GPT_EMBEDDING_MODEL", "text-embedding-3-small")
+            input=document.text, model=os.getenv(
+                "GPT_EMBEDDING_MODEL", "text-embedding-3-small")
         )
         embedding = response.data[0].embedding
 
@@ -184,6 +186,17 @@ class VectorStore:
         # Publish event for document update
         event_bus.publish(
             VectorStoreEvent.DOCUMENT_UPDATED,
-            {"id": document_id, "text": document.text, "metadata": document.metadata},
+            {"id": document_id, "text": document.text,
+                "metadata": document.metadata},
         )
         event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
+
+    def get_all_documents(self) -> list[dict[str, any]]:
+        # دریافت تمام اسناد
+        results = self.collection.get()
+        return [
+            {"id": doc_id, "text": doc, "metadata": meta}
+            for doc, meta, doc_id in zip(
+                results["documents"], results["metadatas"], results["ids"]
+            )
+        ]

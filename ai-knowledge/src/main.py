@@ -69,4 +69,13 @@ def update(id: str, document: Document, response: Response):
         return {"msg": "Update documents failed !"}
 
 
+@app.get('/')
+def all(response: Response):
+    try:
+        return vector.get_all_documents()
+    except Exception as e:
+        print("Error in get all documents:", e)
 
+        response.status_code = 500
+
+        return {"msg": "Get all documents failed !"}
