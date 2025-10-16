@@ -10,11 +10,9 @@ import uuid
 from datetime import datetime
 from openai import OpenAI
 from models import Document
-from util.event_bus import event_bus, VectorStoreEvent
-from util.vectore import chunk_text
+from util import chunk_text
 
 load_dotenv()
-
 
 class VectorStore:
     def __init__(self):
@@ -103,13 +101,6 @@ class VectorStore:
 
             added_documents_ids.extend(ids)
 
-        # Publish event for document addition
-        event_bus.publish(
-            VectorStoreEvent.DOCUMENT_ADDED, {
-                "ids": added_documents_ids, "documents": documents}
-        )
-        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
-
         return added_documents_ids
 
     def save_documents(self, ids, documents, metadatas, embeddings):
@@ -156,11 +147,6 @@ class VectorStore:
         """Delete a vector from the vector store"""
         self.collection.delete(ids=vector_ids)
 
-        # Publish event for document deletion
-        event_bus.publish(VectorStoreEvent.DOCUMENT_DELETED,
-                          {"ids": vector_ids})
-        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
-
     def update_document(self, document_id: str, document: Document):
         """Update a document in the vector store"""
         # تبدیل متن‌ها به بردار با استفاده از OpenAI
@@ -182,14 +168,7 @@ class VectorStore:
             metadatas=[document.metadata],
             ids=[document_id],
         )
-
-        # Publish event for document update
-        event_bus.publish(
-            VectorStoreEvent.DOCUMENT_UPDATED,
-            {"id": document_id, "text": document.text,
-                "metadata": document.metadata},
-        )
-        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
+       
 
     def get_all_documents(self) -> list[dict[str, any]]:
         # دریافت تمام اسناد
