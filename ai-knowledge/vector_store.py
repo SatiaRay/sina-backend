@@ -116,3 +116,37 @@ class VectorStore:
         self.collection.add(
             embeddings=embeddings, documents=documents, metadatas=metadatas, ids=ids
         )
+
+    def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        """جستجوی اسناد مرتبط"""
+        # تبدیل سوال به بردار با استفاده از OpenAI
+        client = OpenAI()
+        response = client.embeddings.create(
+            input=query,
+            model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
+        )
+        query_embedding = response.data[0].embedding
+
+        # جستجو در کالکشن
+        results = self.collection.query(
+            query_embeddings=[query_embedding], n_results=n_results
+        )
+
+        # تبدیل نتایج به فرمت مورد نظر و فیلتر بر اساس threshold
+        documents = []
+        for i in range(len(results["documents"][0])):
+            # تبدیل فاصله به امتیاز شباهت (1 - distance)
+            similarity_score = 1 - results["distances"][0][i]
+
+            # فقط نتایج با امتیاز شباهت بالاتر از 0.3 را اضافه کن
+            if similarity_score >= 0.3:
+                documents.append(
+                    {
+                        "text": results["documents"][0][i],
+                        "metadata": results["metadatas"][0][i],
+                        "score": similarity_score,
+                        "id": results["ids"][0][i],
+                    }
+                )
+
+        return documents
