@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  ai-knowledge:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: ai-knowledge
+    ports:
+      - "8050:80"
+    networks:
+      - backend
+    volumes:
+      - ./${CHROMA_PERSIST_DIRECTORY}:/var/www/html/ai-knowledge/${CHROMA_PERSIST_DIRECTORY}
+    command: /bin/sh -c "uvicorn src.main:app --host=0.0.0.0 --port=80"
+
+volumes:
+  chroma_db:
+
+networks:
+  backend:
+    driver: bridge
