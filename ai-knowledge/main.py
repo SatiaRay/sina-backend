@@ -28,3 +28,6 @@ def store(document: Document, response: Response):
         return {"msg" : "Store document failed !"}
 
 
+@app.get('/search')
+def search(query:str):
+    return vector.search(query=query)
