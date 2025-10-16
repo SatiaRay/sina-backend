@@ -39,6 +39,13 @@ async def guard_middleware(request: Request, call_next):
 def test():
     return {"msg": "The service is up !"}
 
+@app.get("/whoami")
+def whoami(request: Request):
+    return {
+        "scopes": getattr(request.state, "scopes", []),
+        "user_id": getattr(request.state, "user_id", None),
+    }
+
 
 @app.post("/store")
 def store(document: Document, response: Response):
