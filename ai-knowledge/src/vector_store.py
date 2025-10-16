@@ -9,8 +9,8 @@ from pathlib import Path
 import uuid
 from datetime import datetime
 from openai import OpenAI
-from models import Document
-from util import chunk_text
+from .models import Document
+from .util import chunk_text
 
 load_dotenv()
 
