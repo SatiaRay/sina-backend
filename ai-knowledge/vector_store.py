@@ -23,16 +23,19 @@ class VectorStore:
             self.persist_directory = os.getenv(
                 "CHROMA_PERSIST_DIRECTORY", "./data/chroma"
             )
-            self.collection_name = os.getenv("CHROMA_COLLECTION_NAME", "default")
+            self.collection_name = os.getenv(
+                "CHROMA_COLLECTION_NAME", "default")
 
             # ایجاد دایرکتوری اگر وجود نداشت
             os.makedirs(self.persist_directory, exist_ok=True)
 
-            print(f"Initializing ChromaDB with directory: {self.persist_directory}")
+            print(
+                f"Initializing ChromaDB with directory: {self.persist_directory}")
             # ایجاد کلاینت ChromaDB
             self.client = chromadb.PersistentClient(
                 path=self.persist_directory,
-                settings=Settings(anonymized_telemetry=False, allow_reset=True),
+                settings=Settings(anonymized_telemetry=False,
+                                  allow_reset=True),
             )
 
             print("Creating or getting collection...")
@@ -59,7 +62,7 @@ class VectorStore:
     def __refresh(self):
         self.collection = None
         self.collection = self._get_or_create_collection()
-        
+
     def _clean_metadata(self, metadata: dict) -> dict:
         cleaned_metadata = {}
 
@@ -70,3 +73,46 @@ class VectorStore:
                 cleaned_metadata[key] = value
 
         return cleaned_metadata
+
+    def add_documents(self, documents: list[Document]):
+        if not documents:
+            return
+
+        client = OpenAI()
+
+        added_documents_ids = []
+
+        for doc in documents:
+            chunks = chunk_text(doc.text)
+
+            ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(chunks))]
+
+            metadatas = [self._clean_metadata(doc.metadata)] * len(chunks)
+
+            embeddings = []
+
+            for text in chunks:
+                response = client.embeddings.create(
+                    input=text,
+                    model=os.getenv("OPENAI_EMBEDDING_MODEL",
+                                    "text-embedding-3-small"),
+                )
+                embeddings.append(response.data[0].embedding)
+
+            self.save_documents(ids, chunks, metadatas, embeddings)
+
+            added_documents_ids.extend(ids)
+
+        # Publish event for document addition
+        event_bus.publish(
+            VectorStoreEvent.DOCUMENT_ADDED, {
+                "ids": added_documents_ids, "documents": documents}
+        )
+        event_bus.publish(VectorStoreEvent.COLLECTION_MODIFIED)
+
+        return added_documents_ids
+
+    def save_documents(self, ids, documents, metadatas, embeddings):
+        self.collection.add(
+            embeddings=embeddings, documents=documents, metadatas=metadatas, ids=ids
+        )
