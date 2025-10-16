@@ -1,9 +1,14 @@
+from pathlib import Path
+import sys
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
-from openai import BaseModel
-from models import Document
-from util import auth_validate
-from vector_store import VectorStore
+from pydantic import BaseModel
+from .models import Document
+from .util import auth_validate
+from .vector_store import VectorStore
+
+root_dir = Path(__file__).parent.parent
+sys.path.append(str(root_dir))
 
 app = FastAPI()
 vector = VectorStore()
