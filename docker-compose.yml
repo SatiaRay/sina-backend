@@ -112,19 +112,19 @@ services:
       /bin/sh -c "wait-for-it.sh ai-mysql:3306 -- alembic upgrade head &&
                   uvicorn api.main:app --reload --host=0.0.0.0 --port=80"
 
-  ai-knowledge:
+  knowledge:
     build:
-      context: ./ai-knowledge
+      context: ./knowledge
       dockerfile: dockerfile
-    container_name: ai-knowledge
+    container_name: knowledge
     env_file:
-      - ./ai-knowledge/.env
+      - ./knowledge/.env
     ports:
       - "8050:80"
     networks:
       - default
     volumes:
-      - ./ai-knowledge/${CHROMA_PERSIST_DIRECTORY}:/var/www/html/ai-knowledge/${CHROMA_PERSIST_DIRECTORY}
+      - ./knowledge/${CHROMA_PERSIST_DIRECTORY}:/var/www/html/knowledge/${CHROMA_PERSIST_DIRECTORY}
     command: /bin/sh -c "uvicorn src.main:app --host=0.0.0.0 --port=80"
 
   rq-worker-default:
