@@ -7,7 +7,7 @@ from typing import Union
 
 def decode_jwt_token(token: str):
     try:
-        key = os.getenv('OAUTH_TOKEN')
+        key = os.getenv('OAUTH_PUBLIC_KEY')
         
         if not key:
             raise Exception('OAuth public key not found in .env')
