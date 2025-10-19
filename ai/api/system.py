@@ -21,15 +21,11 @@ import sys
 from database.models import (
     Base,
     Wizard,
-    CrawledDomain,
-    CrawlJobs,
-    Document,
     Chat,
     ChatHistory,
     Workflow,
     Instruction,
 )
-from database.vector_store import VectorStore
 from provider.service_container import container
 
 logger = logging.getLogger(__name__)
@@ -167,9 +163,6 @@ class DatabaseExportImport:
             # Define tables to export (in order of dependencies)
             tables = [
                 ("wizards", Wizard),
-                ("crawled_domains", CrawledDomain),
-                ("crawl_jobs", CrawlJobs),
-                ("documents", Document),
                 ("chats", Chat),
                 ("chat_history", ChatHistory),
                 ("workflows", Workflow),
@@ -331,9 +324,6 @@ class DatabaseExportImport:
 
             tables = [
                 ("wizards", Wizard),
-                ("crawled_domains", CrawledDomain),
-                ("crawl_jobs", CrawlJobs),
-                ("documents", Document),
                 ("chats", Chat),
                 ("chat_history", ChatHistory),
                 ("workflows", Workflow),
