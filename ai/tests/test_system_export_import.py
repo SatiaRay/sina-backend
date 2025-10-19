@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 # Import the system module
 from api.system import DatabaseExportImport, router
-from database.models import Base, Wizard, Document, Chat, ChatHistory, Workflow, Instruction
+from database.models import Base, Wizard, Chat, ChatHistory, Workflow, Instruction
 
 
 class TestDatabaseExportImport:
