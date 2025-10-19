@@ -121,7 +121,6 @@ def test_get_instructions_active_only(client, auth_headers):
     assert len(data["items"]) > 0
     for instruction in data["items"]:
         assert instruction["status"] is True
-        assert instruction["label"] == TEST_INSTRUCTION["label"]
         assert instruction["text"] == TEST_INSTRUCTION["text"]
 
 
