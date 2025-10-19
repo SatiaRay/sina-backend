@@ -165,9 +165,16 @@ class ChatAgentRag(ChatAgentRagInterface):
         """
         try:
             main_logger.info(f"Finding relevant documents for question: {question}")
+
+            session = container.make('requeste.session')
             
-            # Search for relevant documents
-            relevant_docs = self.vector_store.search(question)
+            # Search for relevant knowledge through sending inquiry request to the service
+            response = session.get(f"http://knowledge/search?query='{question}'")
+
+            if not response.status_code == 200:
+                raise Exception(f"Search knowledge requeste failed: {response.text}")
+
+            relevant_docs = response.json()
 
             main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
             
