@@ -24,7 +24,6 @@ from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv, find_dotenv
 from provider.service_container import container, ServiceContainer
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
-from database.repository import DocumentRepository
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
 from .models import (
@@ -37,7 +36,6 @@ from .models import (
     StoreVectorRequest,
 )
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
-from database.repository import DocumentRepository
 from database.repositories.workflow_repository import WorkflowRepository
 from database.models import get_db
 import uuid
@@ -49,11 +47,7 @@ from models.tools.functions.ayan import Ayan
 # Routes
 from api.about import router as about_router
 from .wizard import router as wizard_router
-from .document import router as document_router, document_websocket_router
-from .domain import router as domain_router
 from .chat import router as chat_router
-from .crawl import router as crawl_router
-from .vector import router as vector_router
 from .workflow import router as workflow_router
 from .ai import router as ai_router
 from .job import router as job_router
@@ -87,9 +81,6 @@ def init_service_container():
 
     # Bind ChatAgentRagProxy as singleton
     container.singleton("chat_agent", ChatAgentRagProxy)
-
-    # Bind DocumentRepository as singleton
-    container.singleton("document_repository", DocumentRepository)
 
     # Bind WorkflowRepository as singleton
     container.singleton("workflow_repository", WorkflowRepository)
