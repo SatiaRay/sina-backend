@@ -228,6 +228,13 @@ async def guard_middleware(request: Request, call_next):
     # Skip auth for preflight CORS requests
     if request.method == "OPTIONS":
         return await call_next(request)
+
+    token = request.headers.get("authorization")
+    if not token:
+        return JSONResponse(
+            status_code=401,
+            content={"msg": "Missing token"},
+        )
     
     auth = await auth_validate(credential=request)
 
