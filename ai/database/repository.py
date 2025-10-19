@@ -5,10 +5,7 @@ from .models import (
     BaseModel,
     Chat,
     ChatHistory,
-    Document,
     Wizard,
-    CrawledDomain,
-    CrawlJobs,
     Instruction,
     Workflow,
 )
