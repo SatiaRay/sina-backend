@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from typing import Union
 
 from models.tools.functions.trigger_hook import TriggerHook
-from util.auth import decode_jwt_token, auth_validate
+from util.auth import authorized_http_session_factory, decode_jwt_token, auth_validate
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
@@ -78,9 +78,13 @@ load_dotenv(override=True)
 # Set base path for service container
 ServiceContainer.set_base_path(str(root_dir))
 
-
 # Initialize service container bindings
 def init_service_container():
+    # Getting client acess token from idp serivce
+    session = authorized_http_session_factory()
+
+    container.singleton('requeste.session', session)
+
     # Bind ChatAgentRagProxy as singleton
     container.singleton("chat_agent", ChatAgentRagProxy)
 
