@@ -107,7 +107,6 @@ class ChatAgentRag(ChatAgentRagInterface):
         self.workflows = workflows
         self.binding_token = binding_token
         
-        self.vector_store = VectorStore()
         self.client = OpenAI()
         self.called_function = {
             "name": None,
