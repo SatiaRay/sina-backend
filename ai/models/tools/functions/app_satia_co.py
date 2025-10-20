@@ -133,6 +133,7 @@ class AppSatiaCo:
         }
         
         data = self._make_api_request("ibs/getConnectionLogs", extra_params)
+
         if not data:
             return None
 
@@ -146,6 +147,7 @@ class AppSatiaCo:
         }
         
         data = self._make_api_request("splash", extra_params=extra_params)
+
         if not data:
             return None
 
@@ -166,38 +168,67 @@ class AppSatiaCo:
     async def get_transaction_logs(self):
         
         data = self._make_api_request("payments/transactions")
-        if not data:
+
+        if not data or not data['result']['data']:
             return None
 
-        return data['result']['data']
+        transactions = data['result']['data']
+
+        fields = ["Comment", "description", "TypeName", "Price", "Date"]
+
+        return [{k: item.get(k) for k in fields} for item in transactions]
 
         
     @FunctionCallLogger()
     async def get_service_history(self):
         
         data = self._make_api_request("services/serviceHistory")
+
         if not data:
             return None
 
-        return data['result']
+        services = data['result']
+
+        fields = ["Name", "Serial", "Date", "Comment", "Type", "ActivePrint"]
+
+        return [{k: item.get(k) for k in fields} for item in services]
 
     @FunctionCallLogger()
     async def get_service_status_history(self):
         
         data = self._make_api_request("services/historyStatus")
-        if not data:
+
+        if not data or not data['result']['data']:
             return None
 
-        return data['result']
+        services = data['result']['data']
+
+        fields = ["Name", "Date", "Description", "pivot"]
+
+        return [{k: item.get(k) for k in fields} for item in services]
+
 
     @FunctionCallLogger()
     async def get_service_charging_history(self):
         
         data = self._make_api_request("services/ChargingHistory")
-        if not data:
+
+        if not data or not data['result']['data']:
             return None
 
-        return data['result']
+        # Define what you want to keep
+        outer_fields = ["Date", "Status", "Description"]
+        service_fields = ["Name", "Price", "Credit", "Label"]
+
+        # Build a reduced list
+        return [
+            {
+                **{key: item.get(key) for key in outer_fields},
+                "service": {k: item["service"].get(k) for k in service_fields}
+            }
+            for item in data["result"]["data"]
+        ]
+
 
     @FunctionCallLogger()
     async def get_little_more(self):
