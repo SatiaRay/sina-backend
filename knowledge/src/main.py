@@ -47,7 +47,7 @@ def whoami(request: Request):
     }
 
 
-@app.post("/store")
+@app.post("/")
 def store(document: Document, response: Response):
     try:
         vector.add_documents([document])
@@ -72,7 +72,7 @@ class DeleteDocumentsRequest(BaseModel):
     ids: list[str]
 
 
-@app.delete("/delete")
+@app.delete("/")
 def delete(request: DeleteDocumentsRequest, response: Response):
     try:
         vector.delete_documents(request.ids)
@@ -88,7 +88,7 @@ def delete(request: DeleteDocumentsRequest, response: Response):
         return {"msg": "Delete documents failed !"}
 
 
-@app.put('/update/{id}')
+@app.put('/{id}')
 def update(id: str, document: Document, response: Response):
     try:
         vector.update_document(id, document=document)
