@@ -2,8 +2,7 @@ from pathlib import Path
 import sys
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from .models import Document
+from knowledge.src.requests import DeleteDocumentsRequest, StoreDocumentRequest, UpdateDocumentRequest
 from .util import auth_validate
 from .vector_store import VectorStore
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
+
 
 app = FastAPI()
 vector = VectorStore()
@@ -50,6 +50,7 @@ async def guard_middleware(request: Request, call_next):
 def test():
     return {"msg": "The service is up !"}
 
+
 @app.get("/whoami")
 def whoami(request: Request):
     return {
@@ -59,7 +60,7 @@ def whoami(request: Request):
 
 
 @app.post("/")
-def store(document: Document, response: Response):
+def store(document: StoreDocumentRequest, response: Response):
     try:
         vector.add_documents([document])
 
@@ -79,10 +80,6 @@ def search(query: str):
     return vector.search(query=query)
 
 
-class DeleteDocumentsRequest(BaseModel):
-    ids: list[str]
-
-
 @app.delete("/")
 def delete(request: DeleteDocumentsRequest, response: Response):
     try:
@@ -100,7 +97,7 @@ def delete(request: DeleteDocumentsRequest, response: Response):
 
 
 @app.put('/{id}')
-def update(id: str, document: Document, response: Response):
+def update(id: str, document: UpdateDocumentRequest, response: Response):
     try:
         vector.update_document(id, document=document)
 
