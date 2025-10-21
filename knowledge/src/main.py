@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from knowledge.src.requests import DeleteDocumentsRequest, StoreDocumentRequest, UpdateDocumentRequest
 from .util import auth_validate
-from .vector_store import VectorStore
+from .vector import VectorStore
 from fastapi.middleware.cors import CORSMiddleware
 
 

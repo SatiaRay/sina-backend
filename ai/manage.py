@@ -6,7 +6,7 @@ import questionary
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
-from database.vector_store import VectorStore
+from database.vector import VectorStore
 
 console = Console()
 
@@ -29,8 +29,8 @@ def reset_database() -> None:
             console.print("عملیات لغو شد.", style="yellow")
             return
 
-        vector_store = VectorStore()
-        vector_store.delete_all()
+        vector = VectorStore()
+        vector.delete_all()
         
         # پاک کردن فایل‌های پشتیبان
         backup_dirs = ['data/crawled_data', 'data/plaintext_data']
