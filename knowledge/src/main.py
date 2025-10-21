@@ -6,12 +6,23 @@ from pydantic import BaseModel
 from .models import Document
 from .util import auth_validate
 from .vector_store import VectorStore
+from fastapi.middleware.cors import CORSMiddleware
+
 
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
 app = FastAPI()
 vector = VectorStore()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Checking authentication access_token and bind to service container if is valid
 @app.middleware("http")
