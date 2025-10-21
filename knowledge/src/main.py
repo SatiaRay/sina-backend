@@ -2,7 +2,7 @@ from pathlib import Path
 import sys
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
-from knowledge.src.requests import DeleteDocumentsRequest, StoreDocumentRequest, UpdateDocumentRequest
+from .requests import DeleteDocumentsRequest, StoreDocumentRequest, UpdateDocumentRequest
 from .util import auth_validate
 from .vector import VectorStore
 from fastapi.middleware.cors import CORSMiddleware
