@@ -1,12 +1,17 @@
 # app/models/user.py
 from sqlalchemy import Boolean, Column, Integer, String, DateTime, func
 from .database import Base
+from datetime import datetime
 
-class Document(Base):
-    __tablename__ = "documents"
+class BaseModel(Base):
+    __abstract__ = True
 
     id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class Document(BaseModel):
+    __tablename__ = "documents"
+
     vector_id = Column(String(255), index=True, unique=True)
     status = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now())
