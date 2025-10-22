@@ -123,3 +123,14 @@ def all(response: Response):
         response.status_code = 500
 
         return {"msg": "Get all documents failed !"}
+
+@app.get('/{id}')
+def all(id: int, response: Response):
+    try:
+        return repo.get(id)
+    except Exception as e:
+        print("Error in get all documents:", e)
+
+        response.status_code = 500
+
+        return {"msg": "Get all documents failed !"}
