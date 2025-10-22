@@ -124,8 +124,33 @@ services:
     networks:
       - default
     volumes:
-      - ./knowledge/${CHROMA_PERSIST_DIRECTORY}:/var/www/html/knowledge/${CHROMA_PERSIST_DIRECTORY}
-    command: /bin/sh -c "uvicorn src.main:app --host=0.0.0.0 --port=80"
+      - ./knowledge/data/chroma:/var/www/html/knowledge/data/chroma
+    command: /bin/sh -c "wait-for-it.sh mysql:3306 -- alembic upgrade head && uvicorn src.main:app --host=0.0.0.0 --port=80"
+
+
+  knowledge-mysql:
+    image: mysql/mysql-server:8.0
+    env_file:
+      - ./knowledge/.env
+    ports:
+      - "${FORWARD_DB_PORT:-3308}:3308"
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456789"
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_TCP_PORT: "3308"
+      MYSQL_DATABASE: "knowledge_db"
+      MYSQL_USER: "knowledge_serv"
+      MYSQL_PASSWORD: "123456789"
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      MYSQL_EXTRA_OPTIONS: "${MYSQL_EXTRA_OPTIONS}"
+    volumes:
+      - knowledge-mysql-data:/var/lib/mysql
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-p 123456789", "-P", "3308"]
+      retries: 3
+      timeout: 5s
 
   rq-worker-default:
       build:
@@ -182,13 +207,13 @@ services:
       - ./ai:/var/www/html/ai
     command: >
       /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker crawl"
-  
-
 
 volumes:
   sail-mysql:
     driver: local
   ai-mysql-data:
+    driver: local
+  knowledge-mysql-data:
     driver: local
 
 networks:
