@@ -3,9 +3,9 @@ import sys
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from src.repositories import DocumentRepository
-from .requests import StoreDocumentRequest, UpdateDocumentRequest
-from .util import auth_validate
-from .vector import VectorStore
+from src.schemas import StoreDocumentRequest, UpdateDocumentRequest
+from src.util import auth_validate
+from src.vector import VectorStore
 from fastapi.middleware.cors import CORSMiddleware
 
 
