@@ -13,9 +13,9 @@ vector = VectorStore()
 
 T = TypeVar("T", bound=BaseModel)
 
-class Repository(Generic[T]):
-    def __init__(self, model_class: Type[T]):
-        self.model_class = model_class
+class DocumentRepository(Generic[T]):
+    def __init__(self):
+        self.model_class = Document
         self.db = next(get_db())
 
     def get_all(self, without_vector: bool = False):
@@ -73,7 +73,3 @@ class Repository(Generic[T]):
             return True
 
         raise Exception(f"Delete document failed: Document with id {id} not found !")
-
-class DocumentRepository(Repository[Document]):
-    def __init__(self):
-        super().__init__(Document)
