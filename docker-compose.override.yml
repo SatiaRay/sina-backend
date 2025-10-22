@@ -9,3 +9,7 @@ services:
   ai:
     volumes:
       - ./ai:/var/www/html/ai
+
+  idp:
+    volumes:
+      - "./idp:/var/www/html"
