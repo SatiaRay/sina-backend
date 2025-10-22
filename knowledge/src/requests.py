@@ -10,6 +10,3 @@ class StoreDocumentRequest(BaseDocument):
 
 class UpdateDocumentRequest(BaseDocument):
     pass
-
-class DeleteDocumentsRequest(BaseModel):
-    ids: list[str]

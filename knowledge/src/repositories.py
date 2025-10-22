@@ -43,11 +43,14 @@ class Repository(Generic[T]):
 
     def delete(self, id: int) -> bool:
         instance = self.get(id)
+
         if instance:
+            vector.delete_documents([instance.vector_id])
             self.db.delete(instance)
             self.db.commit()
             return True
-        return False
+
+        raise Exception(f"Delete document failed: Document with id {id} not found !")
 
 class DocumentRepository(Repository[Document]):
     def __init__(self):

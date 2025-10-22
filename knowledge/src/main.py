@@ -3,7 +3,7 @@ import sys
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from src.repositories import DocumentRepository
-from .requests import DeleteDocumentsRequest, StoreDocumentRequest, UpdateDocumentRequest
+from .requests import StoreDocumentRequest, UpdateDocumentRequest
 from .util import auth_validate
 from .vector import VectorStore
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,11 +82,10 @@ def search(query: str):
     return vector.search(query=query)
 
 
-@app.delete("/")
-def delete(request: DeleteDocumentsRequest, response: Response):
+@app.delete("/{id}")
+def delete(id: int, response: Response):
     try:
-        vector.delete_documents(request.ids)
-
+        repo.delete(id)
         return {
             "msg": "succeed",
         }
