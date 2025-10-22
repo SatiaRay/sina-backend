@@ -5,3 +5,7 @@ services:
     volumes:
       - ./knowledge:/var/www/html/knowledge
     command: /bin/sh -c "uvicorn src.main:app --reload --host=0.0.0.0 --port=80"
+
+  ai:
+    volumes:
+      - ./ai:/var/www/html/ai
