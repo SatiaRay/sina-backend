@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from src.repositories import DocumentRepository
 from .requests import DeleteDocumentsRequest, StoreDocumentRequest, UpdateDocumentRequest
 from .util import auth_validate
 from .vector import VectorStore
@@ -23,6 +24,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+repo = DocumentRepository()
 
 # Checking authentication access_token and bind to service container if is valid
 @app.middleware("http")
@@ -62,8 +65,7 @@ def whoami(request: Request):
 @app.post("/")
 def store(document: StoreDocumentRequest, response: Response):
     try:
-        vector.add_documents([document])
-
+        repo.create(document)
         return {
             "msg": "succeed",
         }

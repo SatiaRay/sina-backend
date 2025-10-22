@@ -1,11 +1,15 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional, Type, TypeVar, Generic
 
+from src import database
 from src.database import get_db
 from .models import (
     BaseModel,
     Document
 )
+from .vector import VectorStore
+
+vector = VectorStore()
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -21,7 +25,8 @@ class Repository(Generic[T]):
         return self.db.query(self.model_class).filter(self.model_class.id == id).first()
 
     def create(self, data: dict) -> T:
-        instance = self.model_class(**data)
+        vector_id = vector.add_documents([data])[0]
+        instance = self.model_class(**{"vector_id" : vector_id})
         self.db.add(instance)
         self.db.commit()
         self.db.refresh(instance)
