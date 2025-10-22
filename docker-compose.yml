@@ -164,22 +164,6 @@ services:
     command: >
       /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker crawl"
 
-  knowledge:
-    build:
-      context: ./knowledge
-      dockerfile: dockerfile
-    container_name: knowledge
-    env_file:
-      - ./knowledge/.env
-    ports:
-      - "8050:80"
-    networks:
-      - default
-    volumes:
-      - ./knowledge/data/chroma:/var/www/html/knowledge/data/chroma
-    command: /bin/sh -c "wait-for-it.sh mysql:3306 -- alembic upgrade head && uvicorn src.main:app --host=0.0.0.0 --port=80"
-
-
   knowledge-mysql:
     image: mysql/mysql-server:8.0
     env_file:
@@ -203,6 +187,23 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-p 123456789", "-P", "3308"]
       retries: 3
       timeout: 5s
+
+  knowledge:
+    build:
+      context: ./knowledge
+      dockerfile: dockerfile
+    container_name: knowledge
+    depends_on:
+      - knowledge-mysql
+    env_file:
+      - ./knowledge/.env
+    ports:
+      - "8050:80"
+    networks:
+      - default
+    volumes:
+      - ./knowledge/data/chroma:/var/www/html/knowledge/data/chroma
+    command: /bin/sh -c "wait-for-it.sh knowledge-mysql:3308 -- alembic upgrade head && uvicorn src.main:app --host=0.0.0.0 --port=80"
 
 volumes:
   sail-mysql:
