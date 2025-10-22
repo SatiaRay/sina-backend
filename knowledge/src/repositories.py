@@ -20,7 +20,7 @@ class Repository(Generic[T]):
 
     def get_all(self, without_vector: bool = False):
         documents = self.db.query(self.model_class).all()
-        if without_vector:
+        if without_vector or not len(documents):
             return documents
 
         # Collect all vector IDs
