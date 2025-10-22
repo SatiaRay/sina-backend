@@ -38,10 +38,10 @@ class Repository(Generic[T]):
 
         return documents
 
-    def get(self, id: int, with_vector: bool = False):
+    def get(self, id: int, without_vector: bool = False):
         doc = self.db.query(self.model_class).filter(self.model_class.id == id).first()
-        if doc and with_vector and doc.vector_id:
-            vector_doc = vector.get_document(doc.vector_id)
+        if doc and not without_vector and doc.vector_id:
+            vector_doc = vector.get_document_by_id(doc.vector_id)
             doc.vector_data = vector_doc
         return doc
 
