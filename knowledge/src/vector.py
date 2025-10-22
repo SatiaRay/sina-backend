@@ -181,3 +181,14 @@ class VectorStore:
                 results["documents"], results["metadatas"], results["ids"]
             )
         ]
+
+    def get_document_by_id(self, vector_id: str) -> Optional[dict]:
+        """Retrieve a single document by its vector id"""
+        results = self.collection.get(ids=[vector_id])
+        if not results["ids"] or not results["ids"][0]:
+            return None
+        return {
+            "id": results["ids"][0],
+            "text": results["documents"][0],
+            "metadata": results["metadatas"][0],
+        }
