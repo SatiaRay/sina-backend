@@ -116,7 +116,7 @@ def update(id: str, document: UpdateDocumentRequest, response: Response):
 @app.get('/')
 def all(response: Response):
     try:
-        return vector.get_all_documents()
+        return repo.get_all()
     except Exception as e:
         print("Error in get all documents:", e)
 

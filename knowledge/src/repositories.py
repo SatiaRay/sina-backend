@@ -18,11 +18,32 @@ class Repository(Generic[T]):
         self.model_class = model_class
         self.db = next(get_db())
 
-    def get_all(self) -> List[T]:
-        return self.db.query(self.model_class).all()
+    def get_all(self, without_vector: bool = False):
+        documents = self.db.query(self.model_class).all()
+        if without_vector:
+            return documents
 
-    def get(self, id: int) -> Optional[T]:
-        return self.db.query(self.model_class).filter(self.model_class.id == id).first()
+        # Collect all vector IDs
+        vector_ids = [doc.vector_id for doc in documents if doc.vector_id]
+
+        # Batch fetch from vector DB (implement a batch get)
+        vector_data = vector.get_all_documents(vector_ids)
+
+        # Merge by vector_id (map join)
+        vector_map = {v["id"]: v for v in vector_data}
+
+        for doc in documents:
+            if doc.vector_id in vector_map:
+                doc.vector_data = vector_map[doc.vector_id]
+
+        return documents
+
+    def get(self, id: int, with_vector: bool = False):
+        doc = self.db.query(self.model_class).filter(self.model_class.id == id).first()
+        if doc and with_vector and doc.vector_id:
+            vector_doc = vector.get_document(doc.vector_id)
+            doc.vector_data = vector_doc
+        return doc
 
     def create(self, data: dict) -> T:
         vector_id = vector.add_documents([data])[0]
