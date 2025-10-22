@@ -147,7 +147,7 @@ class VectorStore:
         """Delete a vector from the vector store"""
         self.collection.delete(ids=vector_ids)
 
-    def update_document(self, document_id: str, document: Document):
+    def update_document(self, vector_id: str, document: dict):
         """Update a document in the vector store"""
         # تبدیل متن‌ها به بردار با استفاده از OpenAI
         client = OpenAI()

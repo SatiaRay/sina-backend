@@ -100,7 +100,7 @@ def delete(id: int, response: Response):
 @app.put('/{id}')
 def update(id: str, document: UpdateDocumentRequest, response: Response):
     try:
-        vector.update_document(id, document=document)
+        repo.update(id, document.dict())
 
         return {
             "msg": "succeed",

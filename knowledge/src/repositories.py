@@ -55,6 +55,7 @@ class Repository(Generic[T]):
 
     def update(self, id: int, data: dict) -> Optional[T]:
         instance = self.get(id)
+        vector.update_document(instance.vector_id, data)
         if instance:
             for key, value in data.items():
                 setattr(instance, key, value)
