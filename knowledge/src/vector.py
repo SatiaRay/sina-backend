@@ -9,7 +9,6 @@ from pathlib import Path
 import uuid
 from datetime import datetime
 from openai import OpenAI
-from .models import Document
 from .util import chunk_text
 
 load_dotenv()
@@ -72,7 +71,7 @@ class VectorStore:
 
         return cleaned_metadata
 
-    def add_documents(self, documents: list[Document]):
+    def add_documents(self, documents: list[dict]):
         if not documents:
             return
 
@@ -81,7 +80,7 @@ class VectorStore:
         added_documents_ids = []
 
         for doc in documents:
-            chunks = chunk_text(doc.text)
+            chunks = chunk_text(doc['text'])
 
             ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(chunks))]
 
@@ -155,7 +154,7 @@ class VectorStore:
         print("Send modification to ebmedding model ...")
 
         response = client.embeddings.create(
-            input=document.text, model=os.getenv(
+            input=document['text'], model=os.getenv(
                 "GPT_EMBEDDING_MODEL", "text-embedding-3-small")
         )
         embedding = response.data[0].embedding
@@ -164,9 +163,9 @@ class VectorStore:
 
         self.collection.update(
             embeddings=[embedding],
-            documents=[document.text],
-            metadatas=[document.metadata],
-            ids=[document_id],
+            documents=[document['text']],
+            metadatas=[document['metadata']],
+            ids=[vector_id],
         )
        
 
