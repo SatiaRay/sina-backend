@@ -84,7 +84,7 @@ class VectorStore:
 
             ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(chunks))]
 
-            metadatas = [self._clean_metadata(doc.metadata)] * len(chunks)
+            metadatas = [self._clean_metadata(doc['metadata'])] * len(chunks)
 
             embeddings = []
 

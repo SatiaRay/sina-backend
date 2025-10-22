@@ -65,7 +65,7 @@ def whoami(request: Request):
 @app.post("/")
 def store(document: StoreDocumentRequest, response: Response):
     try:
-        repo.create(document)
+        repo.create(document.dict())
         return {
             "msg": "succeed",
         }
