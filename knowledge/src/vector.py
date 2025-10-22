@@ -170,9 +170,12 @@ class VectorStore:
         )
        
 
-    def get_all_documents(self) -> list[dict[str, any]]:
-        # دریافت تمام اسناد
-        results = self.collection.get()
+    def get_all_documents(self, ids: list[str] | None = None) -> list[dict[str, any]]:
+     
+        if ids is not None:
+            results = self.collection.get(ids=ids)
+        else:
+            results = self.collection.get()
         return [
             {"id": doc_id, "text": doc, "metadata": meta}
             for doc, meta, doc_id in zip(
