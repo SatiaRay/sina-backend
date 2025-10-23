@@ -80,7 +80,8 @@ class VectorStore:
         added_documents_ids = []
 
         for doc in documents:
-            chunks = chunk_text(doc['text'])
+            # chunks = chunk_text(doc['text'])
+            chunks = [doc['text']]
 
             ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(chunks))]
 
