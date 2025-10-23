@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\GenerateClientTokenRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -12,7 +13,7 @@ class GenerateClientTokenController extends Controller
      * 
      * Issues client token then response back
      */
-    public function __invoke(Request $request)
+    public function __invoke(GenerateClientTokenRequest $request)
     {
         $response = Http::asForm()->post('http://idp/oauth/token', [
             'grant_type' => 'client_credentials',
