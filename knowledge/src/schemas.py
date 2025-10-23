@@ -7,6 +7,7 @@ class DocumentMetadata(BaseModel):
 class BaseDocument(BaseModel):
     text: str
     metadata: DocumentMetadata
+    status: bool = True
 
 class StoreDocumentRequest(BaseDocument):
     pass
