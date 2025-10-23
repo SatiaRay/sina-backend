@@ -18,36 +18,63 @@ class DocumentRepository(Generic[T]):
         self.model_class = Document
         self.db = next(get_db())
 
+    def _merge_vector_data(self, doc, vector_doc):
+        """
+        Merge vector data (from ChromaDB) into SQL document object.
+        - Flattens the structure.
+        - Preserves all SQL fields.
+        - Injects text and metadata keys at top level.
+        """
+        if not vector_doc:
+            return doc
+
+        # Merge text
+        doc.text = vector_doc.get("text")
+
+        # Merge metadata fields
+        metadata = vector_doc.get("metadata", {})
+        for key, value in metadata.items():
+            setattr(doc, key, value)
+
+        return doc
+
+
     def get_all(self, without_vector: bool = False):
         documents = self.db.query(self.model_class).all()
-        if without_vector or not len(documents):
+        if without_vector or not documents:
             return documents
 
         # Collect all vector IDs
         vector_ids = [doc.vector_id for doc in documents if doc.vector_id]
 
-        # Batch fetch from vector DB (implement a batch get)
+        if not vector_ids:
+            return documents
+
+        # Batch fetch from ChromaDB
         vector_data = vector.get_all_documents(vector_ids)
 
-        # Merge by vector_id (map join)
+        # Create lookup map
         vector_map = {v["id"]: v for v in vector_data}
 
+        # Merge data into each document
         for doc in documents:
-            if doc.vector_id in vector_map:
-                doc.vector_data = vector_map[doc.vector_id]
+            vector_doc = vector_map.get(doc.vector_id)
+            self._merge_vector_data(doc, vector_doc)
 
         return documents
 
+
     def get(self, id: int, without_vector: bool = False):
         doc = self.db.query(self.model_class).filter(self.model_class.id == id).first()
-        if doc and not without_vector and doc.vector_id:
-            vector_doc = vector.get_document_by_id(doc.vector_id)
-            doc.vector_data = vector_doc
-        return doc
+        if not doc or without_vector or not doc.vector_id:
+            return doc
+
+        vector_doc = vector.get_document_by_id(doc.vector_id)
+        return self._merge_vector_data(doc, vector_doc)
 
     def create(self, data: dict) -> T:
         vector_id = vector.add_documents([data])[0]
-        instance = self.model_class(**{"vector_id" : vector_id})
+        instance = self.model_class(**{"vector_id" : vector_id, 'status' : data['status']})
         self.db.add(instance)
         self.db.commit()
         self.db.refresh(instance)
