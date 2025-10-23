@@ -39,28 +39,23 @@ class DocumentRepository(Generic[T]):
         return doc
 
 
-    def get_all(self, without_vector: bool = False):
-        documents = self.db.query(self.model_class).all()
+    def get_all(self, without_vector: bool = False, offset: int = 0, limit: int = 100):
+        # Use offset and limit for pagination
+        documents = self.db.query(self.model_class).offset(offset).limit(limit).all()
         if without_vector or not documents:
             return documents
-
         # Collect all vector IDs
         vector_ids = [doc.vector_id for doc in documents if doc.vector_id]
-
         if not vector_ids:
             return documents
-
         # Batch fetch from ChromaDB
         vector_data = vector.get_all_documents(vector_ids)
-
         # Create lookup map
         vector_map = {v["id"]: v for v in vector_data}
-
         # Merge data into each document
         for doc in documents:
             vector_doc = vector_map.get(doc.vector_id)
             self._merge_vector_data(doc, vector_doc)
-
         return documents
 
 
@@ -100,3 +95,6 @@ class DocumentRepository(Generic[T]):
             return True
 
         raise Exception(f"Delete document failed: Document with id {id} not found !")
+
+    def count(self):
+        return self.db.query(self.model_class).count()

@@ -120,14 +120,19 @@ def update(id: str, document: UpdateDocumentRequest, response: Response):
 
 
 @app.get('/')
-def all(response: Response):
+def all(response: Response, page: int = 1, perpage: int = 20):
     try:
-        return repo.get_all()
+        offset = (page - 1) * perpage
+        documents = repo.get_all(offset=offset, limit=perpage)
+        total_docs = repo.count()
+        total_pages = (total_docs + perpage - 1) // perpage  # ceil division
+        print(total_pages, total_docs)
+        return {
+            "documents": [doc.__dict__ for doc in documents], "pages" : total_pages
+        }
     except Exception as e:
         print("Error in get all documents:", e)
-
         response.status_code = 500
-
         return {"msg": "Get all documents failed !"}
 
 @app.get('/{id}')
