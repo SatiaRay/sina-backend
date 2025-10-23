@@ -74,7 +74,7 @@ class DocumentRepository(Generic[T]):
 
     def create(self, data: dict) -> T:
         vector_id = vector.add_documents([data])[0]
-        instance = self.model_class(**{"vector_id" : vector_id, 'status' : data['status']})
+        instance = self.model_class(**{"vector_id" : vector_id})
         self.db.add(instance)
         self.db.commit()
         self.db.refresh(instance)

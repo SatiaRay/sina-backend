@@ -14,4 +14,3 @@ class Document(BaseModel):
     __tablename__ = "documents"
 
     vector_id = Column(String(255), index=True, unique=True)
-    status = Column(Boolean, default=True)
