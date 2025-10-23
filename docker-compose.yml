@@ -90,6 +90,7 @@ services:
     depends_on:
       - ai-mysql
       - ai-redis
+      - idp
     env_file:
       - ./ai/.env
     environment:
@@ -195,6 +196,7 @@ services:
     container_name: knowledge
     depends_on:
       - knowledge-mysql
+      - idp
     env_file:
       - ./knowledge/.env
     ports:
