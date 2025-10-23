@@ -1,10 +1,12 @@
+import os
 from pathlib import Path
 import sys
+
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from src.repositories import DocumentRepository
 from src.schemas import StoreDocumentRequest, UpdateDocumentRequest
-from src.util import auth_validate
+from src.util import auth_validate, authorized_http_session_factory
 from src.vector import VectorStore
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -47,6 +49,10 @@ async def guard_middleware(request: Request, call_next):
     response = await call_next(auth)
         
     return response
+
+
+
+session = authorized_http_session_factory()
 
 
 @app.get("/test")
