@@ -29,17 +29,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-async def auth_dependency(request: Request):
-    # Skip preflight OPTIONS
+# Checking authentication access_token and bind to service container if is valid
+@app.middleware("http")
+async def guard_middleware(request: Request, call_next):    
+    # Skip auth for preflight CORS requests
     if request.method == "OPTIONS":
-        return None
+        return await call_next(request)
     
     auth = await auth_validate(credential=request)
+
     if not auth:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        return JSONResponse(
+            status_code=401,
+            content={
+                "msg": "Unauthorized",
+            }
+        ) 
     
-    return auth
+    response = await call_next(auth)
+        
+    return response
 
 
 def get_session():
@@ -47,12 +56,12 @@ def get_session():
 
 
 @app.get("/test")
-async def test(auth=Depends(auth_dependency)):
+async def test():
     return {"msg": "The service is up !"}
 
 
 @app.get("/whoami")
-async def whoami(auth=Depends(auth_dependency), request: Request = None):
+async def whoami(request: Request = None):
     return {
         "scopes": getattr(request.state, "scopes", []),
         "user_id": getattr(request.state, "user_id", None),
@@ -62,7 +71,6 @@ async def whoami(auth=Depends(auth_dependency), request: Request = None):
 @app.post("/")
 async def store(
     document: StoreDocumentRequest,
-    auth=Depends(auth_dependency),
     session=Depends(get_session),
     response: Response = None
 ):
@@ -78,7 +86,6 @@ async def store(
 @app.get("/search")
 async def search(
     query: str,
-    auth=Depends(auth_dependency),
     session=Depends(get_session),
 ):
     return vector.search(query=query)
@@ -87,7 +94,6 @@ async def search(
 @app.delete("/{id}")
 async def delete(
     id: int,
-    auth=Depends(auth_dependency),
     session=Depends(get_session),
     response: Response = None
 ):
@@ -104,7 +110,6 @@ async def delete(
 async def update(
     id: int,
     document: UpdateDocumentRequest,
-    auth=Depends(auth_dependency),
     session=Depends(get_session),
     response: Response = None
 ):
@@ -118,11 +123,10 @@ async def update(
 
 
 @app.get("/")
-async def all_documents(
+async def all(
     response: Response,
     page: int = 1,
     perpage: int = 20,
-    auth=Depends(auth_dependency),
     session=Depends(get_session),
 ):
     try:
@@ -140,12 +144,10 @@ async def all_documents(
         response.status_code = 500
         return {"msg": "Get all documents failed !"}
 
-
 @app.get("/{id}")
-async def single_document(
+async def find(
     id: int,
     response: Response,
-    auth=Depends(auth_dependency),
     session=Depends(get_session),
 ):
     try:
