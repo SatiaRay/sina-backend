@@ -2,21 +2,22 @@ import os
 from pathlib import Path
 import sys
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Depends, Request, HTTPException, Response
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+
 from src.repositories import DocumentRepository
 from src.schemas import StoreDocumentRequest, UpdateDocumentRequest
 from src.util import auth_validate, authorized_http_session_factory
 from src.vector import VectorStore
-from fastapi.middleware.cors import CORSMiddleware
 
 
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-
 app = FastAPI()
 vector = VectorStore()
+repo = DocumentRepository()
 
 
 app.add_middleware(
@@ -27,41 +28,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-repo = DocumentRepository()
 
-# Checking authentication access_token and bind to service container if is valid
-@app.middleware("http")
-async def guard_middleware(request: Request, call_next):    
-    # Skip auth for preflight CORS requests
+async def auth_dependency(request: Request):
+    # Skip preflight OPTIONS
     if request.method == "OPTIONS":
-        return await call_next(request)
+        return None
     
     auth = await auth_validate(credential=request)
-
     if not auth:
-        return JSONResponse(
-            status_code=401,
-            content={
-                "msg": "Unauthorized",
-            }
-        ) 
+        raise HTTPException(status_code=401, detail="Unauthorized")
     
-    response = await call_next(auth)
-        
-    return response
+    return auth
 
 
-
-session = authorized_http_session_factory()
+def get_session():
+    return authorized_http_session_factory()
 
 
 @app.get("/test")
-def test():
+async def test(auth=Depends(auth_dependency)):
     return {"msg": "The service is up !"}
 
 
 @app.get("/whoami")
-def whoami(request: Request):
+async def whoami(auth=Depends(auth_dependency), request: Request = None):
     return {
         "scopes": getattr(request.state, "scopes", []),
         "user_id": getattr(request.state, "user_id", None),
@@ -69,79 +59,85 @@ def whoami(request: Request):
 
 
 @app.post("/")
-def store(document: StoreDocumentRequest, response: Response):
+async def store(
+    document: StoreDocumentRequest,
+    response: Response = None
+):
     try:
         repo.create(document.dict())
-        return {
-            "msg": "succeed",
-        }
+        return {"msg": "succeed"}
     except Exception as e:
         print("Error in storing document:", e)
-
         response.status_code = 500
-
         return {"msg": "Store document failed !"}
 
 
-@app.get('/search')
-def search(query: str):
+@app.get("/search")
+async def search(
+    query: str,
+):
     return vector.search(query=query)
 
 
 @app.delete("/{id}")
-def delete(id: int, response: Response):
+async def delete(
+    id: int,
+    response: Response = None
+):
     try:
         repo.delete(id)
-        return {
-            "msg": "succeed",
-        }
+        return {"msg": "succeed"}
     except Exception as e:
-        print("Error in deleting document:", e)
-
+        print("Error deleting document:", e)
         response.status_code = 500
-
         return {"msg": "Delete documents failed !"}
 
 
-@app.put('/{id}')
-def update(id: str, document: UpdateDocumentRequest, response: Response):
+@app.put("/{id}")
+async def update(
+    id: int,
+    document: UpdateDocumentRequest,
+    response: Response = None
+):
     try:
         repo.update(id, document.dict())
-
-        return {
-            "msg": "succeed",
-        }
+        return {"msg": "succeed"}
     except Exception as e:
-        print("Error in updating document:", e)
-
+        print("Error updating document:", e)
         response.status_code = 500
-
         return {"msg": "Update documents failed !"}
 
 
-@app.get('/')
-def all(response: Response, page: int = 1, perpage: int = 20):
+@app.get("/")
+async def all_documents(
+    response: Response,
+    page: int = 1,
+    perpage: int = 20,
+):
     try:
         offset = (page - 1) * perpage
         documents = repo.get_all(offset=offset, limit=perpage)
         total_docs = repo.count()
-        total_pages = (total_docs + perpage - 1) // perpage  # ceil division
-        print(total_pages, total_docs)
+        total_pages = (total_docs + perpage - 1) // perpage
         return {
-            "documents": [doc.__dict__ for doc in documents], "pages" : total_pages
+            "documents": [doc.__dict__ for doc in documents],
+            "pages": total_pages,
+            "total": total_docs,
         }
     except Exception as e:
         print("Error in get all documents:", e)
         response.status_code = 500
         return {"msg": "Get all documents failed !"}
 
-@app.get('/{id}')
-def all(id: int, response: Response):
+
+@app.get("/{id}")
+async def single_document(
+    id: int,
+    response: Response,
+):
     try:
         return repo.get(id)
     except Exception as e:
-        print("Error in get all documents:", e)
-
+        print("Error finding document:", e)
         response.status_code = 500
-
-        return {"msg": "Get all documents failed !"}
+        return {"msg": "Find document failed !"}
