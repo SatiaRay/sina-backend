@@ -1,13 +1,10 @@
 from pydantic import BaseModel
 
-class DocumentMetadata(BaseModel):
+class BaseDocument(BaseModel):
+    text: str
     title: str
     tag: str
     status: bool = True
-
-class BaseDocument(BaseModel):
-    text: str
-    metadata: DocumentMetadata
 
 class StoreDocumentRequest(BaseDocument):
     pass
