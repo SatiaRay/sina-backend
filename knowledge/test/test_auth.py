@@ -1,5 +1,7 @@
 import pytest
 import sys, os
+
+from test.conftest import force_patch_guard_auth
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, AsyncMock
@@ -19,44 +21,29 @@ def client():
     return TestClient(app)
 
 
-def override_auth_fail():
-    async def _override():
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    return _override
-
-def override_auth_success(user=None):
-    async def _override():
-        return user or {"user_id": "123"}
-    return _override
-
-
 def test_guard_middleware_no_auth(client):
-    main.app.dependency_overrides[main.auth_dependency] = override_auth_fail()
-
+    force_patch_guard_auth(AsyncMock(return_value=False))
     response = client.get("/test")
     assert response.status_code == 401
-    assert response.json() == {"detail": "Unauthorized"}
+    assert response.json() == {"msg": "Unauthorized"}
 
 
 def test_guard_middleware_invalid_auth(client):
-    main.app.dependency_overrides[main.auth_dependency] = override_auth_fail()
-
+    force_patch_guard_auth(AsyncMock(return_value=False))
     response = client.get("/test", headers={"Authorization": "Bearer bad"})
     assert response.status_code == 401
-    assert response.json() == {"detail": "Unauthorized"}
+    assert response.json() == {"msg": "Unauthorized"}
 
 
 def test_guard_middleware_valid_auth(client):
-    request_state_mock = MagicMock()
-    main.app.dependency_overrides[main.auth_dependency] = override_auth_success()
-
+    mock_request = MagicMock()
+    force_patch_guard_auth(AsyncMock(return_value=mock_request))
     response = client.get("/test", headers={"Authorization": "Bearer good"})
     assert response.status_code == 200
     assert response.json() == {"msg": "The service is up !"}
 
 
 def test_guard_middleware_malformed_bearer(client):
-    main.app.dependency_overrides[main.auth_dependency] = override_auth_fail()
-
+    force_patch_guard_auth(AsyncMock(return_value=False))
     response = client.get("/test", headers={"Authorization": "Bearer"})
     assert response.status_code == 401
