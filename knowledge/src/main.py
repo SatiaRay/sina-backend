@@ -20,6 +20,7 @@ vector = VectorStore()
 repo = DocumentRepository()
 
 
+# ✅ CORS middleware stays unchanged
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -61,6 +62,8 @@ async def whoami(auth=Depends(auth_dependency), request: Request = None):
 @app.post("/")
 async def store(
     document: StoreDocumentRequest,
+    auth=Depends(auth_dependency),
+    session=Depends(get_session),
     response: Response = None
 ):
     try:
@@ -75,6 +78,8 @@ async def store(
 @app.get("/search")
 async def search(
     query: str,
+    auth=Depends(auth_dependency),
+    session=Depends(get_session),
 ):
     return vector.search(query=query)
 
@@ -82,6 +87,8 @@ async def search(
 @app.delete("/{id}")
 async def delete(
     id: int,
+    auth=Depends(auth_dependency),
+    session=Depends(get_session),
     response: Response = None
 ):
     try:
@@ -97,6 +104,8 @@ async def delete(
 async def update(
     id: int,
     document: UpdateDocumentRequest,
+    auth=Depends(auth_dependency),
+    session=Depends(get_session),
     response: Response = None
 ):
     try:
@@ -113,6 +122,8 @@ async def all_documents(
     response: Response,
     page: int = 1,
     perpage: int = 20,
+    auth=Depends(auth_dependency),
+    session=Depends(get_session),
 ):
     try:
         offset = (page - 1) * perpage
@@ -134,6 +145,8 @@ async def all_documents(
 async def single_document(
     id: int,
     response: Response,
+    auth=Depends(auth_dependency),
+    session=Depends(get_session),
 ):
     try:
         return repo.get(id)
