@@ -38,6 +38,16 @@ class DocumentRepository(Generic[T]):
 
         return doc
 
+    def _to_vector_data(self, data: dict) -> dict:
+        """
+        Convert input data dict to {'text': ..., 'metadata': {...}} format for the vector store.
+        'text' is a top-level field, all others are placed under 'metadata'.
+        """
+        vector_data = {'text': data.get('text')}
+        # Place all other fields except 'text' into metadata
+        vector_data['metadata'] = {k: v for k, v in data.items() if k != 'text'}
+        return vector_data
+
 
     def get_all(self, without_vector: bool = False, offset: int = 0, limit: int = 100):
         # Use offset and limit for pagination
@@ -68,7 +78,7 @@ class DocumentRepository(Generic[T]):
         return self._merge_vector_data(doc, vector_doc)
 
     def create(self, data: dict) -> T:
-        vector_id = vector.add_documents([data])[0]
+        vector_id = vector.add_documents([self._to_vector_data(data)])[0]
         instance = self.model_class(**{"vector_id" : vector_id})
         self.db.add(instance)
         self.db.commit()
@@ -77,7 +87,7 @@ class DocumentRepository(Generic[T]):
 
     def update(self, id: int, data: dict) -> Optional[T]:
         instance = self.get(id)
-        vector.update_document(instance.vector_id, data)
+        vector.update_document(instance.vector_id, self._to_vector_data(data))
         if instance:
             for key, value in data.items():
                 setattr(instance, key, value)
