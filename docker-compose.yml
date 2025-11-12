@@ -48,6 +48,8 @@ services:
       XDEBUG_MODE: "${SAIL_XDEBUG_MODE:-off}"
       XDEBUG_CONFIG: "${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}"
       IGNITION_LOCAL_SITES_PATH: "${PWD}"
+    volumes:
+      - "./idp/.env:/var/www/html/.env"
     networks:
       - default
     depends_on:
@@ -106,6 +108,8 @@ services:
       - "8090:80"
     networks:
       - default
+    volumes:
+      - "./ai/.env:/var/www/html/.env"
     command: >
       /bin/sh -c "wait-for-it.sh ai-mysql:3306 -- alembic upgrade head &&
                   uvicorn api.main:app --reload --host=0.0.0.0 --port=80"
@@ -206,6 +210,7 @@ services:
       - default
     volumes:
       - ./knowledge/data/chroma:/var/www/html/knowledge/data/chroma
+      - "./knowledge/.env:/var/www/html/.env"
     command: /bin/sh -c "wait-for-it.sh knowledge-mysql:3308 -- alembic upgrade head && uvicorn src.main:app --host=0.0.0.0 --port=80"
 
 volumes:
