@@ -167,20 +167,12 @@ class WorkflowRepository(Repository[Workflow]):
     def __init__(self, db: Session):
         super().__init__(db, Workflow)
 
-    def get_all(self, agent_type: Optional[str] = None) -> List[Workflow]:
+    def get_all(self) -> List[Workflow]:
         query = self.db.query(Workflow)
-        if agent_type:
-            query = query.filter(
-                (Workflow.agent_type == agent_type) | (Workflow.agent_type == "both")
-            )
         return query.all()
 
-    def get_active_workflows(self, agent_type: Optional[str] = None) -> List[Workflow]:
+    def get_active_workflows(self) -> List[Workflow]:
         query = self.db.query(Workflow).filter(Workflow.status == True)
-        if agent_type:
-            query = query.filter(
-                (Workflow.agent_type == agent_type) | (Workflow.agent_type == "both")
-            )
         return query.all()
 
     def get_by_name(self, name: str) -> Optional[Workflow]:
@@ -192,32 +184,22 @@ class InstructionRepository(Repository[Instruction]):
         super().__init__(db, Instruction)
 
     def get_all_paginated(
-        self, page: int = 1, size: int = 10, agent_type: Optional[str] = None
+        self, page: int = 1, size: int = 10
     ) -> tuple[list[Instruction], int]:
         query = self.db.query(Instruction).filter(
             Instruction.label != "", Instruction.text != ""
         )
-        if agent_type:
-            query = query.filter(
-                (Instruction.agent_type == agent_type)
-                | (Instruction.agent_type == "both")
-            )
         total = query.count()
         items = query.offset((page - 1) * size).limit(size).all()
         return items, total
 
     def get_active_instructions_paginated(
-        self, page: int = 1, size: int = 10, agent_type: Optional[str] = None
+        self, page: int = 1, size: int = 10
     ) -> tuple[list[Instruction], int]:
         """Get paginated active instructions with non-empty label and text"""
         query = self.db.query(Instruction).filter(
             Instruction.status == True, Instruction.label != "", Instruction.text != ""
         )
-        if agent_type:
-            query = query.filter(
-                (Instruction.agent_type == agent_type)
-                | (Instruction.agent_type == "both")
-            )
         total = query.count()
         items = query.offset((page - 1) * size).limit(size).all()
         return items, total
@@ -284,17 +266,3 @@ class InstructionRepository(Repository[Instruction]):
     def disable_instruction(self, id: int) -> Optional[Instruction]:
         """Disable an instruction"""
         return self.update(id, {"status": False})
-
-    def get_by_agent_type(self, agent_type: str) -> List[Instruction]:
-        """Get active instructions by agent type (voice_agent, text_agent, or both)"""
-        return (
-            self.db.query(Instruction)
-            .filter(
-                Instruction.status == True,
-                Instruction.label != "",
-                Instruction.text != "",
-                (Instruction.agent_type == agent_type)
-                | (Instruction.agent_type == "both"),
-            )
-            .all()
-        )
