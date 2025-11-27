@@ -16,7 +16,6 @@ T = TypeVar("T", bound=BaseModel)
 class DocumentRepository(Generic[T]):
     def __init__(self):
         self.model_class = Document
-        self.db = next(get_db())
 
     def _merge_vector_data(self, doc, vector_doc):
         """
@@ -49,9 +48,9 @@ class DocumentRepository(Generic[T]):
         return vector_data
 
 
-    def get_all(self, without_vector: bool = False, offset: int = 0, limit: int = 100):
+    def get_all(self, db, without_vector: bool = False, offset: int = 0, limit: int = 100):
         # Use offset and limit for pagination
-        documents = self.db.query(self.model_class).offset(offset).limit(limit).all()
+        documents = db.query(self.model_class).offset(offset).limit(limit).all()
         if without_vector or not documents:
             return documents
         # Collect all vector IDs
@@ -69,42 +68,42 @@ class DocumentRepository(Generic[T]):
         return documents
 
 
-    def get(self, id: int, without_vector: bool = False):
-        doc = self.db.query(self.model_class).filter(self.model_class.id == id).first()
+    def get(self, db, id: int, without_vector: bool = False):
+        doc = db.query(self.model_class).filter(self.model_class.id == id).first()
         if not doc or without_vector or not doc.vector_id:
             return doc
 
         vector_doc = vector.get_document_by_id(doc.vector_id)
         return self._merge_vector_data(doc, vector_doc)
 
-    def create(self, data: dict) -> T:
+    def create(self, db, data: dict) -> T:
         vector_id = vector.add_documents([self._to_vector_data(data)])[0]
         instance = self.model_class(**{"vector_id" : vector_id})
-        self.db.add(instance)
-        self.db.commit()
-        self.db.refresh(instance)
+        db.add(instance)
+        db.commit()
+        db.refresh(instance)
         return instance
 
-    def update(self, id: int, data: dict) -> Optional[T]:
-        instance = self.get(id)
+    def update(self, db, id: int, data: dict) -> Optional[T]:
+        instance = self.get(db, id)
         vector.update_document(instance.vector_id, self._to_vector_data(data))
         if instance:
             for key, value in data.items():
                 setattr(instance, key, value)
-            self.db.commit()
-            self.db.refresh(instance)
+            db.commit()
+            db.refresh(instance)
         return instance
 
-    def delete(self, id: int) -> bool:
-        instance = self.get(id)
+    def delete(self, db, id: int) -> bool:
+        instance = self.get(db, id)
 
         if instance:
             vector.delete_documents([instance.vector_id])
-            self.db.delete(instance)
-            self.db.commit()
+            db.delete(instance)
+            db.commit()
             return True
 
         raise Exception(f"Delete document failed: Document with id {id} not found !")
 
-    def count(self):
-        return self.db.query(self.model_class).count()
+    def count(self, db):
+        return db.query(self.model_class).count()

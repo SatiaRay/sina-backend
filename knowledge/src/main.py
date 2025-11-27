@@ -10,6 +10,8 @@ from src.repositories import DocumentRepository
 from src.schemas import StoreDocumentRequest, UpdateDocumentRequest
 from src.util import auth_validate, authorized_http_session_factory
 from src.vector import VectorStore
+from src.database import get_db
+from sqlalchemy.orm import Session
 
 
 root_dir = Path(__file__).parent.parent
@@ -71,11 +73,13 @@ async def whoami(request: Request = None):
 @app.post("/")
 async def store(
     document: StoreDocumentRequest,
-    session=Depends(get_session),
+    db: Session = Depends(get_db),
     response: Response = None
 ):
+    from src.repositories import DocumentRepository
+    repo = DocumentRepository()
     try:
-        repo.create(document.dict())
+        repo.create(db, document.dict())
         return {"msg": "succeed"}
     except Exception as e:
         print("Error in storing document:", e)
@@ -86,7 +90,7 @@ async def store(
 @app.get("/search")
 async def search(
     query: str,
-    session=Depends(get_session),
+    db: Session = Depends(get_db),
 ):
     return vector.search(query=query)
 
@@ -94,11 +98,13 @@ async def search(
 @app.delete("/{id}")
 async def delete(
     id: int,
-    session=Depends(get_session),
+    db: Session = Depends(get_db),
     response: Response = None
 ):
+    from src.repositories import DocumentRepository
+    repo = DocumentRepository()
     try:
-        repo.delete(id)
+        repo.delete(db, id)
         return {"msg": "succeed"}
     except Exception as e:
         print("Error deleting document:", e)
@@ -110,11 +116,13 @@ async def delete(
 async def update(
     id: int,
     document: UpdateDocumentRequest,
-    session=Depends(get_session),
+    db: Session = Depends(get_db),
     response: Response = None
 ):
+    from src.repositories import DocumentRepository
+    repo = DocumentRepository()
     try:
-        repo.update(id, document.dict())
+        repo.update(db, id, document.dict())
         return {"msg": "succeed"}
     except Exception as e:
         print("Error updating document:", e)
@@ -127,12 +135,14 @@ async def all(
     response: Response,
     page: int = 1,
     perpage: int = 20,
-    session=Depends(get_session),
+    db: Session = Depends(get_db),
 ):
+    from src.repositories import DocumentRepository
+    repo = DocumentRepository()
     try:
         offset = (page - 1) * perpage
-        documents = repo.get_all(offset=offset, limit=perpage)
-        total_docs = repo.count()
+        documents = repo.get_all(db, offset=offset, limit=perpage)
+        total_docs = repo.count(db)
         total_pages = (total_docs + perpage - 1) // perpage
         return {
             "documents": [doc.__dict__ for doc in documents],
@@ -148,10 +158,12 @@ async def all(
 async def find(
     id: int,
     response: Response,
-    session=Depends(get_session),
+    db: Session = Depends(get_db),
 ):
+    from src.repositories import DocumentRepository
+    repo = DocumentRepository()
     try:
-        return repo.get(id)
+        return repo.get(db, id)
     except Exception as e:
         print("Error finding document:", e)
         response.status_code = 500
