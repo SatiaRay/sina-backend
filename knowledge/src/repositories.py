@@ -77,7 +77,7 @@ class DocumentRepository(Generic[T]):
         return self._merge_vector_data(doc, vector_doc)
 
     def create(self, db, data: dict) -> T:
-        vector_id = vector.add_documents([self._to_vector_data(data)])[0]
+        vector_id = vector.add_document(self._to_vector_data(data))
         instance = self.model_class(**{"vector_id" : vector_id})
         db.add(instance)
         db.commit()

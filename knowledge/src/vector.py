@@ -1,3 +1,4 @@
+from itertools import tee
 import chromadb
 from certifi import where
 from chromadb.config import Settings
@@ -71,37 +72,27 @@ class VectorStore:
 
         return cleaned_metadata
 
-    def add_documents(self, documents: list[dict]):
-        if not documents:
-            return
-
+    def add_document(self, document: dict):
         client = OpenAI()
 
-        added_documents_ids = []
+        # chunks = chunk_text(doc['text'])
 
-        for doc in documents:
-            # chunks = chunk_text(doc['text'])
-            chunks = [doc['text']]
+        id = f"doc_{uuid.uuid4().hex}"
 
-            ids = [f"doc_{uuid.uuid4().hex}" for _ in range(len(chunks))]
+        metadatas = self._clean_metadata(document['metadata'])
 
-            metadatas = [self._clean_metadata(doc['metadata'])] * len(chunks)
+        embeddings = []
 
-            embeddings = []
+        response = client.embeddings.create(
+            input=document['text'],
+            model=os.getenv("OPENAI_EMBEDDING_MODEL",
+                            "text-embedding-3-small"),
+        )
+        embeddings.append(response.data[0].embedding)
 
-            for text in chunks:
-                response = client.embeddings.create(
-                    input=text,
-                    model=os.getenv("OPENAI_EMBEDDING_MODEL",
-                                    "text-embedding-3-small"),
-                )
-                embeddings.append(response.data[0].embedding)
+        self.save_documents(id, document["text"], metadatas, embeddings)
 
-            self.save_documents(ids, chunks, metadatas, embeddings)
-
-            added_documents_ids.extend(ids)
-
-        return added_documents_ids
+        return id
 
     def save_documents(self, ids, documents, metadatas, embeddings):
         self.collection.add(
