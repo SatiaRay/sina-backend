@@ -11,7 +11,7 @@ services:
     networks:
       - default
     volumes:
-      - ./${CHROMA_PERSIST_DIRECTORY}:/var/www/html/knowledge/${CHROMA_PERSIST_DIRECTORY}
+      - chroma_db:/var/www/html/knowledge/data
     command: /bin/sh -c "wait-for-it.sh knowledge-mysql:3308 -- alembic upgrade head && uvicorn src.main:app --host=0.0.0.0 --port=80"
 
   knowledge-mysql:

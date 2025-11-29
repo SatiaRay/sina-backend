@@ -205,7 +205,7 @@ services:
     networks:
       - default
     volumes:
-      - ./knowledge/data/chroma:/var/www/html/knowledge/data/chroma
+      - chroma_db:/var/www/html/knowledge/data
     command: /bin/sh -c "wait-for-it.sh knowledge-mysql:3308 -- alembic upgrade head && uvicorn src.main:app --host=0.0.0.0 --port=80"
 
 volumes:
@@ -214,6 +214,8 @@ volumes:
   ai-mysql-data:
     driver: local
   knowledge-mysql-data:
+    driver: local
+  chroma_db:
     driver: local
 
 networks:
