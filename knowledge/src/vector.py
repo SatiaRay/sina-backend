@@ -99,7 +99,7 @@ class VectorStore:
             embeddings=embeddings, documents=documents, metadatas=metadatas, ids=ids
         )
 
-    def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+    def search(self, query: str, n_results: int = 10) -> List[Dict[str, Any]]:
         """جستجوی اسناد مرتبط"""
         # تبدیل سوال به بردار با استفاده از OpenAI
         client = OpenAI()
