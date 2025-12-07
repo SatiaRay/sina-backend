@@ -9,8 +9,6 @@ from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-import chromadb
-from chromadb.config import Settings
 from fastapi import HTTPException, UploadFile, APIRouter, Depends
 from fastapi.responses import FileResponse
 import logging
@@ -21,15 +19,11 @@ import sys
 from database.models import (
     Base,
     Wizard,
-    CrawledDomain,
-    CrawlJobs,
-    Document,
     Chat,
     ChatHistory,
     Workflow,
     Instruction,
 )
-from database.vector_store import VectorStore
 from provider.service_container import container
 
 logger = logging.getLogger(__name__)
@@ -41,7 +35,7 @@ config = Dynaconf(settings_files=["../config/ai.json"])
 
 
 class DatabaseExportImport:
-    """Handles export and import functionality for MySQL and ChromaDB databases"""
+    """Handles export and import functionality for MySQL database"""
 
     def __init__(self):
         self.temp_dir = None
@@ -76,21 +70,9 @@ class DatabaseExportImport:
         db = SessionLocal()
         return db, db_url
 
-    def _get_chroma_client(self):
-        """Get ChromaDB client"""
-        chroma_dir = os.getenv("CHROMA_PERSIST_DIRECTORY", "./data/chroma")
-        collection_name = os.getenv("CHROMA_COLLECTION_NAME", "satya_docs")
-
-        client = chromadb.PersistentClient(
-            path=chroma_dir,
-            settings=Settings(anonymized_telemetry=False, allow_reset=True),
-        )
-
-        return client, collection_name
-
     def export_database(self) -> str:
         """
-        Export both MySQL and ChromaDB data to a zip file
+        Export MySQL data to a zip file
 
         Returns:
             str: Path to the exported zip file
@@ -102,20 +84,13 @@ class DatabaseExportImport:
             # Export MySQL data
             mysql_data = self._export_mysql_data()
 
-            # Export ChromaDB data
-            chroma_data = self._export_chroma_data()
-
             # Create metadata
             metadata = {
                 "export_timestamp": datetime.now().isoformat(),
                 "version": "1.0",
                 "mysql_tables": list(mysql_data.keys()),
-                "chroma_collections": list(chroma_data.keys()),
                 "total_mysql_records": sum(
                     len(records) for records in mysql_data.values()
-                ),
-                "total_chroma_records": sum(
-                    len(records) for records in chroma_data.values()
                 ),
             }
 
@@ -123,7 +98,6 @@ class DatabaseExportImport:
             export_data = {
                 "metadata": metadata,
                 "mysql": mysql_data,
-                "chroma": chroma_data,
             }
 
             # Create zip file
@@ -141,12 +115,6 @@ class DatabaseExportImport:
                 zipf.writestr(
                     "mysql_data.json",
                     json.dumps(mysql_data, indent=2, ensure_ascii=False, default=str),
-                )
-
-                # Add ChromaDB data
-                zipf.writestr(
-                    "chroma_data.json",
-                    json.dumps(chroma_data, indent=2, ensure_ascii=False, default=str),
                 )
 
             logger.info(f"Database export completed successfully: {zip_path}")
@@ -167,9 +135,6 @@ class DatabaseExportImport:
             # Define tables to export (in order of dependencies)
             tables = [
                 ("wizards", Wizard),
-                ("crawled_domains", CrawledDomain),
-                ("crawl_jobs", CrawlJobs),
-                ("documents", Document),
                 ("chats", Chat),
                 ("chat_history", ChatHistory),
                 ("workflows", Workflow),
@@ -203,42 +168,6 @@ class DatabaseExportImport:
 
         finally:
             db.close()
-
-    def _export_chroma_data(self) -> Dict[str, Any]:
-        """Export ChromaDB data"""
-        try:
-            client, collection_name = self._get_chroma_client()
-
-            # Get collection
-            collection = client.get_collection(name=collection_name)
-
-            # Get all data from collection
-            result = collection.get()
-
-            chroma_data = {
-                "collection_name": collection_name,
-                "count": len(result["ids"]) if result["ids"] else 0,
-                "ids": result["ids"] or [],
-                "documents": result["documents"] or [],
-                "metadatas": result["metadatas"] or [],
-                "embeddings": result["embeddings"] or [],
-            }
-
-            logger.info(f"Exported {chroma_data['count']} records from ChromaDB")
-            return {"satya_docs": chroma_data}
-
-        except Exception as e:
-            logger.error(f"Error exporting ChromaDB data: {str(e)}")
-            return {
-                "satya_docs": {
-                    "collection_name": collection_name,
-                    "count": 0,
-                    "ids": [],
-                    "documents": [],
-                    "metadatas": [],
-                    "embeddings": [],
-                }
-            }
 
     def import_database(self, file: UploadFile) -> Dict[str, Any]:
         """
@@ -285,20 +214,8 @@ class DatabaseExportImport:
             with open(mysql_path, "r", encoding="utf-8") as f:
                 mysql_data = json.load(f)
 
-            # Read ChromaDB data
-            chroma_path = os.path.join(temp_dir, "chroma_data.json")
-            if not os.path.exists(chroma_path):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid export file: chroma_data.json not found",
-                )
-
-            with open(chroma_path, "r", encoding="utf-8") as f:
-                chroma_data = json.load(f)
-
             # Import data
             mysql_results = self._import_mysql_data(mysql_data)
-            chroma_results = self._import_chroma_data(chroma_data)
 
             # Cleanup
             self._cleanup_temp_directory()
@@ -307,7 +224,6 @@ class DatabaseExportImport:
                 "message": "Database import completed successfully",
                 "metadata": metadata,
                 "mysql_results": mysql_results,
-                "chroma_results": chroma_results,
                 "import_timestamp": datetime.now().isoformat(),
             }
 
@@ -331,9 +247,6 @@ class DatabaseExportImport:
 
             tables = [
                 ("wizards", Wizard),
-                ("crawled_domains", CrawledDomain),
-                ("crawl_jobs", CrawlJobs),
-                ("documents", Document),
                 ("chats", Chat),
                 ("chat_history", ChatHistory),
                 ("workflows", Workflow),
@@ -418,52 +331,6 @@ class DatabaseExportImport:
             logger.error(f"Error clearing MySQL data: {str(e)}")
             raise
 
-    def _import_chroma_data(self, chroma_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Import ChromaDB data"""
-        try:
-            client, collection_name = self._get_chroma_client()
-
-            # Get or create collection
-            collection = client.get_or_create_collection(name=collection_name)
-
-            # Clear existing data
-            collection.delete(where={})
-
-            # Import new data
-            for collection_key, collection_data in chroma_data.items():
-                if collection_data.get("count", 0) > 0:
-                    ids = collection_data.get("ids", [])
-                    documents = collection_data.get("documents", [])
-                    metadatas = collection_data.get("metadatas", [])
-                    embeddings = collection_data.get("embeddings", [])
-
-                    if ids and documents:
-                        # Add documents to collection
-                        if embeddings:
-                            collection.add(
-                                ids=ids,
-                                documents=documents,
-                                metadatas=metadatas,
-                                embeddings=embeddings,
-                            )
-                        else:
-                            collection.add(
-                                ids=ids, documents=documents, metadatas=metadatas
-                            )
-
-            logger.info("ChromaDB data imported successfully")
-            return {
-                "status": "success",
-                "collections_imported": len(chroma_data),
-                "total_records": sum(
-                    data.get("count", 0) for data in chroma_data.values()
-                ),
-            }
-
-        except Exception as e:
-            logger.error(f"Error importing ChromaDB data: {str(e)}")
-            return {"status": "error", "error": str(e)}
-
     def get_export_file_response(self) -> FileResponse:
         """Get FileResponse for the exported file"""
         if not self.export_filename or not self.temp_dir:
@@ -533,11 +400,11 @@ def save_system_settings(settings: dict):
 @router.get(
     "/export",
     summary="Export Database",
-    description="Export both MySQL and ChromaDB data to a downloadable zip file",
+    description="Export MySQL data to a downloadable zip file",
 )
 async def export_database():
     """
-    Export the entire database (MySQL and ChromaDB) to a zip file
+    Export the MySQL database to a zip file
 
     Returns:
         FileResponse: Zip file containing the exported database
@@ -564,7 +431,7 @@ async def import_database(file: UploadFile):
     Import database from an uploaded zip file
 
     This endpoint imports data from a previously exported zip file.
-    **WARNING**: This will replace all existing data in both MySQL and ChromaDB.
+    **WARNING**: This will replace all existing data in MySQL.
 
     Args:
         file: Zip file containing exported database data

@@ -22,7 +22,6 @@ import httpx
 from sqlalchemy.orm import Session
 from database.models import get_db
 from database.repository import (
-    DocumentRepository,
     WorkflowRepository,
     InstructionRepository,
 )
@@ -52,15 +51,11 @@ def get_instruction(db: Session = Depends(get_db)):
     """
     try:
         # Initialize repositories
-        document_repo = DocumentRepository(db)
         workflow_repo = WorkflowRepository(db)
         instruction_repo = InstructionRepository(db)
 
         # Fetch data for voice agent
         voice_agent_type = "voice_agent"
-
-        # Get documents for voice agent
-        voice_documents = document_repo.get_by_agent_type(voice_agent_type)
 
         # Get workflows for voice agent
         raw_voice_workflows = workflow_repo.get_active_workflows(voice_agent_type)

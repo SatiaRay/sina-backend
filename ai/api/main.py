@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from typing import Union
 
 from models.tools.functions.trigger_hook import TriggerHook
-from util.auth import decode_jwt_token, auth_validate
+from util.auth import authorized_http_session_factory, decode_jwt_token, auth_validate
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
@@ -24,11 +24,8 @@ from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv, find_dotenv
 from provider.service_container import container, ServiceContainer
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
-from database.vector_store import VectorStore
-from database.repository import DocumentRepository
 from util.logging_config import configure_logging, log_error
 from util.constants import APP_NAME, APP_VERSION
-from util.event_bus import event_bus, VectorStoreEvent
 from .models import (
     DataSource,
     DataSourceListResponse,
@@ -39,7 +36,6 @@ from .models import (
     StoreVectorRequest,
 )
 from models.html_to_markdown_agent import HTMLToMarkdownAgent
-from database.repository import DocumentRepository
 from database.repositories.workflow_repository import WorkflowRepository
 from database.models import get_db
 import uuid
@@ -51,11 +47,7 @@ from models.tools.functions.ayan import Ayan
 # Routes
 from api.about import router as about_router
 from .wizard import router as wizard_router
-from .document import router as document_router, document_websocket_router
-from .domain import router as domain_router
 from .chat import router as chat_router
-from .crawl import router as crawl_router
-from .vector import router as vector_router
 from .workflow import router as workflow_router
 from .ai import router as ai_router
 from .job import router as job_router
@@ -80,17 +72,15 @@ load_dotenv(override=True)
 # Set base path for service container
 ServiceContainer.set_base_path(str(root_dir))
 
-
 # Initialize service container bindings
 def init_service_container():
-    # Bind VectorStore as singleton
-    container.singleton("vector_store", VectorStore)
+    # Getting client acess token from idp serivce
+    session = authorized_http_session_factory()
+
+    container.singleton('requeste.session', session)
 
     # Bind ChatAgentRagProxy as singleton
     container.singleton("chat_agent", ChatAgentRagProxy)
-
-    # Bind DocumentRepository as singleton
-    container.singleton("document_repository", DocumentRepository)
 
     # Bind WorkflowRepository as singleton
     container.singleton("workflow_repository", WorkflowRepository)
@@ -121,10 +111,6 @@ def init_service_container():
     )
 
     container.singleton("TriggerHook", TriggerHook())
-
-    # Create and bind instances
-    vector_store = container.make("vector_store")
-    container.instance("vector_store", vector_store)
 
     chat_agent = container.make("chat_agent")
     container.instance("chat_agent", chat_agent)
@@ -159,27 +145,6 @@ print(f"Current Directory: {os.getcwd()}")
 print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
 print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
 
-try:
-    # Global vector store instance
-    vector_store = container.make("vector_store")
-
-    def get_vector_store():
-        """Get or create VectorStore instance"""
-        return container.make("vector_store")
-
-    def refresh_vector_store(data=None):
-        """Callback to refresh VectorStore instance"""
-        print("Refreshing VectorStore instance...")
-        vector_store = VectorStore()
-        container.instance("vector_store", vector_store)
-        print("VectorStore instance refreshed successfully")
-
-    # Subscribe to collection modification events
-    event_bus.subscribe(VectorStoreEvent.COLLECTION_MODIFIED, refresh_vector_store)
-
-except Exception as e:
-    print(f"Error during initialization: {str(e)}")
-    raise
 
 # Create FastAPI app
 app = FastAPI(
@@ -200,12 +165,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(wizard_router)
-app.include_router(document_router)
-app.include_router(document_websocket_router)
-app.include_router(domain_router)
-app.include_router(crawl_router)
 app.include_router(chat_router)
-app.include_router(vector_router)
 app.include_router(workflow_router)
 app.include_router(ai_router)
 app.include_router(about_router)
@@ -217,33 +177,6 @@ app.include_router(system_router)
 app.include_router(function_calling_log_router)
 app.include_router(file_router)
 app.include_router(auth_router)
-
-# تعریف تگ‌ها برای سازماندهی بهتر اندپوینت‌ها
-tags_metadata = [
-    {
-        "name": "Chat",
-        "description": "اندپوینت‌های مربوط به پرسش و پاسخ",
-    },
-    {
-        "name": "Knowledge Management",
-        "description": "اندپوینت‌های مربوط به مدیریت پایگاه دانش (افزودن، به‌روزرسانی و حذف)",
-    },
-    {
-        "name": "Data Sources",
-        "description": "اندپوینت‌های مربوط به مدیریت منابع داده",
-    },
-    {
-        "name": "Utilities",
-        "description": "اندپوینت‌های متفرقه و ابزارها",
-    },
-    {
-        "name": "System",
-        "description": "اندپوینت‌های مربوط به مدیریت سیستم و پایگاه داده",
-    },
-]
-
-app.openapi_tags = tags_metadata
-
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -295,6 +228,13 @@ async def guard_middleware(request: Request, call_next):
     # Skip auth for preflight CORS requests
     if request.method == "OPTIONS":
         return await call_next(request)
+
+    token = request.headers.get("authorization")
+    if not token:
+        return JSONResponse(
+            status_code=401,
+            content={"msg": "Missing token"},
+        )
     
     auth = await auth_validate(credential=request)
 
@@ -309,38 +249,6 @@ async def guard_middleware(request: Request, call_next):
     response = await call_next(auth)
         
     return response
-        
-        
-
-
-# مدل‌های درخواست و پاسخ
-class QuestionRequest(BaseModel):
-    question: str
-    attach_resources: bool = False
-
-
-class QuestionResponse(BaseModel):
-    answer: str
-    sources: List[Dict[str, Any]]
-
-
-class DocumentRequest(BaseModel):
-    documents: List[Dict]
-
-
-class UrlRequest(BaseModel):
-    url: HttpUrl
-
-
-class DocumentUpdateRequest(BaseModel):
-    text: str
-    metadata: Optional[dict] = None
-
-
-# نمونه‌های کلاس‌ها
-vector_store = VectorStore()
-agent_rag = ChatAgentRagProxy()
-
 
 @app.get("/")
 async def root():
@@ -366,83 +274,3 @@ async def health_check():
     ```
     """
     return {"status": "ok", "version": "1.0.0"}
-
-
-class AddManuallyKnowledgeRequest:
-    def __init__(self, text: str, metadata: dict):
-        self.text = text
-        self.metadata = metadata
-
-
-@app.post(
-    "/add_manually_knowledge",
-    tags=["Knowledge Management"],
-    summary="افزودن دانش به صورت دستی (تبدیل HTML به Markdown)",
-    description="این اندپوینت مشابه /store_vector است اما ابتدا متن HTML را به مارک‌داون تبدیل می‌کند و سپس در پایگاه داده برداری ذخیره می‌کند.",
-)
-async def add_manually_knowledge(
-    request: StoreVectorRequest = Body(
-        ...,
-        example={
-            "text": "<p class='content'>ساتیا یک پلتفرم مدیریت منابع سازمانی است که...</p>",
-            "agent_type": "voice_agent",
-            "metadata": {
-                "source": "دستی",
-                "title": "درباره ساتیا",
-                "author": "تیم ساتیا",
-                "date": "2024-04-26",
-            },
-        },
-    ),
-    db: Session = Depends(get_db),
-):
-    try:
-        text = request.text
-
-        # Convert HTML to Markdown using RAG model
-        convertor_agent = HTMLToMarkdownAgent()
-        markdown_result = await convertor_agent.convert(text)
-        markdown_text = (
-            markdown_result
-            if isinstance(markdown_result, str)
-            else str(markdown_result)
-        )
-
-        # Initialize vector store
-        vector_store = VectorStore()
-
-        # Store in database
-        repo = DocumentRepository(db)
-        doc = repo.create(
-            {
-                "html": request.text,
-                "markdown": markdown_text,
-                "title": request.metadata["title"],
-                "type": "manual",
-                "agent_type": request.agent_type,
-            }
-        )
-
-        request.metadata["document_id"] = doc.id
-
-        # Add document to vector store
-        ids = vector_store.add_documents(
-            [{"text": markdown_text, "metadata": request.metadata}]
-        )
-
-        repo.update(doc.id, {"status": "vectorized"})
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "message": "متن (مارک‌داون) با موفقیت در پایگاه داده برداری ذخیره شد",
-                "ids": ids,
-                "status": "success",
-            },
-        )
-    except Exception as e:
-        log_error(error_logger, str(e))
-        raise HTTPException(
-            status_code=500,
-            detail=f"خطا در ذخیره متن مارک‌داون در پایگاه داده برداری: {str(e)}",
-        )

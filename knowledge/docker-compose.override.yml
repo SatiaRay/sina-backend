@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  knowledge:
+    volumes:
+      - .:/var/www/html/knowledge/
+      - chroma_db:/var/www/html/knowledge/data
+    command: /bin/sh -c "wait-for-it.sh knowledge-mysql:3308 -- alembic upgrade head && uvicorn src.main:app --reload --host=0.0.0.0 --port=80"
+
+volumes:
+  knowledge-mysql-data:
+  chroma-db:
+
+networks:
+  default:
+    driver: bridge

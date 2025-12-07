@@ -30,7 +30,6 @@ class WorkflowBase(BaseModel):
     name: str
     flow: List[WorkflowNode]
     status: bool = True
-    agent_type: Literal['voice_agent', 'text_agent', 'both'] = Field('text_agent', description='Agent type')
 
 class WorkflowCreate(WorkflowBase):
     pass
@@ -54,15 +53,15 @@ def create_workflow(workflow: WorkflowCreate, db: Session = Depends(get_db)):
     return repo.create(db_workflow)
 
 @router.get("", response_model=List[WorkflowResponse])
-def get_workflows(skip: int = 0, limit: int = 100, agent_type: str = 'text_agent', db: Session = Depends(get_db)):
+def get_workflows(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     repo = WorkflowRepository(db)
-    workflows = repo.get_all(agent_type=agent_type)
+    workflows = repo.get_all()
     return workflows[skip : skip + limit]
 
 @router.get("/active", response_model=List[WorkflowResponse])
-def get_active_workflows(agent_type: str = 'text_agent', db: Session = Depends(get_db)):
+def get_active_workflows(db: Session = Depends(get_db)):
     repo = WorkflowRepository(db)
-    return repo.get_active_workflows(agent_type=agent_type)
+    return repo.get_active_workflows()
 
 @router.get("/{workflow_id}", response_model=WorkflowResponse)
 def get_workflow(workflow_id: int, db: Session = Depends(get_db)):

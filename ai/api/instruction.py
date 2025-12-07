@@ -14,9 +14,6 @@ class InstructionBase(BaseModel):
     label: str = Field(..., min_length=1, max_length=255)
     text: str = Field(..., min_length=1)
     status: bool = True
-    agent_type: Literal["voice_agent", "text_agent", "both"] = Field(
-        "text_agent", description="Agent type"
-    )
 
     @validator("label", "text")
     def validate_not_empty(cls, v):
@@ -59,7 +56,6 @@ def create_instruction(instruction: InstructionCreate, db: Session = Depends(get
 @router.get("/instructions/", response_model=PaginatedResponse)
 def get_instructions(
     active_only: bool = False,
-    agent_type: str = Query("None", description="Agent type"),
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
@@ -67,10 +63,10 @@ def get_instructions(
     repo = InstructionRepository(db)
     if active_only:
         items, total = repo.get_active_instructions_paginated(
-            page, size, agent_type=agent_type
+            page, size
         )
     else:
-        items, total = repo.get_all_paginated(page, size, agent_type=agent_type)
+        items, total = repo.get_all_paginated(page, size)
 
     pages = (total + size - 1) // size  # Ceiling division
 

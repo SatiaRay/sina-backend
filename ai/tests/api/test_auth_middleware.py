@@ -50,7 +50,7 @@ def other_rsa_keys():
 @pytest.fixture(autouse=True)
 def set_public_key_env(monkeypatch, rsa_keys):
     _, public_pem = rsa_keys
-    monkeypatch.setenv("OAUTH_TOKEN", public_pem)
+    monkeypatch.setenv("OAUTH_PUBLIC_KEY", public_pem)
 
 
 def test_missing_token_returns_401(client):

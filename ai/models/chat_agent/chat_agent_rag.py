@@ -3,7 +3,6 @@ from agents import Runner
 from typing import List, Dict, Optional
 import os
 from dotenv import load_dotenv
-from database.vector_store import VectorStore
 from database.repository import InstructionRepository
 from database.models import SessionLocal
 from models.agents.title_analyzer_agent import TitleAnalyzerAgent
@@ -108,7 +107,6 @@ class ChatAgentRag(ChatAgentRagInterface):
         self.workflows = workflows
         self.binding_token = binding_token
         
-        self.vector_store = VectorStore()
         self.client = OpenAI()
         self.called_function = {
             "name": None,
@@ -165,9 +163,16 @@ class ChatAgentRag(ChatAgentRagInterface):
         """
         try:
             main_logger.info(f"Finding relevant documents for question: {question}")
+
+            session = container.make('requeste.session')
             
-            # Search for relevant documents
-            relevant_docs = self.vector_store.search(question)
+            # Search for relevant knowledge through sending inquiry request to the service
+            response = session.get(f"http://knowledge/search?query='{question}'")
+
+            if not response.status_code == 200:
+                raise Exception(f"Search knowledge requeste failed: {response.text}")
+
+            relevant_docs = response.json()
 
             main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
             

@@ -4,7 +4,14 @@ from typing import List
 import os
 from uuid import uuid4
 import mimetypes
-import magic  # Add this import
+
+# Try to import magic, fallback to None if libmagic is not available
+try:
+    import magic
+    MAGIC_AVAILABLE = True
+except ImportError:
+    MAGIC_AVAILABLE = False
+    magic = None
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -47,8 +54,14 @@ async def upload_files(files: List[UploadFile] = File(...)):
                 status_code=400,
                 detail=f"File '{filename}' exceeds the maximum allowed size of {MAX_FILE_SIZE // (1024 * 1024)} MB.",
             )
-        # Detect true MIME type using python-magic
-        detected_type = magic.from_buffer(content, mime=True)
+        # Detect true MIME type using python-magic (if available) or mimetypes as fallback
+        if MAGIC_AVAILABLE:
+            detected_type = magic.from_buffer(content, mime=True)
+        else:
+            # Fallback to mimetypes based on file extension
+            detected_type, _ = mimetypes.guess_type(filename)
+            if detected_type is None:
+                detected_type = file.content_type or "application/octet-stream"
         # Allow .txt files detected as application/octet-stream if browser type is text/plain or extension is .txt
         if detected_type not in ALLOWED_CONTENT_TYPES:
             if detected_type == "application/octet-stream" and (

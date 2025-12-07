@@ -7,8 +7,6 @@ import os
 
 from alembic import context
 
-print("Tables in metadata:", Base.metadata.tables.keys())
-
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

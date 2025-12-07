@@ -4,10 +4,11 @@ import requests
 import os
 from fastapi import Request, WebSocket
 from typing import Union
+from util.logging_config import configure_logging, log_error
 
 def decode_jwt_token(token: str):
     try:
-        key = os.getenv('OAUTH_TOKEN')
+        key = os.getenv('OAUTH_PUBLIC_KEY')
         
         if not key:
             raise Exception('OAuth public key not found in .env')
@@ -59,3 +60,27 @@ async def auth_validate(credential: str|Request) -> Union[WebSocket, Request, bo
         
     except Exception as e:
         return False
+
+# Generates requests session which has defeault OAUTH authorization access token
+def authorized_http_session_factory():
+    # Create a session
+    session = requests.Session()
+
+    # Send request to IDP service for getting client access token
+    response = requests.post('http://idp/api/internal/client-token', json={
+        "client_id" : os.getenv('OAUTH_CLIENT_ID'),
+        "client_secret" : os.getenv('OAUTH_CLIENT_SECRET')
+    })
+
+    # checking successfully
+    if response.status_code != 200:
+        raise Exception("Getting client access token requests failed:", response.text)
+
+    token = response.json()['token']
+
+    # Set default headers for all requests made with this session
+    session.headers.update({
+        "Authorization": f"Bearer {token}"
+    })
+
+    return session

@@ -29,8 +29,8 @@ services:
 
   idp:
     build:
-      context: ./idp/docker/8.4
-      dockerfile: Dockerfile
+      context: ./idp
+      dockerfile: docker/8.4/Dockerfile
       args:
         WWWGROUP: "${WWWGROUP}"
     image: sail-8.4/app
@@ -43,12 +43,11 @@ services:
       - "${VITE_PORT:-5173}:${VITE_PORT:-5173}"
     environment:
       WWWUSER: "${WWWUSER}"
+      WWWGROUP: "${WWWGROUP}"
       LARAVEL_SAIL: 1
       XDEBUG_MODE: "${SAIL_XDEBUG_MODE:-off}"
       XDEBUG_CONFIG: "${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}"
       IGNITION_LOCAL_SITES_PATH: "${PWD}"
-    volumes:
-      - "./idp:/var/www/html"
     networks:
       - default
     depends_on:
@@ -92,6 +91,7 @@ services:
     depends_on:
       - ai-mysql
       - ai-redis
+      - idp
     env_file:
       - ./ai/.env
     environment:
@@ -106,11 +106,10 @@ services:
       - "8090:80"
     networks:
       - default
-    volumes:
-      - ./ai:/var/www/html/ai
     command: >
       /bin/sh -c "wait-for-it.sh ai-mysql:3306 -- alembic upgrade head &&
                   uvicorn api.main:app --reload --host=0.0.0.0 --port=80"
+
   rq-worker-default:
       build:
         context: ./ai
@@ -166,13 +165,57 @@ services:
       - ./ai:/var/www/html/ai
     command: >
       /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker crawl"
-  
 
+  knowledge-mysql:
+    image: mysql/mysql-server:8.0
+    env_file:
+      - ./knowledge/.env
+    ports:
+      - "${FORWARD_DB_PORT:-3308}:3308"
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456789"
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_TCP_PORT: "3308"
+      MYSQL_DATABASE: "knowledge_db"
+      MYSQL_USER: "knowledge_serv"
+      MYSQL_PASSWORD: "123456789"
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
+      MYSQL_EXTRA_OPTIONS: "${MYSQL_EXTRA_OPTIONS}"
+    volumes:
+      - knowledge-mysql-data:/var/lib/mysql
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-p 123456789", "-P", "3308"]
+      retries: 3
+      timeout: 5s
+
+  knowledge:
+    build:
+      context: ./knowledge
+      dockerfile: dockerfile
+    container_name: knowledge
+    depends_on:
+      - knowledge-mysql
+      - idp
+    env_file:
+      - ./knowledge/.env
+    ports:
+      - "8050:80"
+    networks:
+      - default
+    volumes:
+      - chroma_db:/var/www/html/knowledge/data
+    command: /bin/sh -c "wait-for-it.sh knowledge-mysql:3308 -- alembic upgrade head && uvicorn src.main:app --host=0.0.0.0 --port=80"
 
 volumes:
   sail-mysql:
     driver: local
   ai-mysql-data:
+    driver: local
+  knowledge-mysql-data:
+    driver: local
+  chroma_db:
     driver: local
 
 networks:

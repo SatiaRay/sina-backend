@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 # Import the system module
 from api.system import DatabaseExportImport, router
-from database.models import Base, Wizard, Document, Chat, ChatHistory, Workflow, Instruction
+from database.models import Base, Wizard, Chat, ChatHistory, Workflow, Instruction
 
 
 class TestDatabaseExportImport:
@@ -162,22 +162,25 @@ class TestDatabaseExportImport:
         mock_created_col = Mock()
         mock_created_col.name = 'created_at'
         
-        # Mock Document records
-        mock_doc = Mock()
-        mock_doc.id = 1
-        mock_doc.title = "Test Document"
+        # Mock Wizard record
+        mock_wiz = Mock()
+        mock_wiz.id = 1
+        mock_wiz.title = "Test Wziard"
+        mock_wiz.context = "Hello World !"
+        mock_wiz.parent_id = None
+        mock_wiz.enabled = True
+        mock_wiz.wizard_type = "answer"
         
         mock_title_col = Mock()
         mock_title_col.name = 'title'
-        mock_doc.__table__ = Mock()
-        mock_doc.__table__.columns = [mock_id_col, mock_title_col]
+        mock_wiz.__table__ = Mock()
+        mock_wiz.__table__.columns = [mock_id_col, mock_title_col]
         
         # Setup query mocks
         mock_session.query.return_value.all.side_effect = [
-            [],           # wizards
-            [],           # crawled_domains
-            [],           # crawl_jobs
-            [mock_doc],   # documents
+            [
+                mock_wiz
+            ],           # wizards
             [],           # chats
             [],           # chat_history
             [],           # workflows
@@ -186,11 +189,11 @@ class TestDatabaseExportImport:
         
         # Export MySQL data
         result = db_export_import._export_mysql_data()
-        
+
         # Verify results
-        assert 'documents' in result
-        assert len(result['documents']) == 1
-        assert result['documents'][0]['title'] == "Test Document"
+        assert 'wizards' in result
+        assert len(result['wizards']) == 1
+        assert result['wizards'][0]['title'] == "Test Wziard"
         
         mock_session.close.assert_called_once()
     
@@ -339,10 +342,14 @@ class TestDatabaseExportImport:
         
         # Test data
         mysql_data = {
-            "documents": [
+            "wizards": [
                 {
                     "id": 1,
                     "title": "Test Document",
+                    "context": "Hello World !",
+                    "parent_id": None,
+                    "enabled": True,
+                    "wizard_type": "answer",
                     "created_at": datetime.now().isoformat(),
                     "updated_at": datetime.now().isoformat()
                 }
@@ -355,8 +362,8 @@ class TestDatabaseExportImport:
             result = db_export_import._import_mysql_data(mysql_data)
             
             # Verify results
-            assert 'documents' in result
-            assert result['documents']['status'] == 'success'
+            assert 'wizards' in result
+            assert result['wizards']['status'] == 'success'
             
             # Verify database operations
             assert mock_session.add.call_count == 1  # One for each table
