@@ -27,7 +27,7 @@ services:
       retries: 3
       timeout: 5s
 
-  idp:
+  sina-idp-service:
     build:
       context: ./idp
       dockerfile: docker/8.4/Dockerfile
@@ -83,7 +83,7 @@ services:
     networks:
       - default
 
-  ai:
+  sina-ai-service:
     build:
       context: ./ai
       dockerfile: dockerfile
@@ -190,7 +190,7 @@ services:
       retries: 3
       timeout: 5s
 
-  knowledge:
+  sina-knowledge-service:
     build:
       context: ./knowledge
       dockerfile: dockerfile

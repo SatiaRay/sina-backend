@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  knowledge:
+  sina-knowledge-service:
     volumes:
       - .:/var/www/html/knowledge/
       - chroma_db:/var/www/html/knowledge/data
