@@ -30,7 +30,7 @@ services:
     build:
       context: .
       dockerfile: dockerfile
-    container_name: ai
+    container_name: ai-service
     depends_on:
       - mysql
       - redis

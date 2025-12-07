@@ -15,7 +15,7 @@ class GenerateClientTokenController extends Controller
      */
     public function __invoke(GenerateClientTokenRequest $request)
     {
-        $response = Http::asForm()->post('http://idp/oauth/token', [
+        $response = Http::asForm()->post('http://sina-idp-service/oauth/token', [
             'grant_type' => 'client_credentials',
             'client_id' => $request->input('client_id'),
             'client_secret' => $request->input('client_secret'),

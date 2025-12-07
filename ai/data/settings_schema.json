@@ -3,7 +3,7 @@
     "site_name": {
       "lable": "نام نرم افزار",
       "type": "string",
-      "default": "Khan AI"
+      "default": "Sina AI"
     },
     "text_agent_model": {
       "lable": "مدل هوش مصنوعی چت",

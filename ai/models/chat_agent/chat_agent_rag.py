@@ -167,7 +167,7 @@ class ChatAgentRag(ChatAgentRagInterface):
             session = container.make('requeste.session')
             
             # Search for relevant knowledge through sending inquiry request to the service
-            response = session.get(f"http://knowledge/search?query='{question}'")
+            response = session.get(f"http://sina-knowledge-service/search?query='{question}'")
 
             if not response.status_code == 200:
                 raise Exception(f"Search knowledge requeste failed: {response.text}")
