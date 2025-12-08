@@ -102,6 +102,8 @@ services:
       MYSQL_PORT: 3306
       REDIS_HOST: ai-redis
       REDIS_PORT: 6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OAUTH_PUBLIC_KEY: ${PASSPORT_PUBLIC_KEY}
     ports:
       - "8090:80"
     networks:
@@ -204,6 +206,8 @@ services:
       DB_PASS: ${KNOWLEDGE_SERVICE_DB_PASSWORD}
       DB_NAME: knowledge_db
       DB_PORT: 3308
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OAUTH_PUBLIC_KEY: ${PASSPORT_PUBLIC_KEY}
     ports:
       - "8050:80"
     networks:
