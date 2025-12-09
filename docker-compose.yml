@@ -1,7 +1,33 @@
 version: "3.8"
 
 services:
-  # IDP Microservice and its MySQL
+  # ----------------------- INIT SERVICE ----------------------- #
+  init:
+    build:
+      context: ./idp
+      dockerfile: docker/8.4/Dockerfile
+      args:
+        WWWGROUP: "${WWWGROUP}"
+    environment:
+      - APP_ENV=local
+      - DB_CONNECTION=mysql
+      - DB_HOST=idp-mysql
+      - DB_PORT=3307
+      - DB_DATABASE=${DB_DATABASE:-idp_db}
+      - DB_USERNAME=${DB_USERNAME:-idp}
+      - DB_PASSWORD=${DB_PASSWORD:-123456789}
+      - PASSPORT_CLIENTS=sina-ai-service,sina-knowledge-service
+    volumes:
+      - secrets:/secrets
+    depends_on:
+      idp-mysql:
+        condition: service_healthy
+    user: root
+    entrypoint: ["/scripts/generate-passport-clients.sh"]
+
+
+
+  # ----------------------- IDP MYSQL SERVICE ----------------------- #
   idp-mysql:
     image: mysql/mysql-server:8.0
     env_file:
@@ -27,8 +53,15 @@ services:
       retries: 3
       timeout: 5s
 
+
+
+  # ----------------------- IDP SERVICE ----------------------- #
   sina-idp-service:
-    image: devmahmoudi/sina-idp-service
+    build:
+      context: ./idp
+      dockerfile: docker/8.4/Dockerfile
+      args:
+        WWWGROUP: "${WWWGROUP}"
     container_name: idp-service
     env_file:
       - ./idp/.env
@@ -53,10 +86,14 @@ services:
     networks:
       - default
     depends_on:
-      - idp-mysql
+      init:
+        condition: service_completed_successfully
+      idp-mysql:
+        condition: service_healthy
 
 
-  # AI Microservice and its dependencies
+
+  # ----------------------- AI MYSQL SERVICE ----------------------- #
   ai-mysql:
     image: mysql/mysql-server:8.0
     env_file:
@@ -76,23 +113,27 @@ services:
       - ai-mysql-data:/var/lib/mysql
     networks:
       - default
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-p${AI_SERVICE_DB_PASSWORD}", "-P", "3306"]
+      retries: 3
+      timeout: 5s
 
-  ai-redis:
-    image: redis:7.2
-    container_name: ai-redis
-    restart: always
-    ports:
-      - "6379:6379"
-    networks:
-      - default
 
+
+
+  # ----------------------- SINA AI SERVICE ----------------------- #
   sina-ai-service:
-    image: devmahmoudi/sina-ai-service
+    build:
+      context: ./ai
+      dockerfile: dockerfile
     container_name: ai-service
     depends_on:
-      - ai-mysql
-      - ai-redis
-      - sina-idp-service
+      init:
+        condition: service_completed_successfully
+      sina-idp-service:
+        condition: service_started
+      ai-mysql:
+        condition: service_healthy
     env_file:
       - ./ai/.env
     environment:
@@ -113,62 +154,9 @@ services:
       /bin/sh -c "wait-for-it.sh ai-mysql:3306 -t 120 -- alembic upgrade head &&
                   uvicorn api.main:app --reload --host=0.0.0.0 --port=80"
 
-  rq-worker-default:
-      build:
-        context: ./ai
-        dockerfile: dockerfile
-      container_name: rq-worker-default
-      depends_on:
-        - ai-redis
-      env_file:
-        - ./ai/.env
-      environment:
-        REDIS_HOST: ai-redis
-        REDIS_PORT: 6379
-      networks:
-        - default
-      volumes:
-        - ./ai:/var/www/html/ai
-      command: >
-        /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker"
-  rq-worker-vectorize:
-    build:
-      context: ./ai
-      dockerfile: dockerfile
-    container_name: rq-worker-vectorize
-    depends_on:
-      - ai-redis
-    env_file:
-      - ./ai/.env
-    environment:
-      REDIS_HOST: ai-redis
-      REDIS_PORT: 6379
-    networks:
-      - default
-    volumes:
-      - ./ai:/var/www/html/ai
-    command: >
-      /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker vectorize"
 
-  rq-worker-crawl:
-    build:
-      context: ./ai
-      dockerfile: dockerfile
-    container_name: rq-worker-crawl
-    depends_on:
-      - ai-redis
-    env_file:
-      - ./ai/.env
-    environment:
-      REDIS_HOST: ai-redis
-      REDIS_PORT: 6379
-    networks:
-      - default
-    volumes:
-      - ./ai:/var/www/html/ai
-    command: >
-      /bin/sh -c "wait-for-it.sh ai-redis:6379 -- rq worker crawl"
 
+  # ----------------------- KNOWLEDGE MYSQL SERVICE ----------------------- #
   knowledge-mysql:
     image: mysql/mysql-server:8.0
     env_file:
@@ -194,12 +182,21 @@ services:
       retries: 3
       timeout: 5s
 
+
+
+  # ----------------------- SINA KNOWLEDGE SERVICE ----------------------- #
   sina-knowledge-service:
-    image: devmahmoudi/sina-knowledge-service
+    build:
+      context: ./knowledge
+      dockerfile: dockerfile
     container_name: knowledge-service
     depends_on:
-      - knowledge-mysql
-      - sina-idp-service
+      init:
+        condition: service_completed_successfully
+      sina-idp-service:
+        condition: service_started
+      knowledge-mysql:
+        condition: service_healthy
     env_file:
       - ./knowledge/.env
     environment:
@@ -226,6 +223,8 @@ volumes:
   knowledge-mysql-data:
     driver: local
   chroma_db:
+    driver: local
+  secrets:
     driver: local
 
 networks:

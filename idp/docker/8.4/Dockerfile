@@ -74,6 +74,14 @@ COPY ./docker/8.4/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY ./docker/8.4/php.ini /etc/php/8.4/cli/conf.d/99-sail.ini
 RUN chmod +x /usr/local/bin/start-container
 
+RUN mkdir -p /scripts
+COPY ./docker/scripts/generate-passport-clients.sh /scripts/generate-passport-clients.sh
+RUN chmod +x /scripts/generate-passport-clients.sh
+
+# Add wait-for-it.sh
+ADD https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh /usr/local/bin/wait-for-it.sh
+RUN chmod +x /usr/local/bin/wait-for-it.sh
+
 EXPOSE 80/tcp
 
 ENTRYPOINT ["start-container"]
