@@ -65,6 +65,7 @@ services:
     restart: always
     environment:
       MYSQL_TCP_PORT: "3306"
+      MYSQL_PORT: "3306"
       MYSQL_ROOT_PASSWORD: ${AI_SERVICE_DB_PASSWORD}
       MYSQL_DATABASE: aidb
       MYSQL_USER: ${AI_SERVICE_DB_USERNAME}
@@ -109,7 +110,7 @@ services:
     networks:
       - default
     command: >
-      /bin/sh -c "wait-for-it.sh ai-mysql:3306 -- alembic upgrade head &&
+      /bin/sh -c "wait-for-it.sh ai-mysql:3306 -t 120 -- alembic upgrade head &&
                   uvicorn api.main:app --reload --host=0.0.0.0 --port=80"
 
   rq-worker-default:
@@ -178,6 +179,7 @@ services:
       MYSQL_ROOT_PASSWORD: "${KNOWLEDGE_SERVICE_DB_PASSWORD}"
       MYSQL_ROOT_HOST: "%"
       MYSQL_TCP_PORT: "3308"
+      MYSQL_PORT: "3308"
       MYSQL_DATABASE: "knowledge_db"
       MYSQL_USER: "${KNOWLEDGE_SERVICE_DB_USERNAME}"
       MYSQL_PASSWORD: "${KNOWLEDGE_SERVICE_DB_PASSWORD}"
@@ -214,7 +216,7 @@ services:
       - default
     volumes:
       - chroma_db:/var/www/html/knowledge/data
-    command: /bin/sh -c "wait-for-it.sh knowledge-mysql:3308 -- alembic upgrade head && uvicorn src.main:app --host=0.0.0.0 --port=80"
+    command: /bin/sh -c "wait-for-it.sh knowledge-mysql:3308 -t 120 -- alembic upgrade head && uvicorn src.main:app --host=0.0.0.0 --port=80"
 
 volumes:
   sail-mysql:
