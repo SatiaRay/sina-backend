@@ -26,4 +26,4 @@ jobs:
           export KNOWLEDGE_SERVICE_DB_PASSWORD="${{ secrets.KNOWLEDGE_SERVICE_DB_PASSWORD }}"
           export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
 
-          docker compose up -d --build
+          docker compose -f docker-compose.yml up -d --build
