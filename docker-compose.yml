@@ -33,8 +33,6 @@ services:
   # ----------------------- IDP MYSQL SERVICE ----------------------- #
   idp-mysql:
     image: mysql/mysql-server:8.0
-    # env_file:
-    #   - ./idp/.env
     ports:
       - "${FORWARD_DB_PORT:-3307}:3307"
     environment:
@@ -66,8 +64,6 @@ services:
       args:
         WWWGROUP: "${WWWGROUP}"
     container_name: sina-idp-service
-    env_file:
-      - ./idp/.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -118,8 +114,6 @@ services:
   # ----------------------- AI MYSQL SERVICE ----------------------- #
   ai-mysql:
     image: mysql/mysql-server:8.0
-    env_file:
-      - ./ai/.env
     container_name: ai-mysql
     restart: always
     environment:
@@ -156,9 +150,8 @@ services:
         condition: service_started
       ai-mysql:
         condition: service_healthy
-    env_file:
-      - ./ai/.env
     environment:
+      SERVICE_NAME: sina-ai-service
       MYSQL_HOST: ai-mysql
       MYSQL_USER: ${AI_SERVICE_DB_USERNAME}
       MYSQL_PASSWORD: ${AI_SERVICE_DB_PASSWORD}
@@ -168,6 +161,12 @@ services:
       REDIS_PORT: 6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OAUTH_PUBLIC_KEY: ${PASSPORT_PUBLIC_KEY}
+      GPT_MODEL: gpt-4.1-mini
+      GPT_TITLE_ANALYZER_MODEL: gpt-4.1-mini
+      GPT_EMBEDDING_MODEL: text-embedding-3-large
+      GPT_RESPONSE_STREAM_SLEEP_SECOND: 0.0001
+      CHROMA_PERSIST_DIRECTORY: ./data/chroma
+      CHROMA_COLLECTION_NAME: satya_docs
     volumes:
       - secrets:/secrets
     ports:
@@ -183,8 +182,6 @@ services:
   # ----------------------- KNOWLEDGE MYSQL SERVICE ----------------------- #
   knowledge-mysql:
     image: mysql/mysql-server:8.0
-    env_file:
-      - ./knowledge/.env
     ports:
       - "${FORWARD_DB_PORT:-3308}:3308"
     environment:
@@ -221,9 +218,8 @@ services:
         condition: service_started
       knowledge-mysql:
         condition: service_healthy
-    env_file:
-      - ./knowledge/.env
     environment:
+      SERVICE_NAME: sina-knowledge-service
       DB_HOST: knowledge-mysql
       DB_USER: ${KNOWLEDGE_SERVICE_DB_USERNAME}
       DB_PASS: ${KNOWLEDGE_SERVICE_DB_PASSWORD}
@@ -231,6 +227,9 @@ services:
       DB_PORT: 3308
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OAUTH_PUBLIC_KEY: ${PASSPORT_PUBLIC_KEY}
+      CHROMA_COLLECTION_NAME: default
+      CHROMA_PERSIST_DIRECTORY: "data/chroma"
+      OPENAI_EMBEDDING_MODEL: "text-embedding-3-small"
     ports:
       - "8050:80"
     networks:
