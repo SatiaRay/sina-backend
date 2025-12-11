@@ -3,8 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\GenerateClientTokenRequest;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
+use GuzzleHttp\Psr7\Response;
+use League\OAuth2\Server\AuthorizationServer;
+use Psr\Http\Message\ServerRequestInterface;
 
 class GenerateClientTokenController extends Controller
 {
@@ -15,18 +16,20 @@ class GenerateClientTokenController extends Controller
      */
     public function __invoke(GenerateClientTokenRequest $request)
     {
-        $response = Http::asForm()->post('http://sina-idp-service/oauth/token', [
-            'grant_type' => 'client_credentials',
-            'client_id' => $request->input('client_id'),
-            'client_secret' => $request->input('client_secret'),
-            'scope' => '*',
-        ]);
+        $server = resolve(AuthorizationServer::class);
 
-        if(!$response->ok())
-            return response(['msg' => 'operation failed !'], 500);
+        $psr = app(ServerRequestInterface::class)
+            ->withParsedBody([
+                'grant_type' => 'client_credentials',
+                'client_id' => $request->client_id,
+                'client_secret' => $request->client_secret,
+                'scope' => '*',
+            ]);
+
+        $response = $server->respondToAccessTokenRequest($psr, new Response());
 
         return response()->json([
-            'token' => $response->json()['access_token']
+            'token' => json_decode((string) $response->getBody(), true)['access_token']
         ]);
     }
 }
