@@ -13,3 +13,4 @@ services:
   sina-idp-service:
     volumes:
       - "./idp:/var/www/html"
+      - "secrets:/secrets"
