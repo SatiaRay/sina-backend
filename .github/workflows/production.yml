@@ -1,0 +1,66 @@
+# .github/workflows/production.yml
+name: Production Workflow
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+
+  deploy:
+    runs-on: production-server
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy with Docker Compose
+        run: |
+          export APP_KEY="${{ secrets.APP_KEY }}"
+          export IDP_SERVICE_DB_USERNAME="${{ secrets.IDP_SERVICE_DB_USERNAME }}"
+          export IDP_SERVICE_DB_PASSWORD="${{ secrets.IDP_SERVICE_DB_PASSWORD }}"
+          export PASSPORT_PRIVATE_KEY="${{ secrets.PASSPORT_PRIVATE_KEY }}"
+          export PASSPORT_PUBLIC_KEY="${{ secrets.PASSPORT_PUBLIC_KEY }}"
+          export WWWGROUP="${{ secrets.WWWGROUP }}"
+          export WWWUSER="${{ secrets.WWWUSER }}"
+          export AI_SERVICE_DB_USERNAME="${{ secrets.AI_SERVICE_DB_USERNAME }}"
+          export AI_SERVICE_DB_PASSWORD="${{ secrets.AI_SERVICE_DB_PASSWORD }}"
+          export KNOWLEDGE_SERVICE_DB_USERNAME="${{ secrets.KNOWLEDGE_SERVICE_DB_USERNAME }}"
+          export KNOWLEDGE_SERVICE_DB_PASSWORD="${{ secrets.KNOWLEDGE_SERVICE_DB_PASSWORD }}"
+          export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+
+          docker compose -f docker-compose.yml up -d --build
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: needs.deploy.result == 'success'
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx -p semantic-release@25 \
+              -p @semantic-release/commit-analyzer \
+              -p @semantic-release/release-notes-generator \
+              -p @semantic-release/changelog \
+              -p @semantic-release/github \
+              -p @semantic-release/git \
+              semantic-release
+      - name: Done
+        run: |
+          echo "GitHub Release and tag created successfully!"
