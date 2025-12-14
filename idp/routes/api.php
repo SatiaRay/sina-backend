@@ -28,9 +28,8 @@ Route::name('internal.')->prefix('/internal')->group(function () {
  */
 Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
-    // Other authenticated API routes
+
+    Route::apiResource('/users', App\Http\Controllers\API\UserController::class);
+
+    Route::apiResource('/workspaces', App\Http\Controllers\API\WorkspaceController::class);
 });
-
-Route::apiResource('/users', App\Http\Controllers\API\UserController::class);
-
-Route::apiResource('/workspaces', App\Http\Controllers\API\WorkspaceController::class);
