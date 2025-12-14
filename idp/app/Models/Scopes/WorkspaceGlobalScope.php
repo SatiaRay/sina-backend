@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
 use Illuminate\Support\Facades\Auth;
 
-class WorkspaceScope implements Scope
+class WorkspaceGlobalScope implements Scope
 {
     /**
      * Apply the scope to a given Eloquent query builder.

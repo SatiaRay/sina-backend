@@ -9,7 +9,7 @@ class WorkspaceFactory extends Factory
     public function definition(): array
     {
         return [
-            'id' => fake()->uuid(),
+            'id' => fake()->unique()->uuid(),
             'name' => fake()->company(),
             'plan' => fake()->randomElement(['free', 'pro', 'business']),
             'metadata' => json_encode(['color' => fake()->hexColor()]),
