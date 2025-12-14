@@ -9,11 +9,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('user_workspace', function (Blueprint $table) {
-            $table->uuid('id')->primary();
             $table->uuid('workspace_id');
             $table->uuid('user_id');
             $table->string('role', 50);
             $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at');
 
             $table->unique(['workspace_id', 'user_id']);
             
