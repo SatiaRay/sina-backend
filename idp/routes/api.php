@@ -32,3 +32,5 @@ Route::middleware('auth:api')->group(function () {
 });
 
 Route::apiResource('/users', App\Http\Controllers\API\UserController::class);
+
+Route::apiResource('/workspaces', App\Http\Controllers\API\WorkspaceController::class);
