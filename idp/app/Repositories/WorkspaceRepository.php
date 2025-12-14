@@ -27,7 +27,7 @@ class WorkspaceRepository
      */
     public function all()
     {
-        return $this->workspace->get();
+        return $this->workspace->inUserWorkspaces()->get();
     }
 
      /**
