@@ -16,13 +16,24 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        User::factory()->create([
+        $adminWorkspace = Workspace::factory()->create([
+            'name' => 'Admin Workspace'
+        ]);
+
+        $admin = User::factory()->create([
             'name' => 'Admin',
             'email' => 'admin@example.com',
             'password' => '123456789'
         ]);
 
-                // Create workspaces
+        $admin->workspaces()->attach($adminWorkspace->id, [
+            'role' => 'admin',
+            'created_at' => now()
+        ]);
+
+        $admin->update(['primary_workspace_id' => $adminWorkspace->id]);
+
+        // Create workspaces
         $workspaces = Workspace::factory()->count(5)->create();
 
         // Create users and assign to workspaces
