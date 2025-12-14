@@ -30,3 +30,5 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     // Other authenticated API routes
 });
+
+Route::apiResource('/users', App\Http\Controllers\API\UserController::class);

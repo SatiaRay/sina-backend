@@ -1,0 +1,86 @@
+=====================User=====================
+curl --location 'http://localhost/api/users' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "name": "value",
+    "email": "value",
+    "email_verified_at": "value",
+    "password": "value",
+    "remember_token": "value",
+    "primary_workspace_id": "value"
+}'
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request PATCH \
+--data '{
+    "name": "value",
+    "email": "value",
+    "email_verified_at": "value",
+    "password": "value",
+    "remember_token": "value",
+    "primary_workspace_id": "value"
+}'
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request DELETE
+
+curl --location 'http://localhost/api/users' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+=====================User=====================
+=====================User=====================
+curl --location 'http://localhost/api/users' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "name": "value",
+    "email": "value",
+    "email_verified_at": "value",
+    "password": "value",
+    "remember_token": "value",
+    "primary_workspace_id": "value"
+}'
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request PATCH \
+--data '{
+    "name": "value",
+    "email": "value",
+    "email_verified_at": "value",
+    "password": "value",
+    "remember_token": "value",
+    "primary_workspace_id": "value"
+}'
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request DELETE
+
+curl --location 'http://localhost/api/users' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+=====================User=====================
