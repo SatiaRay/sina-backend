@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('oauth_device_codes', function (Blueprint $table) {
             $table->char('id', 80)->primary();
-            $table->foreignId('user_id')->nullable()->index();
+            $table->uuid('user_id')->nullable()->index();
             $table->foreignUuid('client_id')->index();
             $table->char('user_code', 8)->unique();
             $table->text('scopes');
@@ -21,6 +21,8 @@ return new class extends Migration
             $table->dateTime('user_approved_at')->nullable();
             $table->dateTime('last_polled_at')->nullable();
             $table->dateTime('expires_at')->nullable();
+
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('set null');
         });
     }
 
