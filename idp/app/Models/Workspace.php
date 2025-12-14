@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\Scopes\HasWorkspaceScope;
+use App\Models\Scopes\HasWorkspaceGlobalScope;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
