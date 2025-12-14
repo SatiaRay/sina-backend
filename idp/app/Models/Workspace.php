@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Scopes\HasWorkspaceGlobalScope;
+use App\Models\Scopes\HasWorkspaceLocalScopes;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Workspace extends Model
 {
-    use HasUuids, SoftDeletes, HasFactory;
+    use HasUuids, SoftDeletes, HasFactory, HasWorkspaceLocalScopes;
 
     protected $fillable = [
         'name',
