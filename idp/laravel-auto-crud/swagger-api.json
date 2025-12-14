@@ -12,6 +12,110 @@
         }
     ],
     "paths": {
+        "/register": {
+            "post": {
+                "summary": "Register user",
+                "operationId": "register_user",
+                "tags": ["Auth"],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "name": { "type": "string", "example": "John Doe" },
+                                    "email": { "type": "string", "example": "john@example.com" },
+                                    "password": { "type": "string", "example": "password123" },
+                                    "password_confirmation": { "type": "string", "example": "password123" }
+                                },
+                                "required": ["name", "email", "password", "password_confirmation"]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "User registered successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "user": { "$ref": "#/components/schemas/Users" },
+                                        "token": { "type": "string" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/login": {
+            "post": {
+                "summary": "Login user",
+                "operationId": "login_user",
+                "tags": ["Auth"],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "email": { "type": "string", "example": "john@example.com" },
+                                    "password": { "type": "string", "example": "password123" }
+                                },
+                                "required": ["email", "password"]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "User logged in successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "user": { "$ref": "#/components/schemas/Users" },
+                                        "token": { "type": "string" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Invalid credentials"
+                    }
+                }
+            }
+        },
+        "/logout": {
+            "post": {
+                "summary": "Logout user",
+                "operationId": "logout_user",
+                "tags": ["Auth"],
+                "security": [ { "bearerAuth": [] } ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully logged out",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": { "type": "string", "example": "Successfully logged out" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/users": {
             "post": {
                 "summary": "Create users",

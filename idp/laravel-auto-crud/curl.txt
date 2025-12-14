@@ -1,3 +1,29 @@
+=====================Auth=====================
+curl --location 'http://localhost/api/register' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "password": "password123",
+    "password_confirmation": "password123"
+}'
+
+curl --location 'http://localhost/api/login' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "email": "john@example.com",
+    "password": "password123"
+}'
+
+curl --location 'http://localhost/api/logout' \
+--header 'Accept: application/json' \
+--header 'Authorization: Bearer <token>' \
+--request POST
+
 =====================User=====================
 curl --location 'http://localhost/api/users' \
 --header 'Accept: application/json' \

@@ -233,6 +233,72 @@
             ]
         },
         {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Register",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json", "type": "text" },
+                            { "key": "Content-Type", "value": "application/json", "type": "text" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\"\n}",
+                            "options": { "raw": { "language": "json" } }
+                        },
+                        "url": {
+                            "raw": "http://localhost/api/register",
+                            "protocol": "http",
+                            "host": ["localhost"],
+                            "path": ["api", "register"]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json", "type": "text" },
+                            { "key": "Content-Type", "value": "application/json", "type": "text" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"john@example.com\",\n    \"password\": \"password123\"\n}",
+                            "options": { "raw": { "language": "json" } }
+                        },
+                        "url": {
+                            "raw": "http://localhost/api/login",
+                            "protocol": "http",
+                            "host": ["localhost"],
+                            "path": ["api", "login"]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Logout",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json", "type": "text" },
+                            { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }
+                        ],
+                        "url": {
+                            "raw": "http://localhost/api/logout",
+                            "protocol": "http",
+                            "host": ["localhost"],
+                            "path": ["api", "logout"]
+                        }
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
             "name": "Workspaces",
             "item": [
                 {
