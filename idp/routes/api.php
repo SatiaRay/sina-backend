@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
@@ -29,7 +30,8 @@ Route::name('internal.')->prefix('/internal')->group(function () {
 Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    Route::apiResource('/users', App\Http\Controllers\API\UserController::class);
+    Route::get('/me/workspaces', [UserController::class, 'getUserWorkspaces']);
+    Route::post('me/workspaces/{workspace}/switch', [UserController::class, 'switchWorkspace']);
 
     Route::apiResource('/workspaces', App\Http\Controllers\API\WorkspaceController::class);
 });

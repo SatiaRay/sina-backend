@@ -2,69 +2,57 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\UserRequest;
-use App\Http\Resources\UserResource;
-use App\Services\UserService;
+use App\Models\Workspace;
 use Illuminate\Http\Request;
+use App\Services\UserService;
+use App\Http\Requests\UserRequest;
+use App\Services\WorkspaceService;
+use App\Http\Controllers\Controller;
+use App\Http\Resources\UserResource;
+use App\Http\Resources\WorkspaceResource;
 use Symfony\Component\HttpFoundation\Response;
 
 class UserController extends Controller
 {
-    /**
-     * @var UserService
-     */
-    protected UserService $userService;
-
     /**
      * DummyModel Constructor
      *
      * @param UserService $userService
      *
      */
-    public function __construct(UserService $userService)
-    {
-        $this->userService = $userService;
+    public function __construct(
+        protected UserService $userService,
+        protected WorkspaceService $workspaceService
+    ) {
+        //
     }
 
-    public function index(): \Illuminate\Http\Resources\Json\AnonymousResourceCollection
+    /**
+     * Get all workspaces the authenticated user belongs to
+     *
+     * @return void
+     */
+    public function getUserWorkspaces(): \Illuminate\Http\Resources\Json\AnonymousResourceCollection
     {
-        return UserResource::collection($this->userService->getAll());
+        return WorkspaceResource::collection($this->workspaceService->getAll());
     }
 
-    public function store(UserRequest $request): UserResource|\Illuminate\Http\JsonResponse
+    /**
+     * Switch current active workspace
+     * 
+     * @param mixed $workspaceId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function switchWorkspace($workspaceId)
     {
-        try {
-            return new UserResource($this->userService->save($request->validated()));
-        } catch (\Exception $exception) {
-            report($exception);
-            return response()->json(['error' => 'There is an error.'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-    }
+        $workspace = Workspace::inUserWorkspaces()->findOrFail($workspaceId);
 
-    public function show(string $id): UserResource
-    {
-        return UserResource::make($this->userService->getById($id));
-    }
+        // Store active workspace in session or token
+        session(['current_workspace_id' => $workspaceId]);
 
-    public function update(UserRequest $request, string $id): UserResource|\Illuminate\Http\JsonResponse
-    {
-        try {
-            return new UserResource($this->userService->update($request->validated(), $id));
-        } catch (\Exception $exception) {
-            report($exception);
-            return response()->json(['error' => 'There is an error.'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    public function destroy(string $id): \Illuminate\Http\JsonResponse
-    {
-        try {
-            $this->userService->deleteById($id);
-            return response()->json(['message' => 'Deleted successfully'], Response::HTTP_OK);
-        } catch (\Exception $exception) {
-            report($exception);
-            return response()->json(['error' => 'There is an error.'], Response::HTTP_INTERNAL_SERVER_ERROR);
-        }
+        return response()->json([
+            'message' => 'Workspace switched successfully',
+            'workspace' => $workspace,
+        ]);
     }
 }
