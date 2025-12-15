@@ -52,7 +52,7 @@ class WorkspaceService
      * @param array $data
      * @return String
      */
-    public function save(array $data)
+    public function save(array $data): Workspace
     {
         return $this->workspaceRepository->save($data);
     }

@@ -47,7 +47,7 @@ class WorkspaceRepository
      * @param $data
      * @return Workspace
      */
-     public function save(array $data)
+     public function save(array $data): Workspace
     {
         return Workspace::create($data);
     }

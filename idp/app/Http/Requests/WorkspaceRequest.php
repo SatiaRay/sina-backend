@@ -14,7 +14,7 @@ class WorkspaceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'string|max:255',
+            'name' => 'required|string|max:255',
             'plan' => 'string|max:50',
             'metadata' => 'json',
             'deleted_at' => 'date',
