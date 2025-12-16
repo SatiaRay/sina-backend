@@ -64,7 +64,7 @@ class UserControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_authenticated_user_can_get_their_workspaces()
     {
         // Act as the authenticated user
@@ -102,7 +102,7 @@ class UserControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_workspace_response_includes_role_through_pivot()
     {
         $this->actingAs($this->user, 'api');
@@ -120,7 +120,7 @@ class UserControllerTest extends TestCase
         // 2. Include it in WorkspaceResource
     }
 
-    /** @test */
+    
     public function test_user_sees_correct_role_for_each_workspace()
     {
         // Add user to another workspace with different role
@@ -141,7 +141,7 @@ class UserControllerTest extends TestCase
         $response->assertJsonCount(3, 'data');
     }
 
-    /** @test */
+    
     public function test_authenticated_user_can_switch_to_workspace_they_belong_to()
     {
         $this->actingAs($this->user, 'api');
@@ -169,7 +169,7 @@ class UserControllerTest extends TestCase
         $this->assertEquals($this->workspace->id, session('current_workspace_id'));
     }
 
-    /** @test */
+    
     public function test_user_cannot_switch_to_workspace_they_dont_belong_to()
     {
         $this->actingAs($this->user, 'api');
@@ -182,7 +182,7 @@ class UserControllerTest extends TestCase
         $this->assertNotEquals(session('current_workspace_id'), $this->otherWorkspace->id);
     }
 
-    /** @test */
+    
     public function test_cannot_switch_to_nonexistent_workspace()
     {
         $this->actingAs($this->user, 'api');
@@ -193,7 +193,7 @@ class UserControllerTest extends TestCase
         $response->assertStatus(404);
     }
 
-    /** @test */
+    
     public function test_unauthenticated_user_cannot_switch_workspace()
     {
         $response = $this->postJson("/api/me/workspaces/{$this->workspace->id}/switch");
@@ -202,7 +202,7 @@ class UserControllerTest extends TestCase
     }
 
 
-    /** @test */
+    
     public function test_switch_workspace_sets_session_correctly_for_different_roles()
     {
         $this->actingAs($this->user, 'api');

@@ -70,7 +70,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_owner_can_create_workspace()
     {
         $this->actingAs($this->user, 'api');
@@ -107,7 +107,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_workspace_creation_requires_name()
     {
         $this->actingAs($this->user, 'api');
@@ -118,7 +118,7 @@ class WorkspaceControllerTest extends TestCase
         $response->assertJsonValidationErrors(['name']);
     }
 
-    /** @test */
+    
     public function test_owner_can_view_workspace_details()
     {
         $this->actingAs($this->user, 'api');
@@ -143,7 +143,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_member_can_view_workspace_details()
     {
         $this->actingAs($this->memberUser, 'api');
@@ -153,7 +153,7 @@ class WorkspaceControllerTest extends TestCase
         $response->assertStatus(200);
     }
 
-    /** @test */
+    
     public function test_non_member_cannot_view_workspace_details()
     {
         $this->actingAs($this->nonMemberUser, 'api');
@@ -163,7 +163,7 @@ class WorkspaceControllerTest extends TestCase
         $response->assertStatus(403);
     }
 
-    /** @test */
+    
     public function test_owner_can_update_workspace()
     {
         $this->actingAs($this->user, 'api');
@@ -189,7 +189,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_member_cannot_update_workspace()
     {
         $this->actingAs($this->memberUser, 'api');
@@ -210,7 +210,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_owner_can_invite_user_to_workspace()
     {
         $this->actingAs($this->user, 'api');
@@ -237,7 +237,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_member_cannot_invite_users()
     {
         $this->actingAs($this->memberUser, 'api');
@@ -255,7 +255,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_cannot_invite_existing_member()
     {
         $this->actingAs($this->user, 'api');
@@ -274,7 +274,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_owner_can_remove_member()
     {
         $this->actingAs($this->user, 'api');
@@ -293,7 +293,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_owner_cannot_remove_self()
     {
         $this->actingAs($this->user, 'api');
@@ -312,7 +312,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_member_can_leave_workspace()
     {
         $this->actingAs($this->memberUser, 'api');
@@ -331,7 +331,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_owner_cannot_leave_workspace()
     {
         $this->actingAs($this->user, 'api');
@@ -350,7 +350,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_owner_can_delete_workspace()
     {
         $this->actingAs($this->user, 'api');
@@ -368,7 +368,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_member_cannot_delete_workspace()
     {
         $this->actingAs($this->memberUser, 'api');
@@ -386,7 +386,7 @@ class WorkspaceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    
     public function test_unauthenticated_user_cannot_access_workspace_endpoints()
     {
         // Test create
@@ -406,7 +406,7 @@ class WorkspaceControllerTest extends TestCase
         $response->assertStatus(401);
     }
 
-    /** @test */
+    
     public function test_workspace_details_includes_correct_member_roles()
     {
         // Add a guest user
