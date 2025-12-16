@@ -68,11 +68,23 @@ class AuthControllerTest extends TestCase
 
     public function test_user_can_logout()
     {
+        // Create a user with a workspace
         $user = User::factory()->create();
+
+        // Create a workspace for the user
+        $workspace = \App\Models\Workspace::factory()->create();
+
+        // Attach user to workspace (adjust based on your relationship setup)
+        $user->workspaces()->attach($workspace->id, ['role' => 'member']);
+
+        // Set primary workspace if needed by your logic
+        $user->update(['primary_workspace_id' => $workspace->id]);
+
         $token = $user->createToken('SSO')->accessToken;
 
         $response = $this->withHeaders([
             'Authorization' => 'Bearer ' . $token,
+            'X-Workspace-Id' => $workspace->id, // Add workspace header
         ])->postJson('api/logout');
 
         $response
