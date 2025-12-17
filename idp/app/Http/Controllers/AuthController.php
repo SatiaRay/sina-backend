@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -60,15 +61,15 @@ class AuthController extends Controller
 
         $user = Auth::user();
 
-        $currentWorkspaceId = $request->input('workspace_id') ?? $user->primary_workspace_id;
+        $currentWorkspaceId = $request->has('workspace_id') and Workspace::inUserWorkspaces()->where('id', $request->input('workspace_id')) ? $request->input('workspace_id') : $user->primary_workspace_id;
 
         Passport::tokensCan([
-           "workspace:{$currentWorkspaceId}"  => 'View workspace details',
+            "workspace:{$currentWorkspaceId}"  => 'Access to workspace specific resources',
         ]);
 
         $token = $user->createToken('SSO', ["workspace:{$currentWorkspaceId}"])->accessToken;
 
-        return response()->json(['user' => $user, 'token' => $token]);
+        return response()->json(['user' => $user, 'workspace_id' => $currentWorkspaceId, 'token' => $token]);
     }
 
     /**
@@ -81,5 +82,44 @@ class AuthController extends Controller
         $request->user()->token()->revoke();
 
         return response()->json(['message' => 'Successfully logged out']);
+    }
+
+    /**
+     * Switch workspace
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function switchWorkspace(Request $request): JsonResponse
+    {
+        $request->validate([
+            'workspace_id' => 'required|string|exists:workspaces,id',
+        ]);
+
+        $user = Auth::user();
+
+        // Check if the user has access to the requested workspace
+        $hasAccess = Workspace::inUserWorkspaces()
+            ->where('id', $request->input('workspace_id'))
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json([
+                'message' => 'You do not have access to this workspace.'
+            ], 403);
+        }
+
+        // Create new token with the new workspace scope
+        Passport::tokensCan([
+            "workspace:{$request->workspace_id}" => 'Access to workspace specific resources',
+        ]);
+
+        $token = $user->createToken('SSO', ["workspace:{$request->workspace_id}"])->accessToken;
+
+        return response()->json([
+            'user' => $user,
+            'token' => $token,
+            'workspace_id' => $request->workspace_id
+        ]);
     }
 }

@@ -93,4 +93,202 @@ class AuthControllerTest extends TestCase
                 'message' => 'Successfully logged out',
             ]);
     }
+
+    public function test_user_can_switch_workspace()
+    {
+        // Create a user
+        $user = User::factory()->create([
+            'password' => Hash::make('password123'),
+        ]);
+
+        // Create multiple workspaces
+        $workspace1 = \App\Models\Workspace::factory()->create();
+        $workspace2 = \App\Models\Workspace::factory()->create();
+        $workspace3 = \App\Models\Workspace::factory()->create();
+
+        // Attach user to workspace1 and workspace2 (but not workspace3)
+        $user->workspaces()->attach([$workspace1->id, $workspace2->id], ['role' => 'member']);
+
+        // Set primary workspace
+        $user->update(['primary_workspace_id' => $workspace1->id]);
+
+        // First, login to get initial token
+        $loginResponse = $this->postJson('api/login', [
+            'email' => $user->email,
+            'password' => 'password123',
+            'workspace_id' => $workspace1->id,
+        ]);
+
+        $initialToken = $loginResponse->json('token');
+
+        // Now test switching to workspace2
+        $switchResponse = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $initialToken,
+        ])->postJson('api/switch-workspace', [
+            'workspace_id' => $workspace2->id,
+        ]);
+
+        $switchResponse
+            ->assertStatus(200)
+            ->assertJsonStructure([
+                'user' => ['id', 'name', 'email'],
+                'token',
+                'workspace_id',
+            ])
+            ->assertJson([
+                'workspace_id' => $workspace2->id,
+            ]);
+
+        $newToken = $switchResponse->json('token');
+        $this->assertNotEquals($initialToken, $newToken, 'Token should be regenerated');
+    }
+
+    public function test_user_cannot_switch_to_unauthorized_workspace()
+    {
+        $user = User::factory()->create([
+            'password' => Hash::make('password123'),
+        ]);
+
+        $authorizedWorkspace = \App\Models\Workspace::factory()->create();
+        $unauthorizedWorkspace = \App\Models\Workspace::factory()->create();
+
+        // User only has access to authorizedWorkspace
+        $user->workspaces()->attach($authorizedWorkspace->id, ['role' => 'member']);
+        $user->update(['primary_workspace_id' => $authorizedWorkspace->id]);
+
+        // Login
+        $loginResponse = $this->postJson('api/login', [
+            'email' => $user->email,
+            'password' => 'password123',
+        ]);
+
+        $token = $loginResponse->json('token');
+
+        // Try to switch to unauthorized workspace
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $token,
+        ])->postJson('api/switch-workspace', [
+            'workspace_id' => $unauthorizedWorkspace->id,
+        ]);
+
+        $response
+            ->assertStatus(403)
+            ->assertJson([
+                'message' => 'You do not have access to this workspace.',
+            ]);
+    }
+
+    public function test_switch_workspace_requires_authentication()
+    {
+        // Try to switch workspace without authentication
+        $response = $this->postJson('api/switch-workspace', [
+            'workspace_id' => 'some-workspace-id',
+        ]);
+
+        $response->assertStatus(401);
+    }
+
+    public function test_switch_workspace_requires_valid_workspace_id()
+    {
+        $user = User::factory()->create([
+            'password' => Hash::make('password123'),
+        ]);
+
+        $workspace = \App\Models\Workspace::factory()->create();
+        $user->workspaces()->attach($workspace->id, ['role' => 'member']);
+
+        // Login
+        $loginResponse = $this->postJson('api/login', [
+            'email' => $user->email,
+            'password' => 'password123',
+        ]);
+
+        $token = $loginResponse->json('token');
+
+        // Test with non-existent workspace
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $token,
+        ])->postJson('api/switch-workspace', [
+            'workspace_id' => 'non-existent-workspace-id',
+        ]);
+
+        $response->assertStatus(422);
+
+        // Test without workspace_id
+        $response = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $token,
+        ])->postJson('api/switch-workspace', []);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_login_falls_back_to_primary_workspace_when_no_access_to_requested()
+    {
+        $user = User::factory()->create([
+            'password' => Hash::make('password123'),
+        ]);
+
+        $primaryWorkspace = \App\Models\Workspace::factory()->create();
+        $otherWorkspace = \App\Models\Workspace::factory()->create();
+
+        // User only has access to primary workspace
+        $user->workspaces()->attach($primaryWorkspace->id, ['role' => 'member']);
+        $user->update(['primary_workspace_id' => $primaryWorkspace->id]);
+
+        // Try to login with workspace user doesn't have access to
+        $response = $this->postJson('api/login', [
+            'email' => $user->email,
+            'password' => 'password123',
+            'workspace_id' => $otherWorkspace->id, // User doesn't have access to this
+        ]);
+
+        $response
+            ->assertStatus(200)
+            ->assertJson([
+                'workspace_id' => $primaryWorkspace->id, // Should fall back to primary
+            ]);
+    }
+
+    public function test_user_can_switch_back_and_forth_between_workspaces()
+    {
+        $user = User::factory()->create([
+            'password' => Hash::make('password123'),
+        ]);
+
+        $workspace1 = \App\Models\Workspace::factory()->create();
+        $workspace2 = \App\Models\Workspace::factory()->create();
+
+        $user->workspaces()->attach([$workspace1->id, $workspace2->id], ['role' => 'member']);
+        $user->update(['primary_workspace_id' => $workspace1->id]);
+
+        // Login with workspace1
+        $loginResponse = $this->postJson('api/login', [
+            'email' => $user->email,
+            'password' => 'password123',
+            'workspace_id' => $workspace1->id,
+        ]);
+
+        $token = $loginResponse->json('token');
+
+        // Switch to workspace2
+        $response1 = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $token,
+        ])->postJson('api/switch-workspace', [
+            'workspace_id' => $workspace2->id,
+        ]);
+
+        $token2 = $response1->json('token');
+        $response1->assertJson(['workspace_id' => $workspace2->id]);
+
+        // Switch back to workspace1
+        $response2 = $this->withHeaders([
+            'Authorization' => 'Bearer ' . $token2,
+        ])->postJson('api/switch-workspace', [
+            'workspace_id' => $workspace1->id,
+        ]);
+
+        $response2
+            ->assertStatus(200)
+            ->assertJson(['workspace_id' => $workspace1->id]);
+    }
 }

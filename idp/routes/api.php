@@ -29,6 +29,7 @@ Route::name('internal.')->prefix('/internal')->group(function () {
  */
 Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/switch-workspace', [AuthController::class, 'switchWorkspace']);
 
     Route::get('/me/workspaces', [UserController::class, 'getUserWorkspaces']);
     Route::post('me/workspaces/{workspace}/switch', [UserController::class, 'switchWorkspace']);
