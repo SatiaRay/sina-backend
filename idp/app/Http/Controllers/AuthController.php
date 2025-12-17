@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Services\Tenant\CurrentWorkspace;
 use Illuminate\Validation\ValidationException;
+use Laravel\Passport\Passport;
 
 class AuthController extends Controller
 {
@@ -48,6 +49,7 @@ class AuthController extends Controller
         $request->validate([
             'email' => 'required|string|email',
             'password' => 'required|string',
+            'workspace_id' => 'nullable|string|exists:workspaces,id',
         ]);
 
         if (!Auth::attempt($request->only('email', 'password'))) {
@@ -57,7 +59,14 @@ class AuthController extends Controller
         }
 
         $user = Auth::user();
-        $token = $user->createToken('SSO', ['workspace_id' => CurrentWorkspace::id()])->accessToken;
+
+        $currentWorkspaceId = $request->input('workspace_id') ?? $user->primary_workspace_id;
+
+        Passport::tokensCan([
+           "workspace:{$currentWorkspaceId}"  => 'View workspace details',
+        ]);
+
+        $token = $user->createToken('SSO', ["workspace:{$currentWorkspaceId}"])->accessToken;
 
         return response()->json(['user' => $user, 'token' => $token]);
     }
