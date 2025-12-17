@@ -1,6 +1,11 @@
 version: "3.8"
 
 services:
+  init:
+    volumes:
+      - secrets:/secrets
+      - "./idp:/var/www/html"
+
   sina-knowledge-service:
     volumes:
       - ./knowledge:/var/www/html/knowledge/
