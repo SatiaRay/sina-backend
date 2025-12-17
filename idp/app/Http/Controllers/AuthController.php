@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use App\Services\Tenant\CurrentWorkspace;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -41,7 +43,7 @@ class AuthController extends Controller
      * @param Request $request
      * @return void
      */
-    public function login(Request $request)
+    public function login(Request $request): JsonResponse
     {
         $request->validate([
             'email' => 'required|string|email',
@@ -55,7 +57,7 @@ class AuthController extends Controller
         }
 
         $user = Auth::user();
-        $token = $user->createToken('SSO')->accessToken;
+        $token = $user->createToken('SSO', ['workspace_id' => CurrentWorkspace::id()])->accessToken;
 
         return response()->json(['user' => $user, 'token' => $token]);
     }
