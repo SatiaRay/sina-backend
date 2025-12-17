@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Services\Tenant\CurrentTenant;
+use App\Services\Tenant\CurrentWorkspace;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,14 +19,14 @@ class ResolveTenantScope
         if (auth('api')->check()) {
             $user = auth('api')->user();
 
-            // Decide workspace IDs (your logic here)
-            $workspaceIds = $this->resolveWorkspaceIds($user, $request);
+            // Decide workspace ID (your logic here)
+            $workspaceId = $this->resolveWorkspaceId($user, $request);
 
-            if (empty($workspaceIds)) {
+            if (empty($workspaceId)) {
                 abort(403, 'No accessible workspace');
             }
 
-            CurrentTenant::set($workspaceIds);
+            CurrentWorkspace::set(id: $workspaceId);
         }
 
         return $next($request);
@@ -37,7 +37,7 @@ class ResolveTenantScope
      * @param mixed $user
      * @param mixed $request
      */
-    private function resolveWorkspaceIds($user, $request)
+    private function resolveWorkspaceId($user, $request): string|null
     {
         
         // Priority 1: Explicit header (e.g. from API clients or mobile apps)
@@ -45,7 +45,7 @@ class ResolveTenantScope
             $id = $request->header('X-Workspace-Id');
             
             if ($user->workspaces()->where('id', $id)->exists()) {
-                return [$id];
+                return $id;
             }
             
             // Optional: you could abort(403) here if invalid header is sent
@@ -57,7 +57,7 @@ class ResolveTenantScope
             $id = $request->query('workspace_id');
             
             if ($user->workspaces()->where('id', $id)->exists()) {
-                return [$id];
+                return $id;
             }
         }
         
@@ -66,7 +66,7 @@ class ResolveTenantScope
             $id = session('current_workspace_id');
 
             if ($user->workspaces()->where('id', $id)->exists()) {
-                return [$id];
+                return $id;
             }
 
             // Invalid/stale session value – clear it
@@ -78,21 +78,10 @@ class ResolveTenantScope
             // Optional: auto-save to session for consistency
             session(['current_workspace_id' => $user->primary_workspace_id]);
             
-            return [$user->primary_workspace_id];
-        }
-        
-        // Priority 5: All workspaces the user belongs to
-        // (Use with caution – can be many, but safe fallback)
-        $allWorkspaceIds = $user->workspaces()->pluck('workspaces.id')->toArray();
-        
-        if (!empty($allWorkspaceIds)) {
-            // Optionally set the first one as current in session
-            session(['current_workspace_id' => $allWorkspaceIds[0]]);
-            
-            return $allWorkspaceIds;
+            return $user->primary_workspace_id;
         }
 
         // Final fallback: no access
-        return [];
+        return null;
     }
 }
