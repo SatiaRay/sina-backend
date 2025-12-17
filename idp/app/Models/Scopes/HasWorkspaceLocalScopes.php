@@ -3,6 +3,7 @@
 namespace App\Models\Scopes;
 
 use App\Services\Tenant\CurrentTenant;
+use App\Services\Tenant\CurrentWorkspace;
 use Illuminate\Database\Eloquent\Builder;
 
 trait HasWorkspaceLocalScopes
@@ -12,7 +13,7 @@ trait HasWorkspaceLocalScopes
      */
     public function scopeInUserWorkspaces(Builder $query): Builder
     {
-        $workspaceIds = CurrentTenant::ids();
+        $workspaceIds = auth()->user()->workspaces()->pluck('id')->toArray();
 
         if (empty($workspaceIds)) {
             return $query->whereRaw('false'); // no access
@@ -36,16 +37,16 @@ trait HasWorkspaceLocalScopes
     /**
      * Optional: Scope users to those belonging to current workspace(s)
      */
-    public function scopeInCurrentTenantWorkspaces(Builder $query): Builder
+    public function scopeInCurrentWorkspace(Builder $query): Builder
     {
-        $workspaceIds = CurrentTenant::ids();
+        $workspaceId = CurrentWorkspace::id();
 
-        if (empty($workspaceIds)) {
+        if (empty($workspaceId)) {
             return $query->whereRaw('false');
         }
 
-        return $query->whereHas('workspaces', function (Builder $q) use ($workspaceIds) {
-            $q->whereIn('workspaces.id', $workspaceIds);
+        return $query->whereHas('workspaces', function (Builder $q) use ($workspaceId) {
+            $q->where('workspaces.id', $workspaceId);
         });
     }
 }
