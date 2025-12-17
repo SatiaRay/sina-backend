@@ -160,7 +160,7 @@ class WorkspaceControllerTest extends TestCase
 
         $response = $this->getJson("/api/workspaces/{$this->workspace->id}");
 
-        $response->assertStatus(403);
+        $response->assertStatus(404);
     }
 
     
