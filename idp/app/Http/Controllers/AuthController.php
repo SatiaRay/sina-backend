@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UserRoleInWorkspace;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Http\Request;
@@ -32,6 +33,16 @@ class AuthController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+        ]);
+
+        $workspace = Workspace::create([
+            'name' => "{$user->name}'s Workspace",
+        ]);
+
+        $workspace->users()->attach($user->id, ['role' =>UserRoleInWorkspace::OWNER->value]);
+
+        $user->update([
+            'primary_workspace_id' => $workspace->id,
         ]);
 
         $token = $user->createToken('MyAppToken')->accessToken;

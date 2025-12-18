@@ -14,7 +14,7 @@ class AuthControllerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Ensure Passport personal access client exists for tests (arrays, not JSON)
+        // Ensure Passport personal access client exists for tests
         \Laravel\Passport\Client::factory()->create([
             'id' => 1,
             'name' => 'Test Personal Access Client',
@@ -37,12 +37,28 @@ class AuthControllerTest extends TestCase
         $response
             ->assertStatus(201)
             ->assertJsonStructure([
-                'user' => ['id', 'name', 'email', 'created_at', 'updated_at'],
+                'user' => ['id', 'name', 'email', 'primary_workspace_id', 'created_at', 'updated_at'],
                 'token',
             ]);
 
         $this->assertDatabaseHas('users', [
             'email' => 'test@example.com',
+        ]);
+
+        // Check that a workspace was created for the user
+        $user = User::where('email', 'test@example.com')->first();
+        $this->assertNotNull($user->primary_workspace_id);
+        
+        // Check workspace exists
+        $this->assertDatabaseHas('workspaces', [
+            'id' => $user->primary_workspace_id,
+        ]);
+        
+        // Check user is attached to the workspace as owner
+        $this->assertDatabaseHas('user_workspace', [
+            'user_id' => $user->id,
+            'workspace_id' => $user->primary_workspace_id,
+            'role' => 'owner',
         ]);
     }
 
@@ -53,6 +69,13 @@ class AuthControllerTest extends TestCase
             'password' => Hash::make('password123'),
         ]);
 
+        // Since register now creates a workspace, we need to simulate that
+        $workspace = \App\Models\Workspace::factory()->create([
+            'name' => "{$user->name}'s Workspace",
+        ]);
+        $user->workspaces()->attach($workspace->id, ['role' => 'owner']);
+        $user->update(['primary_workspace_id' => $workspace->id]);
+
         $response = $this->postJson('api/login', [
             'email' => 'login@example.com',
             'password' => 'password123',
@@ -61,30 +84,27 @@ class AuthControllerTest extends TestCase
         $response
             ->assertStatus(200)
             ->assertJsonStructure([
-                'user' => ['id', 'name', 'email', 'created_at', 'updated_at'],
+                'user' => ['id', 'name', 'email', 'primary_workspace_id', 'created_at', 'updated_at'],
                 'token',
             ]);
     }
 
     public function test_user_can_logout()
     {
-        // Create a user with a workspace
+        // Create a user
         $user = User::factory()->create();
 
-        // Create a workspace for the user
-        $workspace = \App\Models\Workspace::factory()->create();
-
-        // Attach user to workspace (adjust based on your relationship setup)
-        $user->workspaces()->attach($workspace->id, ['role' => 'member']);
-
-        // Set primary workspace if needed by your logic
+        // Create a workspace for the user (simulating registration)
+        $workspace = \App\Models\Workspace::factory()->create([
+            'name' => "{$user->name}'s Workspace",
+        ]);
+        $user->workspaces()->attach($workspace->id, ['role' => 'owner']);
         $user->update(['primary_workspace_id' => $workspace->id]);
 
         $token = $user->createToken('SSO')->accessToken;
 
         $response = $this->withHeaders([
             'Authorization' => 'Bearer ' . $token,
-            'X-Workspace-Id' => $workspace->id, // Add workspace header
         ])->postJson('api/logout');
 
         $response
@@ -96,47 +116,47 @@ class AuthControllerTest extends TestCase
 
     public function test_user_can_switch_workspace()
     {
-        // Create a user
+        // Create a user with their default workspace
         $user = User::factory()->create([
             'password' => Hash::make('password123'),
         ]);
 
-        // Create multiple workspaces
-        $workspace1 = \App\Models\Workspace::factory()->create();
-        $workspace2 = \App\Models\Workspace::factory()->create();
-        $workspace3 = \App\Models\Workspace::factory()->create();
+        // Create default workspace (simulating registration)
+        $defaultWorkspace = \App\Models\Workspace::factory()->create([
+            'name' => "{$user->name}'s Workspace",
+        ]);
+        $user->workspaces()->attach($defaultWorkspace->id, ['role' => 'owner']);
+        $user->update(['primary_workspace_id' => $defaultWorkspace->id]);
 
-        // Attach user to workspace1 and workspace2 (but not workspace3)
-        $user->workspaces()->attach([$workspace1->id, $workspace2->id], ['role' => 'member']);
-
-        // Set primary workspace
-        $user->update(['primary_workspace_id' => $workspace1->id]);
+        // Create additional workspace for switching
+        $additionalWorkspace = \App\Models\Workspace::factory()->create();
+        $user->workspaces()->attach($additionalWorkspace->id, ['role' => 'member']);
 
         // First, login to get initial token
         $loginResponse = $this->postJson('api/login', [
             'email' => $user->email,
             'password' => 'password123',
-            'workspace_id' => $workspace1->id,
+            'workspace_id' => $defaultWorkspace->id,
         ]);
 
         $initialToken = $loginResponse->json('token');
 
-        // Now test switching to workspace2
+        // Now test switching to additional workspace
         $switchResponse = $this->withHeaders([
             'Authorization' => 'Bearer ' . $initialToken,
         ])->postJson('api/switch-workspace', [
-            'workspace_id' => $workspace2->id,
+            'workspace_id' => $additionalWorkspace->id,
         ]);
 
         $switchResponse
             ->assertStatus(200)
             ->assertJsonStructure([
-                'user' => ['id', 'name', 'email'],
+                'user' => ['id', 'name', 'email', 'primary_workspace_id'],
                 'token',
                 'workspace_id',
             ])
             ->assertJson([
-                'workspace_id' => $workspace2->id,
+                'workspace_id' => $additionalWorkspace->id,
             ]);
 
         $newToken = $switchResponse->json('token');
@@ -149,12 +169,15 @@ class AuthControllerTest extends TestCase
             'password' => Hash::make('password123'),
         ]);
 
-        $authorizedWorkspace = \App\Models\Workspace::factory()->create();
-        $unauthorizedWorkspace = \App\Models\Workspace::factory()->create();
+        // Create default workspace (simulating registration)
+        $defaultWorkspace = \App\Models\Workspace::factory()->create([
+            'name' => "{$user->name}'s Workspace",
+        ]);
+        $user->workspaces()->attach($defaultWorkspace->id, ['role' => 'owner']);
+        $user->update(['primary_workspace_id' => $defaultWorkspace->id]);
 
-        // User only has access to authorizedWorkspace
-        $user->workspaces()->attach($authorizedWorkspace->id, ['role' => 'member']);
-        $user->update(['primary_workspace_id' => $authorizedWorkspace->id]);
+        // Create unauthorized workspace (user not attached)
+        $unauthorizedWorkspace = \App\Models\Workspace::factory()->create();
 
         // Login
         $loginResponse = $this->postJson('api/login', [
@@ -194,8 +217,12 @@ class AuthControllerTest extends TestCase
             'password' => Hash::make('password123'),
         ]);
 
-        $workspace = \App\Models\Workspace::factory()->create();
-        $user->workspaces()->attach($workspace->id, ['role' => 'member']);
+        // Create default workspace (simulating registration)
+        $defaultWorkspace = \App\Models\Workspace::factory()->create([
+            'name' => "{$user->name}'s Workspace",
+        ]);
+        $user->workspaces()->attach($defaultWorkspace->id, ['role' => 'owner']);
+        $user->update(['primary_workspace_id' => $defaultWorkspace->id]);
 
         // Login
         $loginResponse = $this->postJson('api/login', [
@@ -228,12 +255,15 @@ class AuthControllerTest extends TestCase
             'password' => Hash::make('password123'),
         ]);
 
-        $primaryWorkspace = \App\Models\Workspace::factory()->create();
-        $otherWorkspace = \App\Models\Workspace::factory()->create();
+        // Create default workspace (simulating registration)
+        $defaultWorkspace = \App\Models\Workspace::factory()->create([
+            'name' => "{$user->name}'s Workspace",
+        ]);
+        $user->workspaces()->attach($defaultWorkspace->id, ['role' => 'owner']);
+        $user->update(['primary_workspace_id' => $defaultWorkspace->id]);
 
-        // User only has access to primary workspace
-        $user->workspaces()->attach($primaryWorkspace->id, ['role' => 'member']);
-        $user->update(['primary_workspace_id' => $primaryWorkspace->id]);
+        // Create other workspace (user not attached)
+        $otherWorkspace = \App\Models\Workspace::factory()->create();
 
         // Try to login with workspace user doesn't have access to
         $response = $this->postJson('api/login', [
@@ -245,7 +275,7 @@ class AuthControllerTest extends TestCase
         $response
             ->assertStatus(200)
             ->assertJson([
-                'workspace_id' => $primaryWorkspace->id, // Should fall back to primary
+                'workspace_id' => $defaultWorkspace->id, // Should fall back to primary
             ]);
     }
 
@@ -255,40 +285,74 @@ class AuthControllerTest extends TestCase
             'password' => Hash::make('password123'),
         ]);
 
-        $workspace1 = \App\Models\Workspace::factory()->create();
-        $workspace2 = \App\Models\Workspace::factory()->create();
+        // Create default workspace (simulating registration)
+        $defaultWorkspace = \App\Models\Workspace::factory()->create([
+            'name' => "{$user->name}'s Workspace",
+        ]);
+        $user->workspaces()->attach($defaultWorkspace->id, ['role' => 'owner']);
+        $user->update(['primary_workspace_id' => $defaultWorkspace->id]);
 
-        $user->workspaces()->attach([$workspace1->id, $workspace2->id], ['role' => 'member']);
-        $user->update(['primary_workspace_id' => $workspace1->id]);
+        // Create additional workspace
+        $additionalWorkspace = \App\Models\Workspace::factory()->create();
+        $user->workspaces()->attach($additionalWorkspace->id, ['role' => 'member']);
 
-        // Login with workspace1
+        // Login with default workspace
         $loginResponse = $this->postJson('api/login', [
             'email' => $user->email,
             'password' => 'password123',
-            'workspace_id' => $workspace1->id,
+            'workspace_id' => $defaultWorkspace->id,
         ]);
 
         $token = $loginResponse->json('token');
 
-        // Switch to workspace2
+        // Switch to additional workspace
         $response1 = $this->withHeaders([
             'Authorization' => 'Bearer ' . $token,
         ])->postJson('api/switch-workspace', [
-            'workspace_id' => $workspace2->id,
+            'workspace_id' => $additionalWorkspace->id,
         ]);
 
         $token2 = $response1->json('token');
-        $response1->assertJson(['workspace_id' => $workspace2->id]);
+        $response1->assertJson(['workspace_id' => $additionalWorkspace->id]);
 
-        // Switch back to workspace1
+        // Switch back to default workspace
         $response2 = $this->withHeaders([
             'Authorization' => 'Bearer ' . $token2,
         ])->postJson('api/switch-workspace', [
-            'workspace_id' => $workspace1->id,
+            'workspace_id' => $defaultWorkspace->id,
         ]);
 
         $response2
             ->assertStatus(200)
-            ->assertJson(['workspace_id' => $workspace1->id]);
+            ->assertJson(['workspace_id' => $defaultWorkspace->id]);
+    }
+
+    public function test_new_user_has_default_workspace_created()
+    {
+        $response = $this->postJson('api/register', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertStatus(201);
+
+        $user = User::where('email', 'john@example.com')->first();
+        
+        // Verify user has primary workspace set
+        $this->assertNotNull($user->primary_workspace_id);
+        
+        // Verify workspace was created with correct name
+        $workspace = \App\Models\Workspace::find($user->primary_workspace_id);
+        $this->assertNotNull($workspace);
+        $this->assertEquals("John Doe's Workspace", $workspace->name);
+        
+        // Verify user is attached as owner
+        $this->assertDatabaseHas('user_workspace', [
+            'user_id' => $user->id,
+            'workspace_id' => $workspace->id,
+            'role' => 'owner',
+        ]);
     }
 }
