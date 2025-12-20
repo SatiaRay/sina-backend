@@ -73,13 +73,13 @@ def test_create(repo_with_mocks):
     repo = repo_with_mocks
     data = {'text': 'hello', 'title': 'Title'}
     repo.model_class.return_value = MagicMock()
-    repo.vector.add_documents.return_value = ['vid123']
+    repo.vector.add_document.return_value = 'vid123'
     instance = MagicMock()
     repo.model_class.return_value = instance
 
-    result = repo.create(data)
+    result = repo.create(db=repo.db, data=data)
 
-    repo.vector.add_documents.assert_called_once()
+    repo.vector.add_document.assert_called_once()
     repo.db.add.assert_called_once_with(instance)
     repo.db.commit.assert_called_once()
     repo.db.refresh.assert_called_once_with(instance)
@@ -93,12 +93,12 @@ def test_get(repo_with_mocks):
     repo.vector.get_document_by_id.return_value = {'text': 'abc', 'metadata': {'x': 1}}
     repo._merge_vector_data = MagicMock(return_value='merged_doc')
     # with vector
-    result = repo.get(1)
+    result = repo.get(db=repo.db, id=1)
     repo.vector.get_document_by_id.assert_called()
     repo._merge_vector_data.assert_called()
     assert result == 'merged_doc'
     # without vector
-    out = repo.get(1, without_vector=True)
+    out = repo.get(db=repo.db ,id=1, without_vector=True)
     assert out == doc
 
 def test_get_all(repo_with_mocks):
@@ -107,12 +107,12 @@ def test_get_all(repo_with_mocks):
     repo.db.query.return_value.offset.return_value.limit.return_value.all.return_value = [mock_doc]
     repo.vector.get_all_documents.return_value = [{'id': 'v1', 'text': 'T', 'metadata': {'a': 1}}]
     repo._merge_vector_data = MagicMock()
-    out = repo.get_all()
+    out = repo.get_all(db=repo.db)
     repo.vector.get_all_documents.assert_called()
     repo._merge_vector_data.assert_called()
     assert isinstance(out, list)
     # without vector
-    raw = repo.get_all(without_vector=True)
+    raw = repo.get_all(db=repo.db,without_vector=True)
     assert isinstance(raw, list)
 
 def test_update(repo_with_mocks):
@@ -123,7 +123,7 @@ def test_update(repo_with_mocks):
     repo.vector.update_document = MagicMock()
     repo.db.commit = MagicMock()
     repo.db.refresh = MagicMock()
-    out = repo.update(1, data)
+    out = repo.update(db=repo.db, id=1, data=data)
     repo.vector.update_document.assert_called_once_with(instance.vector_id, repo._to_vector_data(data))
     repo.db.commit.assert_called_once()
     repo.db.refresh.assert_called_once_with(instance)
@@ -136,7 +136,7 @@ def test_delete(repo_with_mocks):
     repo.vector.delete_documents = MagicMock()
     repo.db.delete = MagicMock()
     repo.db.commit = MagicMock()
-    res = repo.delete(2)
+    res = repo.delete(db=repo.db, id=2)
     repo.vector.delete_documents.assert_called_once_with([instance.vector_id])
     repo.db.delete.assert_called_once_with(instance)
     repo.db.commit.assert_called_once()
