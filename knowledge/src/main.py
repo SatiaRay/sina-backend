@@ -1,3 +1,4 @@
+# src/main.py (updated)
 import os
 from pathlib import Path
 import sys
@@ -6,10 +7,7 @@ from fastapi import FastAPI, Depends, Request, HTTPException, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.repositories import DocumentRepository
 from src.schemas import StoreDocumentRequest, UpdateDocumentRequest
-from src.util import auth_validate, authorized_http_session_factory
-from src.vector import VectorStore
 from src.database import get_db
 from sqlalchemy.orm import Session
 
@@ -18,11 +16,8 @@ root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
 app = FastAPI()
-vector = VectorStore()
-repo = DocumentRepository()
 
-
-# ✅ CORS middleware stays unchanged
+# ✅ CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,7 +26,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Checking authentication access_token and bind to service container if is valid
+# Keep existing guard_middleware for now
+from src.util import auth_validate
+
 @app.middleware("http")
 async def guard_middleware(request: Request, call_next):    
     # Skip auth for preflight CORS requests
@@ -44,16 +41,40 @@ async def guard_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=401,
             content={
-                "msg": "Unauthorized",
+                "msg": "Unauthorized - No token provided",
+            }
+        ) 
+    
+    # Extract workspace_id from scopes and add to request state
+    scopes = getattr(request.state, "scopes", [])
+    workspace_id = None
+    
+    for scope in scopes:
+        if scope.startswith('workspace:'):
+            workspace_id = scope.split(':')[1]
+            break
+    
+    if workspace_id:
+        # Add tenant context to request state
+        request.state.tenant_context = {
+            'workspace_id': workspace_id,
+            'user_id': getattr(request.state, "user_id", None),
+            'scopes': scopes
+        }
+    else:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "msg": "Unauthorized - No workspace_id provided",
             }
         ) 
     
     response = await call_next(auth)
-        
     return response
 
 
 def get_session():
+    from src.util import authorized_http_session_factory
     return authorized_http_session_factory()
 
 
@@ -64,10 +85,18 @@ async def test():
 
 @app.get("/whoami")
 async def whoami(request: Request = None):
-    return {
+    # Return both old and new format for backward compatibility
+    response = {
         "scopes": getattr(request.state, "scopes", []),
         "user_id": getattr(request.state, "user_id", None),
     }
+    
+    # Add tenant context if available
+    if hasattr(request.state, 'tenant_context'):
+        response['tenant_context'] = request.state.tenant_context
+        response['workspace_id'] = request.state.tenant_context.get('workspace_id')
+    
+    return response
 
 
 @app.post("/")
