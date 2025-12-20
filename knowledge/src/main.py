@@ -1,4 +1,4 @@
-# src/main.py (updated)
+# src/main.py
 import os
 from pathlib import Path
 import sys
@@ -10,12 +10,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.schemas import StoreDocumentRequest, UpdateDocumentRequest
 from src.database import get_db
 from sqlalchemy.orm import Session
+from src.repositories import get_document_repository
+from src.vector import VectorStore
 
 
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
 app = FastAPI()
+vector = VectorStore()
 
 # ✅ CORS middleware
 app.add_middleware(
@@ -103,42 +106,53 @@ async def whoami(request: Request = None):
 async def store(
     document: StoreDocumentRequest,
     db: Session = Depends(get_db),
-    response: Response = None
+    repo = Depends(get_document_repository)  # Use dependency injection
 ):
-    from src.repositories import DocumentRepository
-    repo = DocumentRepository()
     try:
         repo.create(db, document.dict())
         return {"msg": "succeed"}
     except Exception as e:
         print("Error in storing document:", e)
-        response.status_code = 500
-        return {"msg": "Store document failed !"}
+        raise HTTPException(status_code=500, detail="Store document failed!")
 
 
 @app.get("/search")
 async def search(
     query: str,
     db: Session = Depends(get_db),
+    repo = Depends(get_document_repository)  # Add repo dependency
 ):
-    return vector.search(query=query)
+    try:
+        # For now, just return vector search results
+        results = vector.search(query=query)
+        
+        # Filter by current workspace
+        if hasattr(repo, 'workspace_id'):
+            filtered_results = []
+            for result in results:
+                metadata = result.get('metadata', {})
+                if isinstance(metadata, dict) and metadata.get('workspace_id') == repo.workspace_id:
+                    filtered_results.append(result)
+            return filtered_results
+        
+        return results
+    except Exception as e:
+        print(f"Search error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Search failed!")
 
 
 @app.delete("/{id}")
 async def delete(
     id: int,
     db: Session = Depends(get_db),
-    response: Response = None
+    repo = Depends(get_document_repository)  # Use dependency injection
 ):
-    from src.repositories import DocumentRepository
-    repo = DocumentRepository()
     try:
         repo.delete(db, id)
         return {"msg": "succeed"}
     except Exception as e:
         print("Error deleting document:", e)
-        response.status_code = 500
-        return {"msg": "Delete documents failed !"}
+        raise HTTPException(status_code=500, detail="Delete document failed!")
 
 
 @app.put("/{id}")
@@ -146,54 +160,64 @@ async def update(
     id: int,
     document: UpdateDocumentRequest,
     db: Session = Depends(get_db),
-    response: Response = None
+    repo = Depends(get_document_repository)  # Use dependency injection
 ):
-    from src.repositories import DocumentRepository
-    repo = DocumentRepository()
     try:
         repo.update(db, id, document.dict())
         return {"msg": "succeed"}
     except Exception as e:
         print("Error updating document:", e)
-        response.status_code = 500
-        return {"msg": "Update documents failed !"}
+        raise HTTPException(status_code=500, detail="Update document failed!")
 
 
 @app.get("/")
 async def all(
-    response: Response,
     page: int = 1,
     perpage: int = 20,
     db: Session = Depends(get_db),
+    repo = Depends(get_document_repository)  # Use dependency injection
 ):
-    from src.repositories import DocumentRepository
-    repo = DocumentRepository()
     try:
         offset = (page - 1) * perpage
         documents = repo.get_all(db, offset=offset, limit=perpage)
         total_docs = repo.count(db)
-        total_pages = (total_docs + perpage - 1) // perpage
+        total_pages = (total_docs + perpage - 1) // perpage if perpage > 0 else 1
+        
+        # Convert documents to dicts safely
+        documents_list = []
+        for doc in documents:
+            doc_dict = doc.__dict__.copy()
+            # Remove SQLAlchemy internal attribute
+            doc_dict.pop('_sa_instance_state', None)
+            documents_list.append(doc_dict)
+        
         return {
-            "documents": [doc.__dict__ for doc in documents],
+            "documents": documents_list,
             "pages": total_pages,
             "total": total_docs,
         }
     except Exception as e:
         print("Error in get all documents:", e)
-        response.status_code = 500
-        return {"msg": "Get all documents failed !"}
+        raise HTTPException(status_code=500, detail="Get all documents failed!")
+
 
 @app.get("/{id}")
 async def find(
     id: int,
-    response: Response,
     db: Session = Depends(get_db),
+    repo = Depends(get_document_repository)  # Use dependency injection
 ):
-    from src.repositories import DocumentRepository
-    repo = DocumentRepository()
     try:
-        return repo.get(db, id)
+        doc = repo.get(db, id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Convert to dict safely
+        doc_dict = doc.__dict__.copy()
+        doc_dict.pop('_sa_instance_state', None)
+        return doc_dict
+    except HTTPException:
+        raise
     except Exception as e:
         print("Error finding document:", e)
-        response.status_code = 500
-        return {"msg": "Find document failed !"}
+        raise HTTPException(status_code=500, detail="Find document failed!")
