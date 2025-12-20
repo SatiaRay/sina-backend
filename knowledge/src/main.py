@@ -133,9 +133,9 @@ async def search(
                 metadata = result.get('metadata', {})
                 if isinstance(metadata, dict) and metadata.get('workspace_id') == repo.workspace_id:
                     filtered_results.append(result)
-            return filtered_results
+            return filtered_results[0:9]
         
-        return results
+        return results[0:9]
     except Exception as e:
         print(f"Search error: {str(e)}")
         raise HTTPException(status_code=500, detail="Search failed!")
