@@ -19,19 +19,22 @@ class DocumentRepository:
         return query
     
     def _merge_vector_data(self, doc, vector_doc):
-        """Merge vector data into SQL document object"""
+        """
+        Merge vector data (from ChromaDB) into SQL document object.
+        - Flattens the structure.
+        - Preserves all SQL fields.
+        - Injects text and metadata keys at top level.
+        """
         if not vector_doc:
             return doc
 
         # Merge text
-        if vector_doc.get("text"):
-            doc.text = vector_doc["text"]
+        doc.text = vector_doc.get("text")
 
-        # Merge metadata fields (excluding workspace_id which is already in SQL)
+        # Merge metadata fields
         metadata = vector_doc.get("metadata", {})
         for key, value in metadata.items():
-            if key != 'workspace_id' and hasattr(doc, key):
-                setattr(doc, key, value)
+            setattr(doc, key, value)
 
         return doc
 
