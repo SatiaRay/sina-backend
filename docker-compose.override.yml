@@ -10,10 +10,14 @@ services:
     volumes:
       - ./knowledge:/var/www/html/knowledge/
       - chroma_db:/var/www/html/knowledge/data
+    command: /bin/sh -c "wait-for-it.sh knowledge-mysql:3308 -t 120 -- alembic upgrade head && uvicorn src.main:app --reload --host=0.0.0.0 --port=80"
 
   sina-ai-service:
     volumes:
       - ./ai:/var/www/html/ai
+    command: >
+      /bin/sh -c "wait-for-it.sh ai-mysql:3306 -t 120 -- alembic upgrade head &&
+                  uvicorn api.main:app --reload --host=0.0.0.0 --port=80"
 
   sina-idp-service:
     volumes:
