@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Passport\Client;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use League\OAuth2\Server\AuthorizationServer;
 
 class GenerateClientTokenControllerTest extends TestCase
 {
@@ -30,7 +31,7 @@ class GenerateClientTokenControllerTest extends TestCase
         $response = $this->postJson(route('internal.client-token'));
 
         $response->assertStatus(403)
-                 ->assertJson(['msg' => 'Credentials are required!']);
+            ->assertJson(['msg' => 'Credentials are required!']);
     }
 
     public function test_it_rejects_invalid_client_id()
@@ -41,7 +42,7 @@ class GenerateClientTokenControllerTest extends TestCase
         ]);
 
         $response->assertStatus(403)
-                 ->assertJson(['msg' => 'Invalid client ID.']);
+            ->assertJson(['msg' => 'Invalid client ID.']);
     }
 
     public function test_it_rejects_invalid_client_secret()
@@ -52,17 +53,23 @@ class GenerateClientTokenControllerTest extends TestCase
         ]);
 
         $response->assertStatus(403)
-                 ->assertJson(['msg' => 'Invalid client secret.']);
+            ->assertJson(['msg' => 'Invalid client secret.']);
     }
 
     public function test_it_returns_token_when_credentials_are_valid()
     {
-        // Mock the external HTTP request
-        Http::fake([
-            'http://sina-idp-service/oauth/token' => Http::response([
-                'access_token' => 'mocked_token'
-            ], 200)
-        ]);
+        // Mock the AuthorizationServer
+        $mockServer = $this->mock(AuthorizationServer::class);
+
+        $mockResponse = new \GuzzleHttp\Psr7\Response(200, [], json_encode([
+            'access_token' => 'mocked_token',
+            'token_type' => 'Bearer',
+            'expires_in' => 86400
+        ]));
+
+        $mockServer->shouldReceive('respondToAccessTokenRequest')
+            ->once()
+            ->andReturn($mockResponse);
 
         $response = $this->postJson(route('internal.client-token'), [
             'client_id' => $this->client->id,
@@ -70,21 +77,17 @@ class GenerateClientTokenControllerTest extends TestCase
         ]);
 
         $response->assertStatus(200)
-                 ->assertJson(['token' => 'mocked_token']);
-
-        // Ensure the HTTP request was sent
-        Http::assertSent(function ($request) {
-            return $request->url() === 'http://sina-idp-service/oauth/token' &&
-                   $request['grant_type'] === 'client_credentials';
-        });
+            ->assertJson(['token' => 'mocked_token']);
     }
 
     public function test_it_returns_error_when_token_request_fails()
     {
-        // Simulate failed response from OAuth server
-        Http::fake([
-            'http://sina-idp-service/oauth/token' => Http::response([], 500)
-        ]);
+        // Mock the AuthorizationServer to throw an exception
+        $mockServer = $this->mock(AuthorizationServer::class);
+
+        $mockServer->shouldReceive('respondToAccessTokenRequest')
+            ->once()
+            ->andThrow(new \Exception('Server error'));
 
         $response = $this->postJson(route('internal.client-token'), [
             'client_id' => $this->client->id,
@@ -92,6 +95,6 @@ class GenerateClientTokenControllerTest extends TestCase
         ]);
 
         $response->assertStatus(500)
-                 ->assertJson(['msg' => 'operation failed !']);
+            ->assertJson(['msg' => 'operation failed !']);
     }
 }

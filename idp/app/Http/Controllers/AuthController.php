@@ -2,11 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UserRoleInWorkspace;
 use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use App\Services\Tenant\CurrentWorkspace;
 use Illuminate\Validation\ValidationException;
+use Laravel\Passport\Passport;
 
 class AuthController extends Controller
 {
@@ -30,6 +35,16 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
+        $workspace = Workspace::create([
+            'name' => "{$user->name}'s Workspace",
+        ]);
+
+        $workspace->users()->attach($user->id, ['role' =>UserRoleInWorkspace::OWNER->value]);
+
+        $user->update([
+            'primary_workspace_id' => $workspace->id,
+        ]);
+
         $token = $user->createToken('MyAppToken')->accessToken;
 
         return response()->json(['user' => $user, 'token' => $token], 201);
@@ -41,11 +56,12 @@ class AuthController extends Controller
      * @param Request $request
      * @return void
      */
-    public function login(Request $request)
+    public function login(Request $request): JsonResponse
     {
         $request->validate([
             'email' => 'required|string|email',
             'password' => 'required|string',
+            'workspace_id' => 'nullable|string|exists:workspaces,id',
         ]);
 
         if (!Auth::attempt($request->only('email', 'password'))) {
@@ -55,9 +71,16 @@ class AuthController extends Controller
         }
 
         $user = Auth::user();
-        $token = $user->createToken('SSO')->accessToken;
 
-        return response()->json(['user' => $user, 'token' => $token]);
+        $currentWorkspaceId = $request->has('workspace_id') and Workspace::inUserWorkspaces()->where('id', $request->input('workspace_id')) ? $request->input('workspace_id') : $user->primary_workspace_id;
+
+        Passport::tokensCan([
+            "workspace:{$currentWorkspaceId}"  => 'Access to workspace specific resources',
+        ]);
+
+        $token = $user->createToken('SSO', ["workspace:{$currentWorkspaceId}"])->accessToken;
+
+        return response()->json(['user' => $user, 'workspace_id' => $currentWorkspaceId, 'token' => $token]);
     }
 
     /**
@@ -70,5 +93,44 @@ class AuthController extends Controller
         $request->user()->token()->revoke();
 
         return response()->json(['message' => 'Successfully logged out']);
+    }
+
+    /**
+     * Switch workspace
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function switchWorkspace(Request $request): JsonResponse
+    {
+        $request->validate([
+            'workspace_id' => 'required|string|exists:workspaces,id',
+        ]);
+
+        $user = Auth::user();
+
+        // Check if the user has access to the requested workspace
+        $hasAccess = Workspace::inUserWorkspaces()
+            ->where('id', $request->input('workspace_id'))
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json([
+                'message' => 'You do not have access to this workspace.'
+            ], 403);
+        }
+
+        // Create new token with the new workspace scope
+        Passport::tokensCan([
+            "workspace:{$request->workspace_id}" => 'Access to workspace specific resources',
+        ]);
+
+        $token = $user->createToken('SSO', ["workspace:{$request->workspace_id}"])->accessToken;
+
+        return response()->json([
+            'user' => $user,
+            'token' => $token,
+            'workspace_id' => $request->workspace_id
+        ]);
     }
 }
