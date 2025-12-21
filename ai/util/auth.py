@@ -67,7 +67,7 @@ def authorized_http_session_factory():
     session = requests.Session()
 
     # Send request to IDP service for getting client access token
-    response = requests.post('http://idp/api/internal/client-token', json={
+    response = requests.post('http://sina-idp-service/api/internal/client-token', json={
         "client_id" : os.getenv('OAUTH_CLIENT_ID'),
         "client_secret" : os.getenv('OAUTH_CLIENT_SECRET')
     })

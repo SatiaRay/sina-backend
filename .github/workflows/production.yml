@@ -1,0 +1,33 @@
+# .github/workflows/production.yml
+name: Production Workflow
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  deploy:
+    runs-on: production-server
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy with Docker Compose
+        run: |
+          export APP_KEY="${{ secrets.APP_KEY }}"
+          export IDP_SERVICE_DB_USERNAME="${{ secrets.IDP_SERVICE_DB_USERNAME }}"
+          export IDP_SERVICE_DB_PASSWORD="${{ secrets.IDP_SERVICE_DB_PASSWORD }}"
+          export PASSPORT_PRIVATE_KEY="${{ secrets.PASSPORT_PRIVATE_KEY }}"
+          export PASSPORT_PUBLIC_KEY="${{ secrets.PASSPORT_PUBLIC_KEY }}"
+          export WWWGROUP="${{ secrets.WWWGROUP }}"
+          export WWWUSER="${{ secrets.WWWUSER }}"
+          export AI_SERVICE_DB_USERNAME="${{ secrets.AI_SERVICE_DB_USERNAME }}"
+          export AI_SERVICE_DB_PASSWORD="${{ secrets.AI_SERVICE_DB_PASSWORD }}"
+          export KNOWLEDGE_SERVICE_DB_USERNAME="${{ secrets.KNOWLEDGE_SERVICE_DB_USERNAME }}"
+          export KNOWLEDGE_SERVICE_DB_PASSWORD="${{ secrets.KNOWLEDGE_SERVICE_DB_PASSWORD }}"
+          export OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+
+          docker compose -f docker-compose.yml up -d --build
+
+

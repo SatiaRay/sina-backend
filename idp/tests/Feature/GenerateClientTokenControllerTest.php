@@ -59,7 +59,7 @@ class GenerateClientTokenControllerTest extends TestCase
     {
         // Mock the external HTTP request
         Http::fake([
-            'http://idp/oauth/token' => Http::response([
+            'http://sina-idp-service/oauth/token' => Http::response([
                 'access_token' => 'mocked_token'
             ], 200)
         ]);
@@ -74,7 +74,7 @@ class GenerateClientTokenControllerTest extends TestCase
 
         // Ensure the HTTP request was sent
         Http::assertSent(function ($request) {
-            return $request->url() === 'http://idp/oauth/token' &&
+            return $request->url() === 'http://sina-idp-service/oauth/token' &&
                    $request['grant_type'] === 'client_credentials';
         });
     }
@@ -83,7 +83,7 @@ class GenerateClientTokenControllerTest extends TestCase
     {
         // Simulate failed response from OAuth server
         Http::fake([
-            'http://idp/oauth/token' => Http::response([], 500)
+            'http://sina-idp-service/oauth/token' => Http::response([], 500)
         ]);
 
         $response = $this->postJson(route('internal.client-token'), [
