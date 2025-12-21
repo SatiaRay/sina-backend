@@ -2,7 +2,9 @@ name: Staging Workflow
 
 on:
   push:
-
+    branches:
+      - master
+      
 jobs:
   deploy:
     runs-on: staging-server
