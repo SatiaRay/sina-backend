@@ -29,7 +29,7 @@ class OAuthIntrospectionController extends Controller
 
         $token = $request->input('token');
         $tokenTypeHint = $request->input('token_type_hint', 'access_token');
-        
+
         // Verify client authentication first (for protected endpoint)
         $client = $this->verifyClient($request);
         if (!$client) {
@@ -38,7 +38,7 @@ class OAuthIntrospectionController extends Controller
 
         // Try to introspect as access token first
         $introspection = $this->introspectAccessToken($token);
-        
+
         // If not found and hint is refresh_token, try as refresh token
         if (!$introspection['active'] && $tokenTypeHint === 'refresh_token') {
             $introspection = $this->introspectRefreshToken($token);
@@ -56,13 +56,13 @@ class OAuthIntrospectionController extends Controller
             // Parse JWT token
             $parser = new Parser(new JoseEncoder());
             $parsedToken = $parser->parse($token);
-            
+
             // Get token ID from JWT claims
             $tokenId = $parsedToken->claims()->get('jti');
-            
+
             // Find the token in database
             $accessToken = Token::find($tokenId);
-            
+
             if (!$accessToken || $accessToken->revoked) {
                 return ['active' => false];
             }
@@ -95,7 +95,6 @@ class OAuthIntrospectionController extends Controller
                 'user_id' => $accessToken->user_id,
                 'client_name' => $client ? $client->name : null,
             ];
-
         } catch (\Exception $e) {
             // Token is not JWT or invalid
             Log::debug('Token introspection failed', ['error' => $e->getMessage()]);
@@ -110,7 +109,7 @@ class OAuthIntrospectionController extends Controller
     {
         // Find refresh token in database
         $refreshToken = RefreshToken::find($token);
-        
+
         if (!$refreshToken || $refreshToken->revoked) {
             return ['active' => false];
         }
@@ -122,7 +121,7 @@ class OAuthIntrospectionController extends Controller
 
         // Get associated access token
         $accessToken = Token::find($refreshToken->access_token_id);
-        
+
         if (!$accessToken || $accessToken->revoked) {
             return ['active' => false];
         }
@@ -156,14 +155,24 @@ class OAuthIntrospectionController extends Controller
      */
     protected function formatScopes($scopes)
     {
+        // If scopes is a JSON string, decode it first
+        if (is_string($scopes)) {
+            // Check if it's JSON encoded
+            $decoded = json_decode($scopes, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $scopes = $decoded;
+            }
+        }
+
         if (is_array($scopes)) {
             return implode(' ', $scopes);
         }
-        
+
+        // If it's already a space-separated string, return as-is
         if (is_string($scopes)) {
             return $scopes;
         }
-        
+
         return '';
     }
 
@@ -173,7 +182,7 @@ class OAuthIntrospectionController extends Controller
     protected function verifyClient(Request $request)
     {
         $credentials = $this->getClientCredentials($request);
-        
+
         if (!$credentials) {
             return null;
         }
