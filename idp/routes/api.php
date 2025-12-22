@@ -1,11 +1,13 @@
 <?php
 
-use App\Http\Controllers\Api\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\GenerateClientTokenController;
+use App\Http\Controllers\Api\UserController;
 use App\Http\Middleware\AuthorizeClientCredentials;
+use App\Http\Controllers\GenerateClientTokenController;
+use App\Http\Controllers\Api\OAuthIntrospectionController;
+use App\Http\Middleware\VerifyIntrospectionClient;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -39,3 +41,10 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/workspaces/{workspace}/members/{user}', [App\Http\Controllers\Api\WorkspaceController::class, 'removeMember'] );
     Route::post('/workspaces/{workspace}/leave', [App\Http\Controllers\Api\WorkspaceController::class, 'leave'] );
 });
+
+
+/**
+ * Protected introspection endpoint (recommended)
+ */
+Route::middleware([VerifyIntrospectionClient::class])->post('/oauth/introspect', 
+    [OAuthIntrospectionController::class, 'introspect']);
