@@ -1,12 +1,9 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends
+from oauth.introspection.dependencies import get_current_user
 
 router = APIRouter()
 
-
 @router.get("/whoami")
-def whoami(request: Request):
-    return {
-        "scopes": getattr(request.state, "scopes", []),
-        "user_id": getattr(request.state, "user_id", None),
-    }
+def whoami(current_user: dict = Depends(get_current_user)):
+    return current_user
 
