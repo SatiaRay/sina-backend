@@ -4,17 +4,22 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Laravel\Passport\Token;
 use Laravel\Passport\RefreshToken;
 use Laravel\Passport\Client;
-use Lcobucci\JWT\Encoding\JoseEncoder;
-use Lcobucci\JWT\Token\Parser;
-use Carbon\Carbon;
+use League\OAuth2\Server\ResourceServer;
+use Symfony\Bridge\PsrHttpMessage\Factory\PsrHttpFactory;
 use Illuminate\Support\Facades\Log;
 
 class OAuthIntrospectionController extends Controller
 {
+    protected $resourceServer;
+    
+    public function __construct(ResourceServer $resourceServer)
+    {
+        $this->resourceServer = $resourceServer;
+    }
+    
     /**
      * Handle token introspection request
      * RFC 7662: OAuth 2.0 Token Introspection
@@ -29,13 +34,7 @@ class OAuthIntrospectionController extends Controller
 
         $token = $request->input('token');
         $tokenTypeHint = $request->input('token_type_hint', 'access_token');
-
-        // Verify client authentication first (for protected endpoint)
-        $client = $this->verifyClient($request);
-        if (!$client) {
-            return response()->json(['error' => 'invalid_client'], 401);
-        }
-
+        
         // Try to introspect as access token first
         $introspection = $this->introspectAccessToken($token);
 
@@ -48,18 +47,22 @@ class OAuthIntrospectionController extends Controller
     }
 
     /**
-     * Introspect access token
+     * Introspect access token using Passport's ResourceServer
      */
-    protected function introspectAccessToken($token)
+    protected function introspectAccessToken($tokenString)
     {
         try {
-            // Parse JWT token
-            $parser = new Parser(new JoseEncoder());
-            $parsedToken = $parser->parse($token);
+            // Create a mock request with the token as Bearer
+            $mockRequest = Request::create('/');
+            $mockRequest->headers->set('Authorization', 'Bearer ' . $tokenString);
+            
+            // Use Passport's ResourceServer to validate the token
+            $psrRequest = (new PsrHttpFactory)->createRequest($mockRequest);
+            $validatedRequest  = $this->resourceServer->validateAuthenticatedRequest($psrRequest);
 
-            // Get token ID from JWT claims
-            $tokenId = $parsedToken->claims()->get('jti');
-
+            // Get token ID from validated request
+            $tokenId = $validatedRequest->getAttribute('oauth_access_token_id');
+            
             // Find the token in database
             $accessToken = Token::find($tokenId);
 
@@ -95,8 +98,9 @@ class OAuthIntrospectionController extends Controller
                 'user_id' => $accessToken->user_id,
                 'client_name' => $client ? $client->name : null,
             ];
+
         } catch (\Exception $e) {
-            // Token is not JWT or invalid
+            // Token is invalid
             Log::debug('Token introspection failed', ['error' => $e->getMessage()]);
             return ['active' => false];
         }
@@ -109,7 +113,7 @@ class OAuthIntrospectionController extends Controller
     {
         // Find refresh token in database
         $refreshToken = RefreshToken::find($token);
-
+        
         if (!$refreshToken || $refreshToken->revoked) {
             return ['active' => false];
         }
@@ -121,7 +125,7 @@ class OAuthIntrospectionController extends Controller
 
         // Get associated access token
         $accessToken = Token::find($refreshToken->access_token_id);
-
+        
         if (!$accessToken || $accessToken->revoked) {
             return ['active' => false];
         }
@@ -157,99 +161,20 @@ class OAuthIntrospectionController extends Controller
     {
         // If scopes is a JSON string, decode it first
         if (is_string($scopes)) {
-            // Check if it's JSON encoded
             $decoded = json_decode($scopes, true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                 $scopes = $decoded;
             }
         }
-
+        
         if (is_array($scopes)) {
             return implode(' ', $scopes);
         }
-
-        // If it's already a space-separated string, return as-is
+        
         if (is_string($scopes)) {
             return $scopes;
         }
-
+        
         return '';
-    }
-
-    /**
-     * Verify client authentication
-     */
-    protected function verifyClient(Request $request)
-    {
-        $credentials = $this->getClientCredentials($request);
-
-        if (!$credentials) {
-            return null;
-        }
-
-        // Find the client
-        $client = Client::where('id', $credentials['client_id'])
-            ->where('revoked', false)
-            ->first();
-
-        // Verify client secret
-        if (!$client || !$this->verifySecret($client->secret, $credentials['client_secret'])) {
-            return null;
-        }
-
-        // Optionally, check if client is allowed to use introspection
-        // You can add a column to oauth_clients table or use client metadata
-        // if (!$client->can_introspect) {
-        //     return null;
-        // }
-
-        return $client;
-    }
-
-    /**
-     * Get client credentials from request
-     */
-    protected function getClientCredentials(Request $request)
-    {
-        // Check Authorization header (Basic auth)
-        if ($request->header('Authorization')) {
-            $auth = $request->header('Authorization');
-            if (strpos($auth, 'Basic ') === 0) {
-                $credentials = base64_decode(substr($auth, 6));
-                list($clientId, $clientSecret) = explode(':', $credentials, 2);
-                return [
-                    'client_id' => $clientId,
-                    'client_secret' => $clientSecret,
-                ];
-            }
-        }
-
-        // Check request body parameters
-        if ($request->filled('client_id') && $request->filled('client_secret')) {
-            return [
-                'client_id' => $request->input('client_id'),
-                'client_secret' => $request->input('client_secret'),
-            ];
-        }
-
-        return null;
-    }
-
-    /**
-     * Verify client secret (handles hashed secrets)
-     */
-    protected function verifySecret($storedSecret, $providedSecret)
-    {
-        // If secret is hashed with password_hash()
-        if (password_verify($providedSecret, $storedSecret)) {
-            return true;
-        }
-
-        // For plain text secrets (not recommended)
-        if (hash_equals($storedSecret, $providedSecret)) {
-            return true;
-        }
-
-        return false;
     }
 }
