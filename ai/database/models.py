@@ -11,6 +11,7 @@ from sqlalchemy import (
     JSON,
     Enum,
     TEXT,
+    Uuid
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -53,6 +54,7 @@ class BaseModel(Base):
     __abstract__ = True
 
     id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(Uuid)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
