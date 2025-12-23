@@ -39,7 +39,7 @@ class AuthController extends Controller
             'name' => "{$user->name}'s Workspace",
         ]);
 
-        $workspace->users()->attach($user->id, ['role' =>UserRoleInWorkspace::OWNER->value]);
+        $workspace->users()->attach($user->id, ['role' => UserRoleInWorkspace::OWNER->value]);
 
         $user->update([
             'primary_workspace_id' => $workspace->id,
@@ -72,7 +72,13 @@ class AuthController extends Controller
 
         $user = Auth::user();
 
-        $currentWorkspaceId = $request->has('workspace_id') and Workspace::inUserWorkspaces()->where('id', $request->input('workspace_id')) ? $request->input('workspace_id') : $user->primary_workspace_id;
+        $currentWorkspaceId = 
+        (
+            $request->has('workspace_id') 
+            && Workspace::inUserWorkspaces()->where('id', $request->input('workspace_id'))->exists()
+        )
+         ? $request->input('workspace_id') 
+         : $user->primary_workspace_id;
 
         Passport::tokensCan([
             "workspace:{$currentWorkspaceId}"  => 'Access to workspace specific resources',

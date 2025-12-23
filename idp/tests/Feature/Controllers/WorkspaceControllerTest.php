@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature\API;
+namespace Tests\Feature\API\Controllers;
 
 use App\Models\User;
 use App\Models\Workspace;
