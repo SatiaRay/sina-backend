@@ -1,6 +1,6 @@
 import json
 from io import BytesIO
-from typing import List, Literal, Optional
+from typing import List, Optional
 import re
 import urllib.parse
 
@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from database.models import Workflow, get_db
-from database.repositories.workflow_repository import WorkflowRepository
+from database.repository import WorkflowRepository
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
