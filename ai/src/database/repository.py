@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional, Type, TypeVar, Generic, Union, Tuple
 from datetime import datetime
 import uuid
-from .models import BaseModel, Wizard, Chat, ChatHistory, Workflow, Instruction, FunctionCallLog
+from .models import BaseModel, Wizard, Chat, ChatHistory, Workflow, Instruction
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -432,38 +432,3 @@ class InstructionRepository(BaseRepository[Instruction]):
         )
         query = self._apply_workspace_filter(query, workspace_id)
         return query.all()
-    
-class FunctionCallLogRepository(BaseRepository[FunctionCallLog]):
-    def __init__(self, db: Session):
-        super().__init__(db, FunctionCallLog)
-    
-    def get_recent_logs(self, limit: int = 100,
-                        workspace_id: Optional[Union[str, uuid.UUID]] = None) -> List[FunctionCallLog]:
-        """Get recent function call logs for a workspace"""
-        query = self.db.query(FunctionCallLog).order_by(desc(FunctionCallLog.created_at))
-        query = self._apply_workspace_filter(query, workspace_id)
-        return query.limit(limit).all()
-    
-    def get_by_function_name(self, function_name: str,
-                             workspace_id: Optional[Union[str, uuid.UUID]] = None) -> List[FunctionCallLog]:
-        """Get logs by function name within a workspace"""
-        query = self.db.query(FunctionCallLog).filter(
-            FunctionCallLog.function_name == function_name
-        )
-        query = self._apply_workspace_filter(query, workspace_id)
-        return query.order_by(desc(FunctionCallLog.created_at)).all()
-    
-    def get_by_status(self, status: str,
-                      workspace_id: Optional[Union[str, uuid.UUID]] = None) -> List[FunctionCallLog]:
-        """Get logs by status within a workspace"""
-        query = self.db.query(FunctionCallLog).filter(FunctionCallLog.status == status)
-        query = self._apply_workspace_filter(query, workspace_id)
-        return query.order_by(desc(FunctionCallLog.created_at)).all()
-    
-    def get_failed_calls(self, workspace_id: Optional[Union[str, uuid.UUID]] = None) -> List[FunctionCallLog]:
-        """Get failed function calls for a workspace"""
-        return self.get_by_status("failed", workspace_id)
-    
-    def get_successful_calls(self, workspace_id: Optional[Union[str, uuid.UUID]] = None) -> List[FunctionCallLog]:
-        """Get successful function calls for a workspace"""
-        return self.get_by_status("success", workspace_id)

@@ -1,6 +1,6 @@
 # repositories/__init__.py
 from sqlalchemy.orm import Session
-from .repository import WizardRepository, ChatRepository, ChatHistoryRepository, WorkflowRepository, InstructionRepository, FunctionCallLogRepository
+from .repository import WizardRepository, ChatRepository, ChatHistoryRepository, WorkflowRepository, InstructionRepository
 
 class RepositoryFactory:
     """Factory for creating repository instances"""
@@ -27,10 +27,6 @@ class RepositoryFactory:
     @property
     def instructions(self) -> InstructionRepository:
         return InstructionRepository(self.db)
-    
-    @property
-    def function_call_logs(self) -> FunctionCallLogRepository:
-        return FunctionCallLogRepository(self.db)
 
 
 # Convenience function for FastAPI dependency

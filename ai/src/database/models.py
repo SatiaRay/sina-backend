@@ -116,22 +116,6 @@ class Instruction(BaseModel):
     status = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-class FunctionCallLog(BaseModel):
-    __tablename__ = "function_call_logs"
-    
-    timestamp = Column(DateTime, nullable=False, index=True)
-    tool = Column(String(255), nullable=False, index=True)
-    params = Column(JSON, nullable=True)
-    session_id = Column(String(255), nullable=True, index=True)
-    response = Column(JSON, nullable=True)
-    error = Column(Text, nullable=True)
-    duration_ms = Column(Integer, nullable=False)
-    tokens_used = Column(Integer, nullable=True)
-    additional_metadata = Column(JSON, nullable=True)
-    
-    def __repr__(self):
-        return f"<FunctionCallLog(tool='{self.tool}', timestamp={self.timestamp})>"
 
 
 # Database dependency for FastAPI
