@@ -1,7 +1,7 @@
 from openai import OpenAI
 import os
 
-class SpeechToTextModel(OpenAI):
+class SpeechToTextAgent(OpenAI):
     """
     A class to handle speech-to-text operations using OpenAI's API.
     Inherits from OpenAI to utilize its methods and properties.
@@ -9,7 +9,7 @@ class SpeechToTextModel(OpenAI):
 
     def __init__(self, api_key: str = None):
         """
-        Initializes the SpeechToTextModel with the provided API key.
+        Initializes the SpeechToTextAgent with the provided API key.
 
         :param api_key: The API key for OpenAI.
         """

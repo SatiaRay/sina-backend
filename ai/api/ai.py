@@ -11,8 +11,8 @@ import json
 from ai.agents.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from util.logging_config import configure_logging, log_error
 import os
-from ai.models.speech_to_text_model import SpeechToTextModel
-from ai.models.google_speech_to_text_model import GoogleSpeechToTextModel
+from ai.agents.speech_to_text_agent import SpeechToTextAgent
+from ai.agents.google_speech_to_text_agent import GoogleSpeechToTextAgent
 import uuid
 from dynaconf import Dynaconf
 from pathlib import Path
@@ -28,7 +28,7 @@ router = APIRouter(prefix="", tags=["AI"])
 agent_rag = ChatAgentRagProxy()
 
 # Initialze the speech to text model
-speech_to_text_model = None
+speech_to_text_agent = None
 
 
 def get_voice_to_text_model():
@@ -40,9 +40,9 @@ def get_voice_to_text_model():
     try:
         match settings.voice_to_text_service:
             case "openai":
-                return SpeechToTextModel()
+                return SpeechToTextAgent()
             case "google":
-                return GoogleSpeechToTextModel()
+                return GoogleSpeechToTextAgent()
             case _:
                 return None
     except Exception as e:
@@ -167,9 +167,9 @@ async def ask_question_agent_socket(
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
-    speech_to_text_model = get_voice_to_text_model()
+    speech_to_text_agent = get_voice_to_text_model()
 
-    if not speech_to_text_model:
+    if not speech_to_text_agent:
         raise HTTPException(
             status_code=500,
             detail=f"The voice to speech service doesn't defined in the system settings",
@@ -198,7 +198,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
 
                 # Transcribe using Whisper
-                trans = speech_to_text_model.transcribe(filepath)
+                trans = speech_to_text_agent.transcribe(filepath)
 
                 await websocket.send_text(trans)
 
@@ -222,9 +222,9 @@ async def voice_wav_endpoint(file: UploadFile = File(...)):
     """
     API endpoint to transcribe WAV audio files
     """
-    speech_to_text_model = get_voice_to_text_model()
+    speech_to_text_agent = get_voice_to_text_model()
 
-    if not speech_to_text_model:
+    if not speech_to_text_agent:
         raise HTTPException(
             status_code=500,
             detail="The voice to speech service doesn't defined in the system settings",
@@ -249,7 +249,7 @@ async def voice_wav_endpoint(file: UploadFile = File(...)):
             f.write(content)
 
         # Transcribe using speech-to-text model
-        transcription = speech_to_text_model.transcribe(filepath)
+        transcription = speech_to_text_agent.transcribe(filepath)
 
         return {
             "status": "success",

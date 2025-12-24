@@ -4,7 +4,7 @@ from pydub import AudioSegment
 import speech_recognition as sr
 
 
-class GoogleSpeechToTextModel:
+class GoogleSpeechToTextAgent:
     """
     Speech-to-text using Google's Speech Recognition API via speech_recognition + pydub.
     Supports .webm, .mp3, .wav, etc., by converting in-memory to PCM WAV.
