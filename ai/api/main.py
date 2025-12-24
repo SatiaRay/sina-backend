@@ -1,12 +1,7 @@
-import re
 import sys
 import os
 from pathlib import Path
-from urllib.parse import urlparse
-import json
 from datetime import datetime
-from bs4 import BeautifulSoup
-from typing import Union
 
 from models.tools.functions.trigger_hook import TriggerHook
 
@@ -14,31 +9,15 @@ from models.tools.functions.trigger_hook import TriggerHook
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from fastapi import FastAPI, HTTPException, Depends, Body, Request, WebSocket
-from sqlalchemy.orm import Session
+from fastapi import FastAPI,Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, HttpUrl
-from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv, find_dotenv
 from provider.service_container import container, ServiceContainer
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from util.logging_config import configure_logging, log_error
-from util.constants import APP_NAME, APP_VERSION
-from .models import (
-    DataSource,
-    DataSourceListResponse,
-    Chunk,
-    AllKnowledgeRequest,
-    UpdateKnowledgeRequest,
-    VectorSearchRequest,
-    StoreVectorRequest,
-)
-from models.html_to_markdown_agent import HTMLToMarkdownAgent
 from database.repositories.workflow_repository import WorkflowRepository
-from database.models import get_db
 import uuid
-from models.tools.functions.app_satia_co import AppSatiaCo
 from models.tools.functions.neshan import Neshan
 from models.tools.functions.mayoral import Mayoral
 from models.tools.functions.ayan import Ayan
@@ -78,15 +57,6 @@ def init_service_container():
 
     # Bind WorkflowRepository as singleton
     container.singleton("workflow_repository", WorkflowRepository)
-
-    # Bind AppSatiaCo as singleton with required dependencies
-    # container.singleton(
-    #     "AppSatiaCo",
-    #     lambda: AppSatiaCo(
-    #         access_token=os.getenv("SATIA_ACCESS_TOKEN", ""),
-    #         customer=os.getenv("SATIA_CUSTOMER", ""),
-    #     ),
-    # )
 
     container.singleton(
         "Neshan",
@@ -142,9 +112,8 @@ print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
 
 # Create FastAPI app
 app = FastAPI(
-    title=APP_NAME,
-    version=APP_VERSION,
-    description="API for managing documents and knowledge base",
+    title="Sina AI Service",
+    description="Sina AI service responsible for storing instructions, workflows and settings and interaction with LLM services like OpenAi",
     redirect_slashes=False,
 )
 
@@ -218,7 +187,7 @@ async def log_requests(request: Request, call_next):
 
 @app.get("/")
 async def root():
-    return {"app": APP_NAME, "version": "1.0.0", "status": "running"}
+    return {"app": "Sina AI Service", "status": "running"}
 
 
 @app.get(
