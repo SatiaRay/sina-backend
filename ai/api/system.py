@@ -4,27 +4,26 @@ import tempfile
 import zipfile
 import shutil
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
-from sqlalchemy import create_engine, text
+from typing import Dict, Any, List, Tuple
+from sqlalchemy import text
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
-from fastapi import HTTPException, UploadFile, APIRouter, Depends
+from fastapi import HTTPException, UploadFile, APIRouter
 from fastapi.responses import FileResponse
 import logging
 import jsonschema
 from dynaconf import Dynaconf
 import sys
+from util.settings import initialize_system_settings
 
 from database.models import (
-    Base,
     Wizard,
     Chat,
     ChatHistory,
     Workflow,
     Instruction,
 )
-from provider.service_container import container
+
+settings = Dynaconf(settings_files=[initialize_system_settings()])
 
 logger = logging.getLogger(__name__)
 
@@ -521,7 +520,6 @@ async def update_system_settings(new_settings: dict):
                 detail=f"Invalid text_agent_model: {new_settings['text_agent_model']}. Must be one of: {allowed_models}",
             )
         save_system_settings(new_settings)
-        settings = container.make("settings")
         settings.reload()
         return {"message": "Settings updated successfully"}
     except jsonschema.ValidationError as ve:

@@ -14,7 +14,8 @@ from anyio import to_thread
 from .chat_agent_rag_interface import ChatAgentRagInterface
 from sqlalchemy.orm import Session
 import json
-from provider.service_container import container
+from dynaconf import Dynaconf
+from util.settings import initialize_system_settings
 
 load_dotenv()
 main_logger, error_logger, _, debug_logger = configure_logging()
@@ -159,8 +160,6 @@ class ChatAgentRag(ChatAgentRagInterface):
         try:
             main_logger.info(f"Finding relevant documents for question: {question}")
 
-            session = container.make('requeste.session')
-            
             # Search for relevant knowledge through sending inquiry request to the service
             response = session.get(f"http://sina-knowledge-service/search?query='{question}'")
 
@@ -309,7 +308,7 @@ class ChatAgentRag(ChatAgentRagInterface):
         """Stream response from OpenAI with tools configuration"""
         try:
             #tools = function tools
-            settings = container.make('settings')
+            settings = Dynaconf(settings_files=[initialize_system_settings()])
             model = settings.text_agent_model or os.getenv("GPT_MODEL")
             return self.client.responses.create(
                model=model,

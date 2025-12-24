@@ -8,11 +8,8 @@ sys.path.append(str(root_dir))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv, find_dotenv
-from provider.service_container import container, ServiceContainer
-from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
+from dotenv import load_dotenv
 from util.logging_config import configure_logging
-from database.repository import WorkflowRepository
 
 # Routes
 from .wizard import router as wizard_router
@@ -21,48 +18,15 @@ from .workflow import router as workflow_router
 from .ai import router as ai_router
 from .instruction import router as instruction_router
 from .system import router as system_router
-from dynaconf import Dynaconf
 from .file import router as file_router
 from .auth import router as auth_router
 
-from util.settings import initialize_system_settings
 
 # Configure loggers
 main_logger, error_logger, api_logger, _ = configure_logging()
 
 # Force reload environment variables
-print("Loading environment from:", find_dotenv())
 load_dotenv(override=True)
-
-# Set base path for service container
-ServiceContainer.set_base_path(str(root_dir))
-
-# Initialize service container bindings
-def init_service_container():
-    # Bind ChatAgentRagProxy as singleton
-    container.singleton("chat_agent", ChatAgentRagProxy)
-
-    # Bind WorkflowRepository as singleton
-    container.singleton("workflow_repository", WorkflowRepository)
-
-    chat_agent = container.make("chat_agent")
-    container.instance("chat_agent", chat_agent)
-
-    # Bind app settings
-    container.instance(
-        "settings", Dynaconf(settings_files=[initialize_system_settings()])
-    )
-
-
-# Initialize the service container
-init_service_container()
-
-# Debug: Print database configuration at startup
-print("Environment Variables at Startup:")
-print(f"Current Directory: {os.getcwd()}")
-print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
-print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
-
 
 # Create FastAPI app
 app = FastAPI(
