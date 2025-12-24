@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 from database.repository import InstructionRepository
 from database.models import SessionLocal
-from ai_agents.title_analyzer_agent import TitleAnalyzerAgent
+from ai.agents.title_analyzer_agent import TitleAnalyzerAgent
 from util.logging_config import configure_logging, log_error
 import asyncio
 from fastapi import WebSocket
