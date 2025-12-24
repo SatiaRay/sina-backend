@@ -1,4 +1,3 @@
-import enum
 from sqlalchemy import (
     create_engine,
     Column,
@@ -17,29 +16,16 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import os
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 import pymysql
 
 pymysql.install_as_MySQLdb()
 
 # Force reload of environment variables
-print("Loading environment from:", find_dotenv())
 load_dotenv(override=True)
-
-# Debug: Print database configuration
-print("Environment Variables:")
-print(f"Current Directory: {os.getcwd()}")
-print(f"MYSQL_DATABASE from env: {os.environ.get('MYSQL_DATABASE')}")
-print(f"MYSQL_DATABASE from getenv: {os.getenv('MYSQL_DATABASE')}")
-print("\nDatabase Configuration:")
-print(f"Host: {os.getenv('MYSQL_HOST')}")
-print(f"User: {os.getenv('MYSQL_USER')}")
-print(f"Database: {os.getenv('MYSQL_DATABASE')}")
-print(f"Port: {os.getenv('MYSQL_PORT')}")
 
 # Create SQLAlchemy engine
 DATABASE_URL = f"mysql+pymysql://{os.getenv('MYSQL_USER')}:{os.getenv('MYSQL_PASSWORD')}@{os.getenv('MYSQL_HOST')}:{os.getenv('MYSQL_PORT')}/{os.getenv('MYSQL_DATABASE')}"
-print(f"Database URL: {DATABASE_URL}")
 engine = create_engine(DATABASE_URL)
 
 # Create session factory
