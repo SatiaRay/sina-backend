@@ -7,23 +7,16 @@ from fastapi import (
     UploadFile,
     File,
 )
-from models.tools.functions.app_satia_co import AppSatiaCo
-from typing import Optional, List, Dict
 import json
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
-from provider.service_container import container
 from util.logging_config import configure_logging, log_error
 from util.redis_binding_manager import binding_manager
-import wave
 import os
 from models.models.speech_to_text_model import SpeechToTextModel
 from models.models.google_speech_to_text_model import GoogleSpeechToTextModel
-import matplotlib.pyplot as plt
-import io
 import uuid
 from dynaconf import Dynaconf
 from pathlib import Path
-from util.auth import auth_validate
 
 
 # Configure loggers
@@ -65,10 +58,6 @@ async def ask_question_agent_socket(
     session_id: str = Query(..., description="Session ID is required"),
     token: str = Query(..., description="Auth token is required"),
 ):
-    if not token or not await auth_validate(token):
-        await websocket.close(code=1008)  # 1008 = Policy Violation
-        return
-
     await websocket.accept()
     
     # Generate unique binding token for this WebSocket session
