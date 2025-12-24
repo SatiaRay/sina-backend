@@ -59,9 +59,6 @@ async def ask_question_agent_socket(
 ):
     await websocket.accept()
     
-    # Generate unique binding token for this WebSocket session
-    binding_token = binding_manager.generate_binding_token()
-
     try:
         while True:
             data = await websocket.receive_json()
@@ -100,37 +97,6 @@ async def ask_question_agent_socket(
                         "wizard_id": data.get('wizard_id')
                     }
 
-                case "service":
-                    if(data.get('name') == 'satia'):
-                        # Extract token and customer from the credentials object
-                        credentials = data.get('credentials', {})
-                        token = credentials.get('token', '')
-                        customer = credentials.get('customer', '')
-
-                        # Store binding data in Redis with unique token
-                        binding_data = {
-                            "class_name": "AppSatiaCo",
-                            "token": token,
-                            "customer": customer
-                        }
-                        
-                        success = binding_manager.store_binding(binding_token, "AppSatiaCo", binding_data)
-                        
-                        if success:
-                            await websocket.send_json(
-                                {
-                                    "event": "notice",
-                                    "msg": "Service is ready",
-                                }
-                            )
-                        else:
-                            await websocket.send_json(
-                                {
-                                    "event": "error",
-                                    "msg": "Failed to initialize service",
-                                }
-                            )
-
             if (data.get('event') == 'service'):
                 continue
 
@@ -141,7 +107,7 @@ async def ask_question_agent_socket(
             )
             
             await agent_rag.generate_response_socket(
-                message=message, websocket=websocket, hiddenQuestion=hiddenQuestion, hiddenAnswer=hiddenAnswer, binding_token=binding_token
+                message=message, websocket=websocket, hiddenQuestion=hiddenQuestion, hiddenAnswer=hiddenAnswer
             )
 
             await websocket.send_json(
@@ -159,7 +125,6 @@ async def ask_question_agent_socket(
         await websocket.send_text(f"Error: {str(e)}")
     finally:
         # Clean up Redis bindings for this session
-        binding_manager.remove_all_bindings(binding_token)
         await websocket.close()
 
 

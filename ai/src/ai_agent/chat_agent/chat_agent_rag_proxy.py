@@ -25,8 +25,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
         message: dict,
         websocket: WebSocket,
         hiddenQuestion=False,
-        hiddenAnswer=False,
-        binding_token: str = None,
+        hiddenAnswer=False
     ) -> Dict[str, Any]:
         try:
             # Get or create chat session
@@ -78,8 +77,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 question=message['body'],
                 history=formatted_history,
                 websocket=websocket,
-                workflows=workflows,
-                binding_token=binding_token
+                workflows=workflows
             )
 
             # Generate response
@@ -108,14 +106,13 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             logger.error(error_msg)
             return {"status": "error", "error": str(e)}
         
-    def agent_factory(self,question, history, websocket, workflows, binding_token=None):
+    def agent_factory(self,question, history, websocket, workflows):
         return ChatAgentRag(
             question=question,
             history=history,
             websocket=websocket,
             workflows=workflows,
-            db=self.db,
-            binding_token=binding_token
+            db=self.db
         )
 
     # Get or create chat session

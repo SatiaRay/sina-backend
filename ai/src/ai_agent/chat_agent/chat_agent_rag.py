@@ -94,14 +94,12 @@ class ChatAgentRag(ChatAgentRagInterface):
             websocket: WebSocket = None,
             workflows: Optional[str] = None,
             db: Session = SessionLocal(),
-            binding_token: str = None
         ):
         self.db = db
         self.question = question
         self.history = history
         self.websocket = websocket
         self.workflows = workflows
-        self.binding_token = binding_token
         
         self.client = OpenAI()
         self.called_function = {
