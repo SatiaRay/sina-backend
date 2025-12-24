@@ -8,12 +8,11 @@ from fastapi import (
     File,
 )
 import json
-from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
+from ai_agents.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from util.logging_config import configure_logging, log_error
-from util.redis_binding_manager import binding_manager
 import os
-from models.models.speech_to_text_model import SpeechToTextModel
-from models.models.google_speech_to_text_model import GoogleSpeechToTextModel
+from ai_models.speech_to_text_model import SpeechToTextModel
+from ai_models.google_speech_to_text_model import GoogleSpeechToTextModel
 import uuid
 from dynaconf import Dynaconf
 from pathlib import Path
