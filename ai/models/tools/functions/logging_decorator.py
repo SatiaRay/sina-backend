@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from database.models import SessionLocal, FunctionCallLog
 import os
-from database.repositories.function_call_log_repository import FunctionCallLogRepository
+from database.repository import FunctionCallLogRepository
 from functools import wraps
 
 class FunctionCallLogger:
