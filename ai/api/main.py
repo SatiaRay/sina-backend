@@ -9,7 +9,6 @@ from bs4 import BeautifulSoup
 from typing import Union
 
 from models.tools.functions.trigger_hook import TriggerHook
-from util.auth import authorized_http_session_factory, decode_jwt_token, auth_validate
 
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
@@ -74,11 +73,6 @@ ServiceContainer.set_base_path(str(root_dir))
 
 # Initialize service container bindings
 def init_service_container():
-    # Getting client acess token from idp serivce
-    session = authorized_http_session_factory()
-
-    container.singleton('requeste.session', session)
-
     # Bind ChatAgentRagProxy as singleton
     container.singleton("chat_agent", ChatAgentRagProxy)
 
@@ -221,34 +215,6 @@ async def log_requests(request: Request, call_next):
                 "request_id": request_id,
             },
         )
-
-# Checking authentication access_token and bind to service container if is valid
-@app.middleware("http")
-async def guard_middleware(request: Request, call_next):    
-    # Skip auth for preflight CORS requests
-    if request.method == "OPTIONS":
-        return await call_next(request)
-
-    token = request.headers.get("authorization")
-    if not token:
-        return JSONResponse(
-            status_code=401,
-            content={"msg": "Missing token"},
-        )
-    
-    auth = await auth_validate(credential=request)
-
-    if not auth:
-        return JSONResponse(
-            status_code=401,
-            content={
-                "msg": "Unauthorized",
-            }
-        ) 
-    
-    response = await call_next(auth)
-        
-    return response
 
 @app.get("/")
 async def root():
