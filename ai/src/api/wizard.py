@@ -4,7 +4,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 
-from database.models import get_db
+from src.database.models import get_db
 from database.repository import WizardRepository
 
 router = APIRouter(prefix="/wizards", tags=["wizards"])

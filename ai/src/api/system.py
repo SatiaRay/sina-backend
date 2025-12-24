@@ -13,9 +13,9 @@ import logging
 import jsonschema
 from dynaconf import Dynaconf
 import sys
-from util.settings import initialize_system_settings
+from src.util.settings import initialize_system_settings
 
-from database.models import (
+from src.database.models import (
     Wizard,
     Chat,
     ChatHistory,
@@ -53,7 +53,7 @@ class DatabaseExportImport:
 
     def _get_database_connection(self) -> Tuple[Session, str]:
         """Get database connection and URL"""
-        from database.models import SessionLocal
+        from src.database.models import SessionLocal
 
         # Get database URL from environment
         db_url = os.getenv("DATABASE_URL")

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from database.models import Workflow, get_db
+from src.database.models import Workflow, get_db
 from database.repository import WorkflowRepository
 from pydantic import BaseModel, Field
 

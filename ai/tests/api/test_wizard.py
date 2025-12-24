@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from unittest.mock import Mock, patch
 
 from api.wizard import router
-from database.models import get_db
+from src.database.models import get_db
 
 # Mock data for testing
 MOCK_WIZARD = {

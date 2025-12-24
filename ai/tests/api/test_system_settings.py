@@ -8,14 +8,14 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 import time
 from typing import List, Tuple
-from api.main import app
+from src.api.main import app
 from jose import jwt
 
 # Add the project root to the path
 root_dir = Path(__file__).parent.parent.parent
 sys.path.append(str(root_dir))
 
-from api.main import app
+from src.api.main import app
 import api.system as system_mod
 
 client = TestClient(app)

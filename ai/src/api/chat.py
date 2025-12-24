@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from database.models import Chat, ChatHistory, get_db
+from src.database.models import Chat, ChatHistory, get_db
 from datetime import datetime
 
 router = APIRouter()

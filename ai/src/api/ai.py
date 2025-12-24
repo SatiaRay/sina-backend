@@ -8,11 +8,11 @@ from fastapi import (
     File,
 )
 import json
-from ai.agents.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
+from src.ai_agent.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from util.logging_config import configure_logging, log_error
 import os
-from ai.agents.speech_to_text_agent import SpeechToTextAgent
-from ai.agents.google_speech_to_text_agent import GoogleSpeechToTextAgent
+from src.ai_agent.speech_to_text_agent import SpeechToTextAgent
+from src.ai_agent.google_speech_to_text_agent import GoogleSpeechToTextAgent
 import uuid
 from dynaconf import Dynaconf
 from pathlib import Path

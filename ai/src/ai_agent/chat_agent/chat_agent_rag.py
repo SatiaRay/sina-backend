@@ -4,8 +4,8 @@ from typing import List, Dict, Optional
 import os
 from dotenv import load_dotenv
 from database.repository import InstructionRepository
-from database.models import SessionLocal
-from ai.agents.title_analyzer_agent import TitleAnalyzerAgent
+from src.database.models import SessionLocal
+from src.ai_agent.title_analyzer_agent import TitleAnalyzerAgent
 from util.logging_config import configure_logging, log_error
 import asyncio
 from fastapi import WebSocket
