@@ -4,7 +4,7 @@ import shutil
 import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
-from api.main import app
+from src.api.main import app
 import time
 from typing import List, Tuple
 

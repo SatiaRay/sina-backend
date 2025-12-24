@@ -42,7 +42,7 @@ python -m crawler.main
 
 5. راه‌اندازی سرور:
 ```bash
-uvicorn api.main:app --reload --host=0.0.0.0
+uvicorn src.api.main:app --reload --host=0.0.0.0
 ```
 
 ## مستندات

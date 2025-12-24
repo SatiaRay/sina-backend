@@ -16,7 +16,7 @@ mysql_data/
 .cursor/
 
 # Handle data folder
-data/*
-!data/
-!data/settings_schema.json
+src/data/*
+!src/data/
+!src/data/settings_schema.json
 storage/*
