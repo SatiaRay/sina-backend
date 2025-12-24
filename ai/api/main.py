@@ -3,8 +3,6 @@ import os
 from pathlib import Path
 from datetime import datetime
 
-from models.tools.functions.trigger_hook import TriggerHook
-
 # اضافه کردن مسیر ریشه پروژه به sys.path
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
@@ -16,11 +14,8 @@ from dotenv import load_dotenv, find_dotenv
 from provider.service_container import container, ServiceContainer
 from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from util.logging_config import configure_logging, log_error
-from database.repositories.workflow_repository import WorkflowRepository
+from database.repository import WorkflowRepository
 import uuid
-from models.tools.functions.neshan import Neshan
-from models.tools.functions.mayoral import Mayoral
-from models.tools.functions.ayan import Ayan
 
 # Routes
 from api.about import router as about_router
@@ -57,24 +52,6 @@ def init_service_container():
 
     # Bind WorkflowRepository as singleton
     container.singleton("workflow_repository", WorkflowRepository)
-
-    container.singleton(
-        "Neshan",
-        lambda: Neshan(
-            api_key=os.getenv("NESHNA_API_KEY", ""),
-            city_lat=float(os.getenv("NESHAN_CITY_LATITUDE", 34.0873)),
-            city_long=float(os.getenv("NESHAN_CITY_LONG", 49.7022)),
-        ),
-    )
-
-    container.singleton(
-        "Mayoral",
-        lambda: Mayoral(
-            bearer_token=os.getenv("MAYORAL_API_BEARER_TOKEN", ""),
-        ),
-    )
-
-    container.singleton("TriggerHook", TriggerHook())
 
     chat_agent = container.make("chat_agent")
     container.instance("chat_agent", chat_agent)

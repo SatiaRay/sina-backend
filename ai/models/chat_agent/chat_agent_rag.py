@@ -13,13 +13,8 @@ from openai import OpenAI
 from anyio import to_thread
 from .chat_agent_rag_interface import ChatAgentRagInterface
 from sqlalchemy.orm import Session
-from pathlib import Path
 import json
-import re
-from models.tools.functions import call_function
 from provider.service_container import container
-import logging
-import inspect
 
 load_dotenv()
 main_logger, error_logger, _, debug_logger = configure_logging()
@@ -313,14 +308,14 @@ class ChatAgentRag(ChatAgentRagInterface):
     def _connect_stream(self, messages: List[Dict[str, str]]):
         """Stream response from OpenAI with tools configuration"""
         try:
-            tools = self._load_tools_configuration()
+            #tools = function tools
             settings = container.make('settings')
             model = settings.text_agent_model or os.getenv("GPT_MODEL")
             return self.client.responses.create(
                model=model,
                input=messages,
                stream=True,
-               tools=tools
+            #    tools=tools
             )
         except Exception as e:
             error_logger.error(f"Error in _connect_stream: {str(e)}")
@@ -339,11 +334,8 @@ class ChatAgentRag(ChatAgentRagInterface):
             
             response = await self._stream_event_handler(stream=stream, broadcast_response_to_websocket=broadcast_response_to_websocket)
                     
-            if response['call_info'] is not None:
-                # If a function was called, handle it and get the new response
-                subResponse = await self._suplly_called_function(response['call_info'])
-                
-                response['text'] += subResponse
+            # if response['call_info'] is not None:
+            #     # If a function was called, handle it and get the new response
             
             return response['text']
             
@@ -390,95 +382,3 @@ class ChatAgentRag(ChatAgentRagInterface):
                 await asyncio.sleep(float(delay))
           
         return result
-        
-    async def _suplly_called_function(self, called_function: dict):
-        try:
-            # Add function call to history
-            self.history.append(called_function)
-            
-            # Call the function and get result
-            result = await call_function(
-                called_function['name'], 
-                json.loads(called_function['arguments']), 
-                client_websocket_connection=self.websocket,
-                binding_token=self.binding_token
-            )
-            
-            # Add result to chat history
-            if self.history is None:
-                self.history = []
-            
-            self.history.append({
-                "type": "function_call_output",
-                "call_id": called_function['call_id'],
-                "output": json.dumps(result)
-            })
-            
-        except Exception as e:
-            error_logger.error(f"Error in supply_called_function: {str(e)}")
-            
-            # Add error information to chat history
-            if self.history is None:
-                self.history = []
-            
-            error_info = {
-                "status": "error",
-                "function": called_function['name'],
-                "error": str(e)
-            }
-            
-            self.history.append({
-                "type": "function_call_output",
-                "call_id": called_function['call_id'],
-                "output": json.dumps(error_info)
-            })
-            
-        finally:
-            # Reset called_function regardless of success or failure
-            called_function = {
-                "name": None,
-                "arguments": []
-            }
-            # Re-call generate_response_socket with updated history
-            return await self.generate_response_socket()
-
-    def _load_tools_configuration(self) -> List[Dict]:
-        """
-        Load and return the tools configuration from map.json.
-        Validates that function names match the required pattern ^[a-zA-Z0-9_-]+$
-        
-        Returns:
-            List[Dict]: List of function configurations from the map file
-            
-        Raises:
-            FileNotFoundError: If the map.json file is not found
-            json.JSONDecodeError: If the map.json file contains invalid JSON
-            ValueError: If any function name doesn't match the required pattern
-        """
-        try:
-            map_path = Path(__file__).parent.parent / "tools" / "functions" / "map.json"
-            with open(map_path, 'r', encoding='utf-8') as f:
-                tools_config = json.load(f)
-            
-            # Validate function names
-            name_pattern = re.compile(r'^[a-zA-Z0-9_-]+$')
-            for func in tools_config["functions"]:
-                if not name_pattern.match(func["name"]):
-                    raise ValueError(
-                        f"Invalid function name '{func['name']}'. "
-                        "Function names must contain only letters, numbers, underscores, and hyphens."
-                    )
-            
-            return tools_config["functions"]
-        except FileNotFoundError as e:
-            error_logger.error(f"Tools configuration file not found: {str(e)}")
-            raise
-        except json.JSONDecodeError as e:
-            error_logger.error(f"Invalid JSON in tools configuration file: {str(e)}")
-            raise
-        except ValueError as e:
-            error_logger.error(f"Invalid function configuration: {str(e)}")
-            raise
-        except Exception as e:
-            error_logger.error(f"Error loading tools configuration: {str(e)}")
-            raise
