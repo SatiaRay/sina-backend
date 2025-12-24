@@ -1,13 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from database.repository import InstructionRepository
-from src.database.models import get_db, Workspace
+from src.database.models import get_db
 from pydantic import BaseModel, Field, validator
-from typing import Optional, Literal
 from datetime import datetime
-from api.dependencies import get_current_user, get_current_workspace
-from src.database.models import User
+from src.oauth.dependencies import get_current_user, get_current_workspace
 
 router = APIRouter()
 
@@ -16,7 +14,7 @@ class InstructionBase(BaseModel):
     label: str = Field(..., min_length=1, max_length=255)
     text: str = Field(..., min_length=1)
     status: bool = True
-    workspace_id: Optional[int] = None  # Will be set from current workspace
+    workspace_id: Optional[str] = None  # Will be set from current workspace
 
     @validator("label", "text")
     def validate_not_empty(cls, v):
@@ -45,10 +43,10 @@ class InstructionUpdate(BaseModel):
 
 class InstructionResponse(InstructionBase):
     id: int
-    workspace_id: int  # Always required in response
+    workspace_id: str  # Always required in response
     created_at: datetime
     updated_at: datetime
-    created_by: Optional[int] = None
+    created_by: Optional[str] = None  # User ID from token
 
     class Config:
         from_attributes = True
@@ -66,16 +64,16 @@ class PaginatedResponse(BaseModel):
 def create_instruction(
     instruction: InstructionCreate,
     db: Session = Depends(get_db),
-    current_workspace: Workspace = Depends(get_current_workspace),
-    current_user: User = Depends(get_current_user)
+    current_workspace_id: str = Depends(get_current_workspace),
+    current_user: dict = Depends(get_current_user)
 ):
     """Create instruction in current workspace"""
     repo = InstructionRepository(db)
     
     # Override workspace_id with current workspace
     instruction_data = instruction.dict()
-    instruction_data['workspace_id'] = current_workspace.id
-    instruction_data['created_by'] = current_user.id
+    instruction_data['workspace_id'] = current_workspace_id
+    instruction_data['created_by'] = current_user.get('sub', current_user.get('username'))
     
     return repo.create(instruction_data)
 
@@ -86,18 +84,18 @@ def get_instructions(
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
-    current_workspace: Workspace = Depends(get_current_workspace)
+    current_workspace_id: str = Depends(get_current_workspace)
 ):
     """Get instructions from current workspace"""
     repo = InstructionRepository(db)
     
     if active_only:
         items, total = repo.get_active_instructions_paginated(
-            page, size, workspace_id=current_workspace.id
+            page, size, workspace_id=current_workspace_id
         )
     else:
         items, total = repo.get_all_paginated(
-            page, size, workspace_id=current_workspace.id
+            page, size, workspace_id=current_workspace_id
         )
 
     pages = (total + size - 1) // size  # Ceiling division
@@ -111,11 +109,11 @@ def get_instructions(
 def get_instruction(
     instruction_id: int,
     db: Session = Depends(get_db),
-    current_workspace: Workspace = Depends(get_current_workspace)
+    current_workspace_id: str = Depends(get_current_workspace)
 ):
     """Get instruction by ID from current workspace"""
     repo = InstructionRepository(db)
-    instruction = repo.get(instruction_id, workspace_id=current_workspace.id)
+    instruction = repo.get(instruction_id, workspace_id=current_workspace_id)
     if not instruction:
         raise HTTPException(status_code=404, detail="Instruction not found")
     return instruction
@@ -126,20 +124,20 @@ def update_instruction(
     instruction_id: int,
     instruction: InstructionUpdate,
     db: Session = Depends(get_db),
-    current_workspace: Workspace = Depends(get_current_workspace)
+    current_workspace_id: str = Depends(get_current_workspace)
 ):
     """Update instruction in current workspace"""
     repo = InstructionRepository(db)
     
     # Check if instruction exists in current workspace
-    existing_instruction = repo.get(instruction_id, workspace_id=current_workspace.id)
+    existing_instruction = repo.get(instruction_id, workspace_id=current_workspace_id)
     if not existing_instruction:
         raise HTTPException(status_code=404, detail="Instruction not found")
     
     updated_instruction = repo.update(
         instruction_id, 
         instruction.dict(exclude_unset=True),
-        workspace_id=current_workspace.id
+        workspace_id=current_workspace_id
     )
     return updated_instruction
 
@@ -148,17 +146,17 @@ def update_instruction(
 def delete_instruction(
     instruction_id: int,
     db: Session = Depends(get_db),
-    current_workspace: Workspace = Depends(get_current_workspace)
+    current_workspace_id: str = Depends(get_current_workspace)
 ):
     """Delete instruction from current workspace"""
     repo = InstructionRepository(db)
     
     # Check if instruction exists in current workspace
-    existing_instruction = repo.get(instruction_id, workspace_id=current_workspace.id)
+    existing_instruction = repo.get(instruction_id, workspace_id=current_workspace_id)
     if not existing_instruction:
         raise HTTPException(status_code=404, detail="Instruction not found")
     
-    if not repo.delete(instruction_id, workspace_id=current_workspace.id):
+    if not repo.delete(instruction_id, workspace_id=current_workspace_id):
         raise HTTPException(status_code=404, detail="Instruction not found")
     
     return {"message": "Instruction deleted successfully"}
@@ -168,11 +166,11 @@ def delete_instruction(
 def enable_instruction(
     instruction_id: int,
     db: Session = Depends(get_db),
-    current_workspace: Workspace = Depends(get_current_workspace)
+    current_workspace_id: str = Depends(get_current_workspace)
 ):
     """Enable instruction in current workspace"""
     repo = InstructionRepository(db)
-    instruction = repo.enable_instruction(instruction_id, workspace_id=current_workspace.id)
+    instruction = repo.enable_instruction(instruction_id, workspace_id=current_workspace_id)
     if not instruction:
         raise HTTPException(status_code=404, detail="Instruction not found")
     return instruction
@@ -182,30 +180,44 @@ def enable_instruction(
 def disable_instruction(
     instruction_id: int,
     db: Session = Depends(get_db),
-    current_workspace: Workspace = Depends(get_current_workspace)
+    current_workspace_id: str = Depends(get_current_workspace)
 ):
     """Disable instruction in current workspace"""
     repo = InstructionRepository(db)
-    instruction = repo.disable_instruction(instruction_id, workspace_id=current_workspace.id)
+    instruction = repo.disable_instruction(instruction_id, workspace_id=current_workspace_id)
     if not instruction:
         raise HTTPException(status_code=404, detail="Instruction not found")
     return instruction
 
 
-# Optional: Admin endpoints for cross-workspace operations (if needed)
-@router.get("/admin/instructions/", response_model=PaginatedResponse)
-def get_all_instructions_admin(
-    workspace_id: Optional[int] = Query(None, description="Filter by workspace ID"),
+# Optional: Admin endpoints for users with multiple workspaces
+@router.get("/cross-workspace/instructions/", response_model=PaginatedResponse)
+def get_cross_workspace_instructions(
+    workspace_id: Optional[str] = Query(None, description="Filter by workspace ID"),
     active_only: bool = False,
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user)
 ):
-    """Admin endpoint to get instructions from all workspaces"""
-    # Check if user has admin privileges
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
+    """Get instructions from all workspaces the user has access to"""
+    from src.oauth.dependencies import extract_all_workspace_ids
+    
+    # Get all workspace IDs the user has access to
+    user_workspace_ids = extract_all_workspace_ids(current_user)
+    
+    if not user_workspace_ids:
+        raise HTTPException(
+            status_code=403,
+            detail="No workspace access found in token"
+        )
+    
+    # If specific workspace requested, validate access
+    if workspace_id and workspace_id not in user_workspace_ids:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Access denied to workspace: {workspace_id}"
+        )
     
     repo = InstructionRepository(db)
     
