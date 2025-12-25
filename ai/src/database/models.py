@@ -58,6 +58,7 @@ class Wizard(BaseModel):
         default="answer",
         nullable=False,
     )
+    created_by = Column(String(255), nullable=False)
 
     # Relationship for self-referential hierarchy
     parent = relationship("Wizard", remote_side=lambda: [Wizard.id], backref="children")
@@ -94,12 +95,14 @@ class Workflow(BaseModel):
     name = Column(String(255), unique=True, nullable=False)
     flow = Column(JSON)
     status = Column(Boolean, default=True)
+    created_by = Column(String(255), nullable=False)
 
 class Instruction(BaseModel):
     __tablename__ = "instructions"
     label = Column(String(255), nullable=False)
     text = Column(Text, nullable=False)
     status = Column(Boolean, default=True)
+    created_by = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
