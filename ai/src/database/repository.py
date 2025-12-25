@@ -2,7 +2,7 @@
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from typing import List, Optional, Type, TypeVar, Generic, Union, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from .models import BaseModel, Wizard, Chat, ChatHistory, Workflow, Instruction
 
@@ -25,8 +25,6 @@ class BaseRepository(Generic[T]):
     def _validate_workspace(self, data: dict, workspace_id: Optional[str] = None):
         """Validate and add workspace_id to data"""
         if workspace_id:
-            if isinstance(workspace_id, str):
-                workspace_id = uuid.UUID(workspace_id)
             data['workspace_id'] = workspace_id
         elif 'workspace_id' not in data:
             raise ValueError("workspace_id is required for workspace isolation")
@@ -91,36 +89,10 @@ class WizardRepository(BaseRepository[Wizard]):
     def __init__(self, db: Session):
         super().__init__(db, Wizard)
     
-    def get_all(self, workspace_id: Optional[str] = None, 
-                enable_only: bool = False) -> List[Wizard]:
-        """Get all wizards for a workspace"""
-        query = self.db.query(Wizard)
-        query = self._apply_workspace_filter(query, workspace_id)
-        
-        if enable_only:
-            query = query.filter(Wizard.enabled == True)
-        
-        return query.all()
-    
-    def get_heads(self, workspace_id: Optional[str] = None, 
-                  enable_only: bool = False) -> List[Wizard]:
-        """Get all head wizards (no parent) for a workspace"""
-        query = self.db.query(Wizard).filter(Wizard.parent_id.is_(None))
-        query = self._apply_workspace_filter(query, workspace_id)
-        
-        if enable_only:
-            query = query.filter(Wizard.enabled == True)
-        
-        return query.all()
-    
-    def get(self, id: int, workspace_id: Optional[str] = None, 
-            enable_only: bool = False) -> Optional[Wizard]:
+    def get(self, id: int, workspace_id: Optional[str] = None) -> Optional[Wizard]:
         """Get a wizard with its children"""
         query = self.db.query(Wizard).filter(Wizard.id == id)
         query = self._apply_workspace_filter(query, workspace_id)
-        
-        if enable_only:
-            query = query.filter(Wizard.enabled == True)
         
         wizard = query.first()
         
@@ -130,90 +102,17 @@ class WizardRepository(BaseRepository[Wizard]):
                 Wizard.parent_id == wizard.id
             )
             children_query = self._apply_workspace_filter(children_query, workspace_id)
-            
-            if enable_only:
-                children_query = children_query.filter(Wizard.enabled == True)
-            
             wizard.children = children_query.all()
         
         return wizard
     
-    def get_by_parent(self, parent_id: Optional[int], 
-                      workspace_id: Optional[str] = None,
-                      enable_only: bool = True) -> List[Wizard]:
-        """Get child wizards by parent ID within a workspace"""
-        query = self.db.query(Wizard).filter(Wizard.parent_id == parent_id)
-        query = self._apply_workspace_filter(query, workspace_id)
-        
-        if enable_only:
-            query = query.filter(Wizard.enabled == True)
-        
-        return query.all()
-    
-    def get_with_children(self, id: int, 
-                          workspace_id: Optional[str] = None,
-                          enable_only: bool = True) -> Optional[Wizard]:
-        """Get wizard with eager-loaded children"""
-        query = self.db.query(Wizard).filter(Wizard.id == id)
-        query = self._apply_workspace_filter(query, workspace_id)
-        
-        if enable_only:
-            query = query.filter(Wizard.enabled == True)
-        
-        return query.first()
-    
-    def get_root_wizards(self, workspace_id: Optional[str] = None,
-                         enable_only: bool = True) -> List[Wizard]:
+    def get_root_wizards(self, workspace_id: Optional[str] = None) -> List[Wizard]:
         """Get root wizards for a workspace"""
         query = self.db.query(Wizard).filter(Wizard.parent_id.is_(None))
         query = self._apply_workspace_filter(query, workspace_id)
-        
-        if enable_only:
-            query = query.filter(Wizard.enabled == True)
-        
         return query.all()
+ 
     
-    def get_wizard_hierarchy(self, id: int, 
-                             workspace_id: Optional[str] = None,
-                             enable_only: bool = True) -> List[Wizard]:
-        """Get a wizard and all its descendants within a workspace"""
-        wizard = self.get_with_children(id, workspace_id, enable_only)
-        if not wizard:
-            return []
-        
-        result = [wizard]
-        children = self.get_by_parent(id, workspace_id, enable_only)
-        for child in children:
-            result.extend(self.get_wizard_hierarchy(child.id, workspace_id, enable_only))
-        
-        return result
-    
-    def enable_wizard(self, id: int, workspace_id: Optional[str] = None) -> Optional[Wizard]:
-        """Enable a wizard within a workspace"""
-        return self.update(id, {"enabled": True}, workspace_id)
-    
-    def disable_wizard(self, id: int, workspace_id: Optional[str] = None) -> Optional[Wizard]:
-        """Disable a wizard within a workspace"""
-        return self.update(id, {"enabled": False}, workspace_id)
-    
-    def get_enabled_wizards(self, workspace_id: Optional[str] = None) -> List[Wizard]:
-        """Get all enabled wizards for a workspace"""
-        query = self.db.query(Wizard).filter(Wizard.enabled == True)
-        query = self._apply_workspace_filter(query, workspace_id)
-        return query.all()
-    
-    def get_disabled_wizards(self, workspace_id: Optional[str] = None) -> List[Wizard]:
-        """Get all disabled wizards for a workspace"""
-        query = self.db.query(Wizard).filter(Wizard.enabled == False)
-        query = self._apply_workspace_filter(query, workspace_id)
-        return query.all()
-    
-    def get_by_name(self, name: str, workspace_id: Optional[str] = None) -> Optional[Wizard]:
-        """Get wizard by name within a workspace"""
-        query = self.db.query(Wizard).filter(Wizard.name == name)
-        query = self._apply_workspace_filter(query, workspace_id)
-        return query.first()
-
 class ChatRepository(BaseRepository[Chat]):
     def __init__(self, db: Session):
         super().__init__(db, Chat)
