@@ -93,7 +93,7 @@ class ChatHistory(BaseModel):
 
 class Workflow(BaseModel):
     __tablename__ = "workflows"
-    name = Column(String(255), unique=True, nullable=False)
+    name = Column(String(255), nullable=False)
     flow = Column(JSON)
     status = Column(Boolean, default=True)
     created_by = Column(String(255), nullable=False)
