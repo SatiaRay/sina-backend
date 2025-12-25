@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from dotenv import load_dotenv
 from fastapi.testclient import TestClient
-from src.database.models import Base, get_db, Instruction
+from src.database.models import Base, get_db, Instruction, Workflow
 from src.api.main import app
 from src.oauth.dependencies import get_current_user, get_current_workspace
 from src.database.models import Wizard 
@@ -106,7 +106,7 @@ def create_test_instruction(db, mock_token_info):
             text=text,
             status=status,
             workspace_id=workspace_id,
-            created_by=created_by,  # Add this field
+            created_by=created_by,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc)
         )
@@ -151,7 +151,7 @@ def client(db, monkeypatch, mock_token_info):
 
 
 @pytest.fixture
-def auth_client_no_workspace(db, monkeypatch, mock_token_info_no_workspace):
+def auth_client_no_workspace(client, mock_token_info_no_workspace):
     """Client with token that has no workspace scope"""
     def override_get_db():
         try:
@@ -339,7 +339,7 @@ def create_wizard_hierarchy(db, mock_token_info):
     return _create_hierarchy
 
 @pytest.fixture
-def wizard_client(db, monkeypatch, mock_token_info):
+def wizard_client(client, mock_token_info, db):
     """Client for testing wizard endpoints (no workspace dependencies needed)"""
     def override_get_db():
         try:
@@ -362,3 +362,36 @@ def wizard_client(db, monkeypatch, mock_token_info):
     
     # Clear overrides after test
     app.dependency_overrides.clear()
+    
+@pytest.fixture
+def workflow_client(client, mock_token_info, db):
+    """Client with workflow authentication"""
+    # Set up authentication mock
+    client.app.dependency_overrides[get_current_user] = lambda: mock_token_info
+    client.app.dependency_overrides[get_current_workspace] = lambda: "39354e1f-b9cc-30eb-9700-963b3a53e977"
+    client.app.state.db = db
+    yield client
+    # Clean up
+    client.app.dependency_overrides.clear()
+
+@pytest.fixture
+def create_test_workflow(db, mock_token_info):
+    """Factory fixture to create test workflows"""
+    def _create_workflow(name="Test Workflow", flow=None, status=True):
+        if flow is None:
+            flow = [{"id": "1", "label": "Start", "type": "start"}]
+        
+        workflow = Workflow(
+            name=name,
+            flow=flow,
+            status=status,
+            created_by=mock_token_info["sub"],
+            workspace_id="39354e1f-b9cc-30eb-9700-963b3a53e977",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        db.add(workflow)
+        db.commit()
+        db.refresh(workflow)
+        return workflow
+    return _create_workflow
