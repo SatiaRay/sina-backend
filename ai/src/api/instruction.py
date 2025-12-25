@@ -151,11 +151,7 @@ def delete_instruction(
     """Delete instruction from current workspace"""
     repo = InstructionRepository(db)
     
-    # Check if instruction exists in current workspace
-    existing_instruction = repo.get(instruction_id, workspace_id=current_workspace_id)
-    if not existing_instruction:
-        raise HTTPException(status_code=404, detail="Instruction not found")
-    
+    # The delete method already checks if the instruction exists
     if not repo.delete(instruction_id, workspace_id=current_workspace_id):
         raise HTTPException(status_code=404, detail="Instruction not found")
     
