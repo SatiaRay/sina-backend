@@ -1,3 +1,4 @@
+from time import timezone
 from sqlalchemy import (
     create_engine,
     Column,
@@ -14,7 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 import pymysql
@@ -41,8 +42,8 @@ class BaseModel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     workspace_id = Column(String(255))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
 
 # Wizard model
@@ -68,8 +69,8 @@ class Chat(BaseModel):
     __tablename__ = "chats"
     session_id = Column(String(255), unique=True, nullable=False)
     status = Column(String(20), default="active")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
     # Relationships
     chat_history = relationship("ChatHistory", backref="session", lazy=True)
@@ -82,9 +83,9 @@ class ChatHistory(BaseModel):
     body = Column(TEXT, nullable=False)
     hidden = Column(Boolean, default=False, nullable=True)
     type = Column(Enum("text", "image"), default="text", nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    timestamp = Column(DateTime, default=datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
     # Renamed 'metadata' to 'extra_metadata'
     extra_metadata = Column(JSON, nullable=True)
@@ -103,8 +104,8 @@ class Instruction(BaseModel):
     text = Column(Text, nullable=False)
     status = Column(Boolean, default=True)
     created_by = Column(String(255), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
 
 # Database dependency for FastAPI
