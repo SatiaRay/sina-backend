@@ -4,7 +4,7 @@ import tempfile
 import zipfile
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import HTTPException

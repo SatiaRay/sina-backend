@@ -1,7 +1,7 @@
 # tests/test_instructions_api.py - Updated tests
 import pytest
 from fastapi import status
-from datetime import datetime
+from datetime import datetime, timezone
 from src.database.models import Instruction
 
 
@@ -321,8 +321,8 @@ class TestInstructionWorkspaceIsolation:
             status=True,
             workspace_id="another-workspace-id",
             created_by=mock_token_info["sub"],  # Add created_by
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
         db.add(instruction_other)
         db.commit()
@@ -347,8 +347,8 @@ class TestInstructionWorkspaceIsolation:
             status=True,
             workspace_id="another-workspace-id",
             created_by=mock_token_info["sub"],  # Add created_by
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
         db.add(instruction)
         db.commit()

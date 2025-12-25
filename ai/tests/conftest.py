@@ -12,8 +12,9 @@ from fastapi.testclient import TestClient
 from src.database.models import Base, get_db, Instruction
 from src.api.main import app
 from src.oauth.dependencies import get_current_user, get_current_workspace
+from src.database.models import Wizard 
 from unittest.mock import AsyncMock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 # Use in-memory SQLite for all tests
@@ -106,8 +107,8 @@ def create_test_instruction(db, mock_token_info):
             status=status,
             workspace_id=workspace_id,
             created_by=created_by,  # Add this field
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
         db.add(instruction)
         db.commit()
@@ -249,4 +250,115 @@ def unauth_client(db):
     with TestClient(app) as c:
         yield c
     
+    app.dependency_overrides.clear()
+    
+@pytest.fixture
+def create_test_wizard(db, mock_token_info):
+    """Helper fixture to create test wizards"""
+    def _create_wizard(
+        title="Test Wizard",
+        context="Test context",
+        parent_id=None,
+        enabled=True,
+        wizard_type="answer",
+        workspace_id="39354e1f-b9cc-30eb-9700-963b3a53e977"
+    ):
+        wizard = Wizard(
+            title=title,
+            context=context,
+            parent_id=parent_id,
+            enabled=enabled,
+            wizard_type=wizard_type,
+            created_by=mock_token_info["sub"],
+            workspace_id=workspace_id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        db.add(wizard)
+        db.commit()
+        db.refresh(wizard)
+        return wizard
+    return _create_wizard
+
+@pytest.fixture
+def create_wizard_hierarchy(db, mock_token_info):
+    """Helper fixture to create a wizard hierarchy for testing"""
+    def _create_hierarchy():
+        workspace_id = "39354e1f-b9cc-30eb-9700-963b3a53e977"
+        
+        # Create root wizard
+        root_wizard = Wizard(
+            title="Root Wizard",
+            context="Root context",
+            parent_id=None,
+            enabled=True,
+            wizard_type="question",
+            created_by=mock_token_info["sub"],
+            workspace_id=workspace_id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        db.add(root_wizard)
+        db.flush()
+        
+        # Create child wizards
+        child1 = Wizard(
+            title="Child Wizard 1",
+            context="Child 1 context",
+            parent_id=root_wizard.id,
+            enabled=True,
+            wizard_type="answer",
+            created_by=mock_token_info["sub"],
+            workspace_id=workspace_id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        
+        child2 = Wizard(
+            title="Child Wizard 2",
+            context="Child 2 context",
+            parent_id=root_wizard.id,
+            enabled=True,
+            wizard_type="answer",
+            created_by=mock_token_info["sub"],
+            workspace_id=workspace_id,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        
+        db.add_all([child1, child2])
+        db.commit()
+        
+        db.refresh(root_wizard)
+        
+        return {
+            "root": root_wizard,
+            "child1": child1,
+            "child2": child2
+        }
+    return _create_hierarchy
+
+@pytest.fixture
+def wizard_client(db, monkeypatch, mock_token_info):
+    """Client for testing wizard endpoints (no workspace dependencies needed)"""
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
+    
+    # Mock OAuth dependencies - wizards don't use workspace, just authentication
+    async def override_get_current_user():
+        return mock_token_info
+    
+    # Apply dependency overrides
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    
+    # Note: Wizard endpoints don't use get_current_workspace
+    
+    with TestClient(app) as c:
+        yield c
+    
+    # Clear overrides after test
     app.dependency_overrides.clear()

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from fastapi import WebSocket
-from models.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
+from src.ai_agent.chat_agent.chat_agent_rag_proxy import ChatAgentRagProxy
 from src.database.models import Chat, ChatHistory
 from typing import List, Dict, Any, Optional, Union
 from fastapi import Request
