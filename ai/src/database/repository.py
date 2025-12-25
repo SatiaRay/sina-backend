@@ -1,7 +1,7 @@
 # repositories/base.py
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
-from typing import List, Optional, Type, TypeVar, Generic, Union, Tuple
+from typing import Any, Dict, List, Optional, Type, TypeVar, Generic, Union, Tuple
 from datetime import datetime, timezone
 import uuid
 from .models import BaseModel, Wizard, Chat, ChatHistory, Workflow, Instruction
@@ -192,12 +192,12 @@ class ChatHistoryRepository(BaseRepository[ChatHistory]):
 class WorkflowRepository(BaseRepository[Workflow]):
     def __init__(self, db: Session):
         super().__init__(db, Workflow)
-    
-    def get_all(self, workspace_id: Optional[str] = None) -> List[Workflow]:
-        """Get all workflows for a workspace"""
-        query = self.db.query(Workflow)
+        
+    def get_by_name(self, name: str, workspace_id: Optional[str] = None) -> Optional[Chat]:
+        """Get workflow by name"""
+        query = self.db.query(Workflow).filter(Workflow.name == name)
         query = self._apply_workspace_filter(query, workspace_id)
-        return query.all()
+        return query.first()
     
     def get_active_workflows(self, workspace_id: Optional[str] = None) -> List[Workflow]:
         """Get active workflows for a workspace"""
@@ -205,29 +205,25 @@ class WorkflowRepository(BaseRepository[Workflow]):
         query = self._apply_workspace_filter(query, workspace_id)
         return query.all()
     
-    def get_by_name(self, name: str, 
-                    workspace_id: Optional[str] = None) -> Optional[Workflow]:
-        """Get workflow by name within a workspace"""
-        query = self.db.query(Workflow).filter(Workflow.name == name)
-        query = self._apply_workspace_filter(query, workspace_id)
-        return query.first()
-    
-    def activate_workflow(self, id: int, 
-                          workspace_id: Optional[str] = None) -> Optional[Workflow]:
-        """Activate a workflow within a workspace"""
-        return self.update(id, {"status": True}, workspace_id)
-    
-    def deactivate_workflow(self, id: int, 
-                            workspace_id: Optional[str] = None) -> Optional[Workflow]:
-        """Deactivate a workflow within a workspace"""
-        return self.update(id, {"status": False}, workspace_id)
-    
-    def get_by_status(self, status: bool, 
-                      workspace_id: Optional[str] = None) -> List[Workflow]:
-        """Get workflows by status within a workspace"""
-        query = self.db.query(Workflow).filter(Workflow.status == status)
-        query = self._apply_workspace_filter(query, workspace_id)
-        return query.all()
+    def get_active_workflows_flows(self, workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Retrieve flows of all active workflows from the database.
+            
+        Returns:
+            List[Dict[str, Any]]: List of flows from active workflows
+        """
+        try:
+            # Query active workflows and extract only their flows
+            query = self.db.query(Workflow.flow).filter(Workflow.status == True)
+            query = self._apply_workspace_filter(query, workspace_id)
+
+            workflows = query.all()
+                
+            # Extract flows from the query results
+            return [workflow[0] for workflow in workflows]
+        except Exception as e:
+            self.db.rollback()
+            raise e 
     
 class InstructionRepository(BaseRepository[Instruction]):
     def __init__(self, db: Session):
