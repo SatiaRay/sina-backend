@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -35,7 +35,7 @@ class OAuthIntrospectionController extends Controller
         $token = $request->input('token');
         $tokenTypeHint = $request->input('token_type_hint', 'access_token');
         
-        // Try to introspect as access token first
+        // Try to introspect as access token firstF
         $introspection = $this->introspectAccessToken($token);
 
         // If not found and hint is refresh_token, try as refresh token

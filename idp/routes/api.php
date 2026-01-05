@@ -3,10 +3,10 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\UserController;
 use App\Http\Middleware\AuthorizeClientCredentials;
 use App\Http\Controllers\GenerateClientTokenController;
-use App\Http\Controllers\Api\OAuthIntrospectionController;
+use App\Http\Controllers\OAuthIntrospectionController;
 use App\Http\Middleware\VerifyIntrospectionClient;
 
 Route::get('/user', function (Request $request) {
@@ -36,10 +36,10 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/me/workspaces', [UserController::class, 'getUserWorkspaces']);
     Route::post('me/workspaces/{workspace}/switch', [UserController::class, 'switchWorkspace']);
 
-    Route::apiResource('/workspaces', App\Http\Controllers\Api\WorkspaceController::class);
-    Route::post('/workspaces/{workspace}/invite', [App\Http\Controllers\Api\WorkspaceController::class, 'invite']);
-    Route::delete('/workspaces/{workspace}/members/{user}', [App\Http\Controllers\Api\WorkspaceController::class, 'removeMember'] );
-    Route::post('/workspaces/{workspace}/leave', [App\Http\Controllers\Api\WorkspaceController::class, 'leave'] );
+    Route::apiResource('/workspaces', App\Http\Controllers\WorkspaceController::class);
+    Route::post('/workspaces/{workspace}/invite', [App\Http\Controllers\WorkspaceController::class, 'invite']);
+    Route::delete('/workspaces/{workspace}/members/{user}', [App\Http\Controllers\WorkspaceController::class, 'removeMember'] );
+    Route::post('/workspaces/{workspace}/leave', [App\Http\Controllers\WorkspaceController::class, 'leave'] );
 });
 
 
