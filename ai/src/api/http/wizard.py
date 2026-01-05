@@ -5,8 +5,8 @@ from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, timezone
 
 from src.database.models import get_db
-from database.repository import WizardRepository
-from src.oauth.dependencies import get_current_user, get_current_workspace
+from src.database.repository import WizardRepository
+from src.api.dependencies.oauth import get_current_user, get_current_workspace
 
 router = APIRouter(prefix="/wizards", tags=["wizards"])
 

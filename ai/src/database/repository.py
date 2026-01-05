@@ -1,9 +1,6 @@
 # repositories/base.py
-from sqlalchemy import desc
 from sqlalchemy.orm import Session
-from typing import Any, Dict, List, Optional, Type, TypeVar, Generic, Union, Tuple
-from datetime import datetime, timezone
-import uuid
+from typing import Any, Dict, List, Optional, Type, TypeVar, Generic, Tuple
 from .models import BaseModel, Wizard, Chat, ChatHistory, Workflow, Instruction
 
 T = TypeVar("T", bound=BaseModel)
@@ -324,3 +321,34 @@ class InstructionRepository(BaseRepository[Instruction]):
         )
         query = self._apply_workspace_filter(query, workspace_id)
         return query.all()
+    
+class RepositoryFactory:
+    """Factory for creating repository instances"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    @property
+    def wizards(self) -> WizardRepository:
+        return WizardRepository(self.db)
+    
+    @property
+    def chats(self) -> ChatRepository:
+        return ChatRepository(self.db)
+    
+    @property
+    def chat_history(self) -> ChatHistoryRepository:
+        return ChatHistoryRepository(self.db)
+    
+    @property
+    def workflows(self) -> WorkflowRepository:
+        return WorkflowRepository(self.db)
+    
+    @property
+    def instructions(self) -> InstructionRepository:
+        return InstructionRepository(self.db)
+
+
+# Convenience function for FastAPI dependency
+def get_repository_factory(db: Session) -> RepositoryFactory:
+    return RepositoryFactory(db)

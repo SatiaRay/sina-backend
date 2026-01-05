@@ -3,10 +3,10 @@ from agents import Runner
 from typing import List, Dict, Optional
 import os
 from dotenv import load_dotenv
-from database.repository import InstructionRepository
+from src.database.repository import InstructionRepository
 from src.database.models import SessionLocal
 from src.ai_agent.title_analyzer_agent import TitleAnalyzerAgent
-from util.logging_config import configure_logging, log_error
+from src.util.logging_config import configure_logging, log_error
 import asyncio
 from fastapi import WebSocket
 from openai import OpenAI
@@ -15,7 +15,7 @@ from .chat_agent_rag_interface import ChatAgentRagInterface
 from sqlalchemy.orm import Session
 import json
 from dynaconf import Dynaconf
-from util.settings import initialize_system_settings
+from src.api.http.setting import schema as setting_schema
 
 load_dotenv()
 main_logger, error_logger, _, debug_logger = configure_logging()
@@ -306,8 +306,7 @@ class ChatAgentRag(ChatAgentRagInterface):
         """Stream response from OpenAI with tools configuration"""
         try:
             #tools = function tools
-            settings = Dynaconf(settings_files=[initialize_system_settings()])
-            model = settings.text_agent_model or os.getenv("GPT_MODEL")
+            model = setting_schema.text_agent_model or os.getenv("GPT_MODEL")
             return self.client.responses.create(
                model=model,
                input=messages,

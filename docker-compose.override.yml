@@ -17,7 +17,7 @@ services:
       - ./ai:/var/www/html/ai
     command: >
       /bin/sh -c "wait-for-it.sh ai-mysql:3306 -t 120 -- alembic upgrade head &&
-                  uvicorn src.api.main:app --reload --host=0.0.0.0 --port=80"
+                  uvicorn src.api.http.main:app --reload --host=0.0.0.0 --port=80"
 
   sina-idp-service:
     volumes:

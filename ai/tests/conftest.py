@@ -7,11 +7,10 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from dotenv import load_dotenv
 from fastapi.testclient import TestClient
 from src.database.models import Base, get_db, Instruction, Workflow
-from src.api.main import app
-from src.oauth.dependencies import get_current_user, get_current_workspace
+from src.api.http.main import app
+from src.api.dependencies.oauth import get_current_user, get_current_workspace
 from src.database.models import Wizard 
 from unittest.mock import AsyncMock, patch
 from datetime import datetime, timezone
@@ -214,21 +213,21 @@ def auth_client_multiple_workspaces(db, monkeypatch, mock_token_info_multiple_wo
 @pytest.fixture
 def mock_extract_workspace():
     """Mock the extract_workspace_id function"""
-    with patch('src.oauth.dependencies.extract_workspace_id') as mock:
+    with patch('src.api.dependencies.oauth.extract_workspace_id') as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_extract_all_workspaces():
     """Mock the extract_all_workspace_ids function"""
-    with patch('src.oauth.dependencies.extract_all_workspace_ids') as mock:
+    with patch('src.api.dependencies.oauth.extract_all_workspace_ids') as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_oauth_service():
     """Mock the OAuthIntrospectionService"""
-    with patch('src.oauth.dependencies.OAuthIntrospectionService') as MockService:
+    with patch('src.api.dependencies.oauth.OAuthIntrospectionService') as MockService:
         mock_instance = AsyncMock()
         mock_instance.introspect_token = AsyncMock()
         MockService.return_value = mock_instance

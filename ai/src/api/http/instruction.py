@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from database.repository import InstructionRepository
+from src.database.repository import InstructionRepository
 from src.database.models import get_db
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
-from src.oauth.dependencies import get_current_user, get_current_workspace
+from src.api.dependencies.oauth import get_current_user, get_current_workspace
 
 router = APIRouter()
 

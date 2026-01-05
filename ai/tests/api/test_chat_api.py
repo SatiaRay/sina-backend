@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from src.database.models import Base, Chat, ChatHistory
-from api.chat import router
+from src.api.http.chat import router
 from fastapi import FastAPI
 from src.database.models import get_db
 

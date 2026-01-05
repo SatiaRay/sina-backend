@@ -10,8 +10,7 @@ from sqlalchemy import (
     Boolean,
     JSON,
     Enum,
-    TEXT,
-    Uuid
+    TEXT
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship

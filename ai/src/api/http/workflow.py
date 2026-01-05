@@ -9,9 +9,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from src.database.models import Workflow, get_db
-from database.repository import WorkflowRepository
+from src.database.repository import WorkflowRepository
 from pydantic import BaseModel, Field, field_validator
-from src.oauth.dependencies import (
+from src.api.dependencies.oauth import (
     get_current_user,
     get_current_workspace
 )

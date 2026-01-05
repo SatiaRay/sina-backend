@@ -1,10 +1,10 @@
 import traceback
 from fastapi import Request, WebSocket
 from src.database.models import get_db
-from database.repository import WorkflowRepository
+from src.database.repository import WorkflowRepository
 from .chat_agent_rag_interface import ChatAgentRagInterface
 from .chat_agent_rag import ChatAgentRag
-from database.repository import ChatRepository, ChatHistoryRepository, WizardRepository
+from src.database.repository import ChatRepository, ChatHistoryRepository, WizardRepository
 from src.database.models import Chat
 from typing import Dict, Any, Optional, Union
 import logging

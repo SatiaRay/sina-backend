@@ -6,20 +6,18 @@ from pathlib import Path
 root_dir = Path(__file__).parent.parent
 sys.path.append(str(root_dir))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from util.logging_config import configure_logging
+from src.util.logging_config import configure_logging
+from src.api.dependencies.oauth import get_current_user
 
 # Routes
 from .wizard import router as wizard_router
 from .chat import router as chat_router
 from .workflow import router as workflow_router
-from .ai import router as ai_router
 from .instruction import router as instruction_router
-from .system import router as system_router
-from .file import router as file_router
-from .auth import router as auth_router
+from .setting import router as system_router
 
 
 # Configure loggers
@@ -48,12 +46,13 @@ app.add_middleware(
 app.include_router(wizard_router)
 app.include_router(chat_router)
 app.include_router(workflow_router)
-app.include_router(ai_router)
 app.include_router(instruction_router)
 app.include_router(system_router)
-app.include_router(file_router)
-app.include_router(auth_router)
 
 @app.get("/")
 async def root():
     return {"app": "Sina AI Service", "status": "running"}
+
+@app.get("/whoami")
+def whoami(current_user: dict = Depends(get_current_user)):
+    return current_user
