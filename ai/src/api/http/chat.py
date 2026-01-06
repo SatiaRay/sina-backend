@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from src.api.dependencies.oauth import extract_workspace_from_token_info, get_websocket_user
 from src.database.models import Chat, ChatHistory, get_db
 from datetime import datetime
 from fastapi import (
@@ -30,9 +31,6 @@ main_logger, error_logger, api_logger, _ = configure_logging()
 
 # Initialize the router
 router = APIRouter(prefix="", tags=["AI"])
-
-# Initialize the chat agent
-agent_rag = ChatAgentRagProxy()
 
 # Initialze the speech to text model
 speech_to_text_agent = None
@@ -142,23 +140,25 @@ async def get_chat_history(
 
 
 def get_voice_to_text_model():
+    
+    return SpeechToTextAgent()
 
-    settings_file = Path(__file__).parent.parent / "data" / "system_settings.json"
+    # settings_file = Path(__file__).parent.parent / "data" / "system_settings.json"
 
-    settings = Dynaconf(settings_files=[str(settings_file)], lowercase_read=True)
+    # settings = Dynaconf(settings_files=[str(settings_file)], lowercase_read=True)
 
-    try:
-        match settings.voice_to_text_service:
-            case "openai":
-                return SpeechToTextAgent()
-            case "google":
-                return GoogleSpeechToTextAgent()
-            case _:
-                return None
-    except Exception as e:
-        api_logger.info(f"Get voice to text service error {str(e)}")
-        print(e)
-        return None
+    # try:
+    #     match settings.voice_to_text_service or "openai":
+    #         case "openai":
+    #             return SpeechToTextAgent()
+    #         case "google":
+    #             return GoogleSpeechToTextAgent()
+    #         case _:
+    #             return None
+    # except Exception as e:
+    #     api_logger.info(f"Get voice to text service error {str(e)}")
+    #     print(e)
+    #     return None
 
 
 @router.websocket("/ws/ask")
@@ -170,13 +170,28 @@ async def ask_question_agent_socket(
     await websocket.accept()
     
     try:
+        # Validate token and get user info
+        token_info = await get_websocket_user(websocket, token)
+        
+        # Extract workspace ID
+        workspace_id = extract_workspace_from_token_info(token_info)
+        if not workspace_id:
+            await websocket.close(code=4001, reason="No workspace access in token")
+            return
+        
+        # Initialize the chat agent
+        agent_rag = ChatAgentRagProxy(workspace_id=workspace_id, access_token=token)
+        
+        # Store workspace_id in websocket state for use in agent_rag
+        websocket.state.workspace_id = workspace_id
+        websocket.state.user_id = token_info.get("sub")
+        
         while True:
             data = await websocket.receive_json()
             
             if not data.get('event'):
                 await websocket.send_text("Error: No event type provided.")
                 continue
-            
             
             hiddenQuestion = False
             hiddenAnswer = False
@@ -216,8 +231,17 @@ async def ask_question_agent_socket(
                 }
             )
             
-            await agent_rag.generate_response_socket(
-                message=message, websocket=websocket, hiddenQuestion=hiddenQuestion, hiddenAnswer=hiddenAnswer
+            credentials = {
+                "access_token" : token,
+                "workspace_id" : workspace_id,
+            }
+            
+            # Pass workspace_id to the agent
+            await agent_rag.generate_response(
+                message=message, 
+                websocket=websocket, 
+                hiddenQuestion=hiddenQuestion, 
+                hiddenAnswer=hiddenAnswer
             )
 
             await websocket.send_json(
@@ -225,18 +249,16 @@ async def ask_question_agent_socket(
                     "event": "finished",
                     "msg": "Response generated complete",
                 }
-                    )
-                
-
+            )
+            
     except WebSocketDisconnect:
-        api_logger.info("WebSocket disconnected")
+        print(f"WebSocket disconnected: session_id={session_id}")
     except Exception as e:
-        log_error(error_logger, e, f"Failed while processing: {str(e)}")
-        await websocket.send_text(f"Error: {str(e)}")
-    finally:
-        # Clean up Redis bindings for this session
-        await websocket.close()
-
+        print(f"WebSocket error: {str(e)}")
+        try:
+            await websocket.close(code=1011, reason=str(e))
+        except:
+            pass
 
 @router.websocket("/ws/voice")
 async def websocket_endpoint(websocket: WebSocket):

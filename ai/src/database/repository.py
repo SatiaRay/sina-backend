@@ -1,4 +1,5 @@
 # repositories/base.py
+from json import dumps
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional, Type, TypeVar, Generic, Tuple
 from .models import BaseModel, Wizard, Chat, ChatHistory, Workflow, Instruction
@@ -24,7 +25,7 @@ class BaseRepository(Generic[T]):
         if workspace_id:
             data['workspace_id'] = workspace_id
         elif 'workspace_id' not in data:
-            raise ValueError("workspace_id is required for workspace isolation")
+            raise ValueError("workspace_id is required for workspace isolation. Data: " + dumps(data))
         return data
     
     def get_all(self, workspace_id: Optional[str] = None) -> List[T]:

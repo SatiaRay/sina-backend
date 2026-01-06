@@ -96,3 +96,5 @@ class OAuthIntrospectionService:
         if self._client:
             await self._client.aclose()
             self._client = None
+            
+            

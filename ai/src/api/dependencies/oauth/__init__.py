@@ -1,6 +1,6 @@
 # dependencies.py
 from typing import Optional, Dict, Any, List
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, status, WebSocket
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .oauth_service import OAuthIntrospectionService
 
@@ -165,5 +165,66 @@ async def require_workspace_access(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Access denied to workspace: {workspace_id}"
         )
+    
+    return token_info
+
+oauth_service = OAuthIntrospectionService()
+
+async def validate_websocket_token(token: str) -> Dict[str, Any]:
+    """
+    Validate token for WebSocket connections
+    """
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token is required for WebSocket connection"
+        )
+    
+    try:
+        # Introspect the token
+        token_info = await oauth_service.introspect_token(token)
+        return token_info
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token: {str(e)}"
+        )
+
+def extract_workspace_from_token_info(token_info: Dict[str, Any]) -> Optional[str]:
+    """
+    Extract workspace ID from token scopes
+    """
+    scope = token_info.get("scope", "")
+    scopes = scope.split()
+    
+    for scope_item in scopes:
+        if scope_item.startswith("workspace:"):
+            return scope_item.split(":", 1)[1]
+    
+    return None
+
+async def get_websocket_user(
+    websocket: WebSocket,
+    token: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    WebSocket dependency that validates token and returns user info
+    """
+    if not token:
+        # Try to get token from query parameters
+        token = websocket.query_params.get("token")
+    
+    if not token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token is required"
+        )
+    
+    token_info = await validate_websocket_token(token)
+    
+    # Add token info to websocket state for later use
+    websocket.state.token_info = token_info
+    websocket.state.workspace_id = extract_workspace_from_token_info(token_info)
     
     return token_info
