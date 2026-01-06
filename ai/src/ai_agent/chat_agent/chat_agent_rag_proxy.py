@@ -1,3 +1,4 @@
+import string
 import traceback
 from fastapi import Request, WebSocket
 from src.database.models import get_db
@@ -13,14 +14,16 @@ import logging
 logger = logging.getLogger('satya.error')
 
 class ChatAgentRagProxy(ChatAgentRagInterface):
-    def __init__(self):
+    def __init__(self, workspace_id: str, access_token: str):
         self.db = next(get_db())  # Get the actual session from generator
         self.chat_repository = ChatRepository(self.db)
         self.chat_history_repository = ChatHistoryRepository(self.db)
         self.workflow_repository = WorkflowRepository(self.db)  # Initialize workflow repository
         self.wizard_repository = WizardRepository(self.db)  # Initialize wizard repository
+        self.workspace_id = workspace_id
+        self.access_token = access_token
 
-    async def generate_response_socket(
+    async def generate_response(
         self,
         message: dict,
         websocket: WebSocket,
@@ -29,11 +32,11 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
     ) -> Dict[str, Any]:
         try:
             # Get or create chat session
-            chat = self.__get_chat(request=None, websocket=websocket)
+            chat = self.__get_chat(request=None, websocket=websocket, workspace_id=self.workspace_id)
             
             # Send wizard body response if message type is wizard and wizard type is answer
             if message.get('type') == 'wizard' and message.get('wizard_id'):
-                wizard = self.wizard_repository.get(message['wizard_id'])
+                wizard = self.wizard_repository.get(message['wizard_id'], workspace_id=self.workspace_id)
                 if wizard and getattr(wizard, 'wizard_type', None) == 'answer':
                     # Send wizard body as response
                     await websocket.send_json({
@@ -59,7 +62,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             )
             
             # Get chat history
-            chat_history = self.chat_history_repository.get_chat_history_by_chat_id(chat_id=chat.id, limit=50)
+            chat_history = self.chat_history_repository.get_chat_history_by_chat_id(chat_id=chat.id, workspace_id=self.workspace_id, limit=50)
 
             # Format messages for the agent
             formatted_history = [
@@ -70,18 +73,20 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 for msg in chat_history
             ]
 
-            workflows = self.workflow_repository.get_active_workflows_flows()
+            workflows = self.workflow_repository.get_active_workflows_flows(workspace_id=self.workspace_id)
 
             # Initialize agent with all required parameters
             agent = self.agent_factory(
                 question=message['body'],
                 history=formatted_history,
                 websocket=websocket,
-                workflows=workflows
+                workflows=workflows,
+                workspace_id=self.workspace_id,
+                access_token=self.access_token
             )
 
             # Generate response
-            response = await agent.generate_response_socket()
+            response = await agent.generate_response()
             
             print(response)
 
@@ -106,17 +111,19 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
             logger.error(error_msg)
             return {"status": "error", "error": str(e)}
         
-    def agent_factory(self,question, history, websocket, workflows):
+    def agent_factory(self,question, history, websocket, workflows, workspace_id, access_token):
         return ChatAgentRag(
             question=question,
             history=history,
             websocket=websocket,
             workflows=workflows,
+            workspace_id=workspace_id,
+            access_token=access_token,
             db=self.db
         )
 
     # Get or create chat session
-    def __get_chat(self, request: Optional[Request] = None, websocket: Optional[WebSocket] = None) -> Chat:
+    def __get_chat(self, workspace_id: str, request: Optional[Request] = None, websocket: Optional[WebSocket] = None) -> Chat:
         try:
             # Get session ID from request or websocket
             session_id = None
@@ -129,12 +136,13 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                 raise ValueError("Session ID is required")
             
             # Try to get existing chat
-            chat = self.chat_repository.get_with_messages(session_id)
+            chat = self.chat_repository.get_with_messages(session_id, workspace_id=workspace_id)
             
             # Create new chat if not exists
             if not chat:
                 chat_data = {
-                    "session_id": session_id
+                    "session_id": session_id,
+                    "workspace_id": workspace_id
                 }
                 chat = self.chat_repository.create(chat_data)
                 self.db.commit()
@@ -170,6 +178,7 @@ class ChatAgentRagProxy(ChatAgentRagInterface):
                     "body": message['body'] if isinstance(message, dict) else message,
                     "role": role,
                     "hidden": hidden,
+                    "workspace_id": self.workspace_id,
                     "type": message['type'] if isinstance(message, dict) else "text"
                 }
                 

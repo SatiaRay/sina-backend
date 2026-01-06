@@ -1,6 +1,6 @@
 from sys import set_coroutine_origin_tracking_depth
 from agents import Runner
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 import os
 from dotenv import load_dotenv
 from src.database.repository import InstructionRepository
@@ -14,8 +14,9 @@ from anyio import to_thread
 from .chat_agent_rag_interface import ChatAgentRagInterface
 from sqlalchemy.orm import Session
 import json
-from dynaconf import Dynaconf
 from src.api.http.setting import schema as setting_schema
+import httpx
+from urllib.parse import quote
 
 load_dotenv()
 main_logger, error_logger, _, debug_logger = configure_logging()
@@ -90,14 +91,18 @@ class ChatAgentRag(ChatAgentRagInterface):
     def __init__(
             self,
             question: str,
-            history: Optional[List[Dict[str, str]]] = None,
-            websocket: WebSocket = None,
+            websocket: WebSocket,
+            workspace_id: str,
+            access_token: str,
+            history: Optional[List[Dict[str, Any]]] = None,
             workflows: Optional[str] = None,
             db: Session = SessionLocal(),
         ):
         self.db = db
         self.question = question
         self.history = history
+        self.workspace_id = workspace_id
+        self.access_token = access_token
         self.websocket = websocket
         self.workflows = workflows
         
@@ -158,36 +163,46 @@ class ChatAgentRag(ChatAgentRagInterface):
         try:
             main_logger.info(f"Finding relevant documents for question: {question}")
 
-            # Search for relevant knowledge through sending inquiry request to the service
-            response = session.get(f"http://sina-knowledge-service/search?query='{question}'")
-
-            if not response.status_code == 200:
-                raise Exception(f"Search knowledge requeste failed: {response.text}")
-
-            relevant_docs = response.json()
+            # Create headers with authorization
+            headers = {
+                "Authorization": f"Bearer {self.access_token}",
+                "Content-Type": "application/json"
+            }
+            
+            # URL encode the question
+            encoded_question = quote(question)
+            url = f"http://sina-knowledge-service/search?query={encoded_question}"
+            
+            # Make the request using httpx
+            async with httpx.AsyncClient(headers=headers) as client:
+                response = await client.get(url)
+                
+                if response.status_code != 200:
+                    raise Exception(f"Search knowledge request failed: {response.status_code} - {response.text}")
+                
+                relevant_docs = response.json()
 
             main_logger.debug(f"Found {len(relevant_docs)} relevant documents")
             
             filterd_ids = await self._filter_found_documents_by_agent(question, relevant_docs)
             
-            main_logger.info(f"Found documetns after filter by AI length is {len(filterd_ids)}")
+            main_logger.info(f"Found documents after filter by AI length is {len(filterd_ids)}")
             
             if len(filterd_ids):
-            
                 # Filter and return the relevant documents
                 filtered_docs = [
                     doc for doc in relevant_docs 
                     if doc['id'] in filterd_ids
                 ]
                 
-                return sorted(filtered_docs, key=lambda x: x.get('score', set_coroutine_origin_tracking_depth))
+                return sorted(filtered_docs, key=lambda x: x.get('score', 0), reverse=True)
             
             return []
             
         except Exception as e:
             error_context = f"Question: {question}"
             log_error(error_logger, e, error_context)
-            raise 
+            raise
         
     async def _filter_found_documents_by_agent(self, question, documents) -> list[int]:
         """
@@ -306,7 +321,7 @@ class ChatAgentRag(ChatAgentRagInterface):
         """Stream response from OpenAI with tools configuration"""
         try:
             #tools = function tools
-            model = setting_schema.text_agent_model or os.getenv("GPT_MODEL")
+            model = os.getenv("GPT_MODEL")
             return self.client.responses.create(
                model=model,
                input=messages,
@@ -317,7 +332,7 @@ class ChatAgentRag(ChatAgentRagInterface):
             error_logger.error(f"Error in _connect_stream: {str(e)}")
             raise
 
-    async def generate_response_socket(self, broadcast_response_to_websocket = True):
+    async def generate_response(self, broadcast_response_to_websocket = True):
         try:
             main_logger.info(f"Generating response for question: {self.question}")
 
