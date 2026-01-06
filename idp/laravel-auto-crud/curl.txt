@@ -1,0 +1,237 @@
+=====================Auth=====================
+curl --location 'http://localhost/api/register' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "password": "password123",
+    "password_confirmation": "password123"
+}'
+
+curl --location 'http://localhost/api/login' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "email": "john@example.com",
+    "password": "password123"
+}'
+
+curl --location 'http://localhost/api/logout' \
+--header 'Accept: application/json' \
+--header 'Authorization: Bearer <token>' \
+--request POST
+
+=====================User=====================
+curl --location 'http://localhost/api/users' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "name": "value",
+    "email": "value",
+    "email_verified_at": "value",
+    "password": "value",
+    "remember_token": "value",
+    "primary_workspace_id": "value"
+}'
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request PATCH \
+--data '{
+    "name": "value",
+    "email": "value",
+    "email_verified_at": "value",
+    "password": "value",
+    "remember_token": "value",
+    "primary_workspace_id": "value"
+}'
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request DELETE
+
+curl --location 'http://localhost/api/users' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+=====================User=====================
+=====================User=====================
+curl --location 'http://localhost/api/users' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "name": "value",
+    "email": "value",
+    "email_verified_at": "value",
+    "password": "value",
+    "remember_token": "value",
+    "primary_workspace_id": "value"
+}'
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request PATCH \
+--data '{
+    "name": "value",
+    "email": "value",
+    "email_verified_at": "value",
+    "password": "value",
+    "remember_token": "value",
+    "primary_workspace_id": "value"
+}'
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request DELETE
+
+curl --location 'http://localhost/api/users' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+curl --location 'http://localhost/api/users/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+=====================User=====================
+=====================Workspace=====================
+curl --location 'http://localhost/api/workspaces' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "name": "value",
+    "plan": "value",
+    "metadata": "value",
+    "deleted_at": "value"
+}'
+
+curl --location 'http://localhost/api/workspaces/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request PATCH \
+--data '{
+    "name": "value",
+    "plan": "value",
+    "metadata": "value",
+    "deleted_at": "value"
+}'
+
+curl --location 'http://localhost/api/workspaces/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request DELETE
+
+curl --location 'http://localhost/api/workspaces' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+curl --location 'http://localhost/api/workspaces/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+=====================Workspace=====================
+=====================Project=====================
+curl --location 'http://localhost/api/projects' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "workspace_id": "value",
+    "name": "value",
+    "description": "value",
+    "archived": "value",
+    "created_by": "value",
+    "deleted_at": "value"
+}'
+
+curl --location 'http://localhost/api/projects/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request PATCH \
+--data '{
+    "workspace_id": "value",
+    "name": "value",
+    "description": "value",
+    "archived": "value",
+    "created_by": "value",
+    "deleted_at": "value"
+}'
+
+curl --location 'http://localhost/api/projects/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request DELETE
+
+curl --location 'http://localhost/api/projects' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+curl --location 'http://localhost/api/projects/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+=====================Project=====================
+=====================AuditLog=====================
+curl --location 'http://localhost/api/audit_logs' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request POST \
+--data '{
+    "workspace_id": "value",
+    "actor_user_id": "value",
+    "action": "value",
+    "resource_type": "value",
+    "resource_id": "value",
+    "metadata": "value"
+}'
+
+curl --location 'http://localhost/api/audit_logs/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request PATCH \
+--data '{
+    "workspace_id": "value",
+    "actor_user_id": "value",
+    "action": "value",
+    "resource_type": "value",
+    "resource_id": "value",
+    "metadata": "value"
+}'
+
+curl --location 'http://localhost/api/audit_logs/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request DELETE
+
+curl --location 'http://localhost/api/audit_logs' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+curl --location 'http://localhost/api/audit_logs/:id' \
+--header 'Accept: application/json' \
+--header 'Content-Type: application/json' \
+--request GET
+
+=====================AuditLog=====================

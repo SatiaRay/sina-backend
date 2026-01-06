@@ -1,0 +1,93 @@
+# .github/workflows/staging.yml
+name: Staging Workflow
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+  DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
+  ENVIRONMENT: staging
+
+jobs:
+  build-and-push:
+    runs-on: staging-server
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_HUB_USERNAME }}
+          password: ${{ env.DOCKER_HUB_TOKEN }}
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          key: ${{ runner.os }}-docker-${{ hashFiles('**/Dockerfile', '**/dockerfile') }}
+          path: /tmp/.buildx-cache
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
+      - name: Build and push IDP image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./idp
+          file: ./idp/docker/8.4/Dockerfile
+          push: true
+          tags: ${{ env.DOCKER_HUB_USERNAME }}/sina-idp-service:staging-${{ github.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          build-args: |
+            WWWGROUP=${{ vars.WWWGROUP }}
+
+      - name: Build and push AI image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ai
+          file: ./ai/dockerfile
+          push: true
+          tags: ${{ env.DOCKER_HUB_USERNAME }}/sina-ai-service:staging-${{ github.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Build and push Knowledge image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./knowledge
+          file: ./knowledge/dockerfile
+          push: true
+          tags: ${{ env.DOCKER_HUB_USERNAME }}/sina-knowledge-service:staging-${{ github.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  deploy:
+    runs-on: staging-server
+    needs: build-and-push
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update docker-compose with staging tags
+        run: |
+          sed -i "s|image: sail-8.4/app|image: ${{ env.DOCKER_HUB_USERNAME }}/sina-idp-service:staging-${{ github.sha }}|g" docker-compose.yml
+          sed -i "s|build:\n *context: ./ai\n *dockerfile: dockerfile|image: ${{ env.DOCKER_HUB_USERNAME }}/sina-ai-service:staging-${{ github.sha }}|g" docker-compose.yml
+          sed -i "s|build:\n *context: ./knowledge\n *dockerfile: dockerfile|image: ${{ env.DOCKER_HUB_USERNAME }}/sina-knowledge-service:staging-${{ github.sha }}|g" docker-compose.yml
+          # Assuming workers use the same AI image
+
+      - name: Deploy to staging
+        run: |
+          docker-compose pull
+          docker-compose up -d --force-recreate
+          # Add any necessary post-deploy commands or migrations

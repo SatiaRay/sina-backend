@@ -1,6 +1,6 @@
 import pytest
-from models.chat_agent.chat_agent_rag import ChatAgentRag
-from database.repository import InstructionRepository
+from src.ai_agent.chat_agent.chat_agent_rag import ChatAgentRag
+from src.database.repository import InstructionRepository
 from unittest.mock import Mock, AsyncMock, patch
 from fastapi import WebSocket
 import asyncio

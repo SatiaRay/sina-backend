@@ -13,9 +13,10 @@ mysql_data/
 /chroma_data/*
 /chroma_data/*
 .idea/
+.cursor/
 
 # Handle data folder
-data/*
-!data/
-!data/settings_schema.json
+src/data/*
+!src/data/
+!src/data/settings_schema.json
 storage/*

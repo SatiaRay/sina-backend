@@ -3,8 +3,11 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\GenerateClientTokenController;
+use App\Http\Controllers\UserController;
 use App\Http\Middleware\AuthorizeClientCredentials;
+use App\Http\Controllers\GenerateClientTokenController;
+use App\Http\Controllers\OAuthIntrospectionController;
+use App\Http\Middleware\VerifyIntrospectionClient;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -28,5 +31,20 @@ Route::name('internal.')->prefix('/internal')->group(function () {
  */
 Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
-    // Other authenticated API routes
+    Route::post('/switch-workspace', [AuthController::class, 'switchWorkspace']);
+
+    Route::get('/me/workspaces', [UserController::class, 'getUserWorkspaces']);
+    Route::post('me/workspaces/{workspace}/switch', [UserController::class, 'switchWorkspace']);
+
+    Route::apiResource('/workspaces', App\Http\Controllers\WorkspaceController::class);
+    Route::post('/workspaces/{workspace}/invite', [App\Http\Controllers\WorkspaceController::class, 'invite']);
+    Route::delete('/workspaces/{workspace}/members/{user}', [App\Http\Controllers\WorkspaceController::class, 'removeMember'] );
+    Route::post('/workspaces/{workspace}/leave', [App\Http\Controllers\WorkspaceController::class, 'leave'] );
 });
+
+
+/**
+ * Protected introspection endpoint (recommended)
+ */
+Route::middleware([VerifyIntrospectionClient::class])->post('/oauth/introspect', 
+    [OAuthIntrospectionController::class, 'introspect']);

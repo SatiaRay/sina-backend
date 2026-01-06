@@ -1,12 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database.models import Base, Chat, ChatHistory
-from api.chat import router
+from src.database.models import Base, Chat, ChatHistory
+from src.api.http.chat import router
 from fastapi import FastAPI
-from database.models import get_db
+from src.database.models import get_db
 
 # Create test database
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
