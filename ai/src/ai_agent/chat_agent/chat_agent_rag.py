@@ -121,7 +121,7 @@ class ChatAgentRag(ChatAgentRagInterface):
                 return ""
                 
             repo = InstructionRepository(self.db)
-            active_instructions = repo.get_active_instructions()
+            active_instructions = repo.get_active_instructions(workspace_id=self.workspace_id)
             
             if not active_instructions:
                 return ""
